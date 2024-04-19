@@ -40,7 +40,7 @@ CMakeFiles
 *.make
 build/
 out/
-bin/tubekit
+bin/avant
 .vscode/
 .vs/
 *.log

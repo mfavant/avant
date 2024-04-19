@@ -1,7 +1,12 @@
 #include <iostream>
 #include <string>
 
+#include "utility/singleton.h"
+#include "system/system.h"
+
+using avant::utility::singleton;
+
 int main(int argc, char **argv)
 {
-    return 0;
+    return singleton<avant::system::system>::instance()->init();
 }

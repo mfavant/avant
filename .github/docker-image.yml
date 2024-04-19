@@ -1,0 +1,44 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/avant
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+      
+    - name: create tag
+      run: |
+          SHA=${{ github.sha }}
+          TAG=${IMAGE}:$(TZ=UTC-9 date '+%Y%m')-${SHA:0:7}
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            TAG="${IMAGE}:latest"
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo TAG $TAG 
+      
+    - name: login to dockerhub
+      uses: docker/login-action@v1
+      with: 
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+    - name: build docker image
+      run: |
+        docker build . -t ${{ env.TAG }}
+        
+    - name: push image
+      run: |
+        docker push ${{ env.TAG }}
