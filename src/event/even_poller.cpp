@@ -48,7 +48,8 @@ int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=tr
 {
     struct ::epoll_event ev;
     ev.data.ptr = ptr;
-    if (et && !(EPOLL_CTL_DEL & events))
+    ev.data.fd = fd;
+    if (et && !(EPOLL_CTL_DEL & op))
     {
         ev.events = events | EPOLLET; // decause epoll default LT
         /*

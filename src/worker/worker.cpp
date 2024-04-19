@@ -38,7 +38,7 @@ void worker::operator()()
         int inow = this->curr_connection_num->fetch_add(1);
         if (inow - latest_show > 100)
         {
-            LOG_ERROR("curr_connection_num %d", inow);
+            // LOG_ERROR("curr_connection_num %d", inow);
             latest_show = inow;
         }
         if (this->to_stop)

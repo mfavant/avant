@@ -166,13 +166,7 @@ bool socket::close()
 
 int socket::accept()
 {
-    int sockfd = ::accept(m_sockfd, NULL, NULL);
-    if (sockfd < 0)
-    {
-        // LOG_ERROR("accept call error: errno=%d errstr=%s", errno, strerror(errno));
-        sockfd = -1;
-    }
-    return sockfd;
+    return ::accept(m_sockfd, NULL, NULL);
 }
 
 int socket::recv(char *buf, size_t len, int &oper_errno)

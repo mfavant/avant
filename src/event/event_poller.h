@@ -127,6 +127,8 @@ namespace avant::event
          *
          */
         int m_max_connections{0};
+
+    public:
         /**
          * @brief 事件数组
          *

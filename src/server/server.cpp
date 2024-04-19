@@ -6,10 +6,12 @@
 #include <thread>
 #include <avant-log/logger.h>
 #include <chrono>
+#include <vector>
 #include "server/server.h"
 #include "socket/socket.h"
 #include "utility/singleton.h"
 #include "task/task_type.h"
+#include "socket/server_socket.h"
 
 using namespace std;
 using namespace avant::server;
@@ -17,6 +19,7 @@ using namespace avant::socket;
 using namespace avant::utility;
 using namespace avant::task;
 using namespace avant::worker;
+using namespace avant::socket;
 
 server::server()
 {
@@ -247,8 +250,24 @@ void server::on_start()
         t.detach();
     }
 
+    LOG_ERROR("IP %s PORT %d", m_ip.c_str(), m_port);
+    server_socket listen_socket(m_ip, m_port, m_max_client_cnt);
+    if (0 > listen_socket.get_fd())
+    {
+        LOG_ERROR("listen_socket failed get_fd() < 0");
+        stop_flag = true;
+        return;
+    }
+    if (0 != epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLERR, true))
+    {
+        LOG_ERROR("listen_socket epoller add failed");
+        return;
+    }
+
     uint32_t counter = 0;
     bool sent = false;
+    uint32_t client_counter = 0;
+
     while (true)
     {
         int num = epoller.wait(10);
@@ -264,6 +283,36 @@ void server::on_start()
                 break;
             }
         }
+        for (int i = 0; i < num; i++)
+        {
+            if (epoller.m_events[i].data.fd == listen_socket.get_fd())
+            {
+                std::vector<int> clients_fd;
+                for (size_t loop = 0; loop < m_accept_per_tick; loop++)
+                {
+                    int new_client_fd = listen_socket.accept();
+                    if (new_client_fd < 0)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        clients_fd.push_back(new_client_fd);
+                        client_counter++;
+                        if (client_counter % 1000 == 0)
+                        {
+                            LOG_ERROR("client_counter[%u]", client_counter);
+                        }
+                    }
+                }
+                for (int new_client_fd : clients_fd)
+                {
+                    // LOG_ERROR("new_client_fd[%d]", new_client_fd);
+                    ::close(new_client_fd);
+                }
+            }
+        }
+
         if (counter != UINT32_MAX)
         {
             counter++;
