@@ -3,8 +3,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <thread>
 #include <avant-log/logger.h>
-
+#include <chrono>
 #include "server/server.h"
 #include "socket/socket.h"
 #include "utility/singleton.h"
@@ -15,6 +16,7 @@ using namespace avant::server;
 using namespace avant::socket;
 using namespace avant::utility;
 using namespace avant::task;
+using namespace avant::worker;
 
 server::server()
 {
@@ -83,6 +85,8 @@ void server::start()
     LOG_ERROR("m_use_ssl %d", (int)m_use_ssl);
     LOG_ERROR("m_crt_pem %s", m_crt_pem.c_str());
     LOG_ERROR("m_key_pem %s", m_key_pem.c_str());
+
+    on_start();
 }
 
 void server::set_worker_cnt(size_t worker_cnt)
@@ -210,4 +214,95 @@ void server::to_stop()
 SSL_CTX *server::get_ssl_ctx()
 {
     return m_ssl_context;
+}
+
+void server::on_start()
+{
+    int iret = epoller.create(m_max_client_cnt * 2);
+    if (iret != 0)
+    {
+        LOG_ERROR("epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
+        stop_flag = true;
+        return;
+    }
+
+    worker::worker *worker_arr = new worker::worker[m_worker_cnt];
+    m_workers.reset(worker_arr);
+    for (size_t i = 0; i < m_worker_cnt; i++)
+    {
+        m_workers[i].worker_id = i;
+        m_workers[i].curr_connection_num = &m_curr_connection_num;
+        iret = m_workers[i].epoller.create(m_max_client_cnt * 2);
+        if (iret != 0)
+        {
+            LOG_ERROR("epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
+            stop_flag = true;
+            return;
+        }
+    }
+
+    for (size_t i = 0; i < m_worker_cnt; i++)
+    {
+        std::thread t(std::ref(m_workers[i]));
+        t.detach();
+    }
+
+    uint32_t counter = 0;
+    bool sent = false;
+    while (true)
+    {
+        int num = epoller.wait(10);
+        if (num < 0)
+        {
+            LOG_ERROR("epoller.wait return [%d]", num);
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        if (counter != UINT32_MAX)
+        {
+            counter++;
+        }
+        else
+        {
+            if (sent == false)
+            {
+                sent = true;
+                for (size_t i = 0; i < m_worker_cnt; i++)
+                {
+                    m_workers[i].to_stop = true;
+                }
+            }
+            else
+            {
+                bool flag = true;
+                for (size_t i = 0; i < m_worker_cnt; i++)
+                {
+                    if (!m_workers[i].is_stoped)
+                    {
+                        flag = false;
+                    }
+                }
+                if (flag)
+                {
+                    break;
+                }
+            }
+        }
+        if (counter != UINT32_MAX && stop_flag)
+        {
+            counter = UINT32_MAX;
+            sent = true;
+            for (size_t i = 0; i < m_worker_cnt; i++)
+            {
+                m_workers[i].to_stop = true;
+            }
+        }
+    }
+    stop_flag = true;
 }

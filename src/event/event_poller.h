@@ -7,7 +7,7 @@
 #include <cstring>
 #include <unordered_map>
 
-namespace tubekit::event
+namespace avant::event
 {
     class event_poller
     {
@@ -20,7 +20,7 @@ namespace tubekit::event
          *
          * @param max_connections
          */
-        void create(int max_connections);
+        int create(int max_connections);
 
         /**
          * @brief 向epoll句柄添加新的epoll_event

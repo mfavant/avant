@@ -1,6 +1,6 @@
 #include "event/event_poller.h"
 
-using namespace tubekit::event;
+using namespace avant::event;
 
 event_poller::event_poller() : m_epfd(0),
                                m_max_connections(0),
@@ -23,20 +23,25 @@ event_poller::~event_poller()
     }
 }
 
-void event_poller::create(int max_connections)
+int event_poller::create(int max_connections)
 {
     m_max_connections = max_connections;
     m_epfd = ::epoll_create(max_connections + 1); // plane
     if (m_epfd < 0)
     {
-        return;
+        return -1;
     }
     if (m_events != nullptr)
     {
         delete[] m_events;
         m_events = nullptr;
     }
-    m_events = new ::epoll_event[max_connections + 1];
+    m_events = new (std::nothrow)::epoll_event[max_connections + 1];
+    if (!m_events)
+    {
+        return -2;
+    }
+    return 0;
 }
 
 int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=true*/)

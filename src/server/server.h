@@ -4,8 +4,12 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
+#include <memory>
+#include <atomic>
 
+#include "worker/worker.h"
 #include "task/task_type.h"
+#include "event/event_poller.h"
 
 namespace avant::server
 {
@@ -50,6 +54,7 @@ namespace avant::server
     private:
         bool on_stop();
         bool is_stop();
+        void on_start();
 
         void set_use_ssl(bool use_ssl);
         void set_crt_pem(std::string set_crt_pem);
@@ -88,5 +93,9 @@ namespace avant::server
         volatile bool stop_flag{false};
 
         SSL_CTX *m_ssl_context{nullptr};
+        std::shared_ptr<avant::worker::worker[]> m_workers{nullptr};
+        std::atomic<int> m_curr_connection_num{0};
+
+        avant::event::event_poller epoller;
     };
 }
