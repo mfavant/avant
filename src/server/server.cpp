@@ -70,6 +70,7 @@ void server::start()
         }
     }
 
+    LOG_ERROR("m_app_id %s", m_app_id.c_str());
     LOG_ERROR("m_ip %s", m_ip.c_str());
     LOG_ERROR("m_port %d", m_port);
     LOG_ERROR("m_worker_cnt %d", m_worker_cnt);
@@ -159,7 +160,8 @@ std::string server::get_key_pem()
     return m_key_pem;
 }
 
-void server::config(const std::string &ip,
+void server::config(const std::string &app_id,
+                    const std::string &ip,
                     int port,
                     size_t worker_cnt,
                     size_t max_client_cnt,
@@ -172,6 +174,7 @@ void server::config(const std::string &ip,
                     std::string key_pem /*= ""*/,
                     bool use_ssl /*= false*/)
 {
+    set_app_id(app_id);
     set_listen_info(ip, port);
     set_worker_cnt(worker_cnt);
     set_max_client_cnt(max_client_cnt);

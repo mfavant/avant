@@ -27,6 +27,7 @@ int system::init()
     inifile::inifile *ini = singleton<inifile::inifile>::instance();
     ini->load(get_root_path() + "/config/main.ini");
 
+    const string app_id = (*ini)["server"]["app_id"];
     const string &ip = (*ini)["server"]["ip"];
     const int port = (*ini)["server"]["port"];
     const int worker_cnt = (*ini)["server"]["worker_cnt"];
@@ -70,7 +71,8 @@ int system::init()
 
     // server
     auto m_server = singleton<server::server>::instance();
-    m_server->config(ip,
+    m_server->config(app_id,
+                     ip,
                      port,
                      worker_cnt,
                      max_client_cnt,

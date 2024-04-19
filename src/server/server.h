@@ -26,7 +26,13 @@ namespace avant::server
         std::string get_crt_pem();
         std::string get_key_pem();
         SSL_CTX *get_ssl_ctx();
-        void config(const std::string &ip,
+        inline std::string get_app_id()
+        {
+            return m_app_id;
+        }
+
+        void config(const std::string &app_id,
+                    const std::string &ip,
                     int port,
                     size_t worker_cnt,
                     size_t max_client_cnt,
@@ -58,9 +64,14 @@ namespace avant::server
         {
             m_accept_per_tick = accept_per_tick;
         }
+        inline void set_app_id(std::string app_id)
+        {
+            m_app_id = app_id;
+        }
         void set_listen_info(const std::string &ip, int port);
 
     private:
+        std::string m_app_id{};
         std::string m_ip{};
         size_t m_port{0};
         size_t m_worker_cnt{0};
