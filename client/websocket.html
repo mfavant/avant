@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<!-- saved from url=(0060)http://61.171.51.135:20023/mes/avant/client/websocket.html -->
+<html lang="en">
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Example</title>
+    <style>
+        .show-block {
+            background-color: black;
+            color: aliceblue;
+        }
+    </style>
+</head>
+
+<body>
+    <div><span id="pingpong" class="show-block"></span></div>
+    <div>延迟:<span id="ms" class="show-block"></span><span class="show-block">ms</span></div>
+    <!-- 修改：添加一个文本输入框 -->
+    <input type="text" id="myInput" placeholder="Type your message...">
+    <button onclick="sendMessage()">Send Message</button>
+    <div id="response"></div>
+
+    <script>
+        let pingpongcount = 0;
+        //const socket = new WebSocket("wss://61.171.51.135:20023/");
+        const socket = new WebSocket("ws://172.29.94.203:20023/");
+        socket.addEventListener("open", (event) => {
+            console.log("WebSocket connection opened:", event);
+            //setTimeout(sendMessage, 0);
+            start();
+        });
+
+        socket.addEventListener("message", (event) => {
+            //console.log("Received message:", event.data);
+            //setTimeout(sendMessage, 0);
+            let textarea = document.getElementById("response");
+            textarea.style.display = "block";
+            let newNode = document.createElement("textarea");
+            newNode.textContent = event.data;
+            //textarea.appendChild(newNode);
+            let child_len = textarea.childNodes.length;
+            //console.log(child_len);
+            if (child_len > 10) {
+                while (textarea.firstChild) {
+                    textarea.removeChild(textarea.firstChild);
+                }
+            }
+            ++pingpongcount;
+            document.getElementById("pingpong").innerText = pingpongcount.toString();
+
+
+            //转换为时间戳
+            let responseTime = new Date();
+            responseTime.setTime(event.data);
+            let currTime = new Date();
+            let gap = currTime - responseTime;
+            //console.log(gap);
+            {
+                let msEl = document.getElementById("ms");
+                msEl.textContent = String(gap);
+            }
+        });
+
+        socket.addEventListener("close", (event) => {
+            console.log("WebSocket connection closed:", event);
+        });
+
+        socket.addEventListener("error", (event) => {
+            console.error("WebSocket error:", event);
+        });
+
+        // 修改：添加发送消息的函数
+        function sendMessage() {
+            const inputElement = document.getElementById("myInput");
+            const message = inputElement.value;
+
+            // 确保输入不为空
+            if (message.trim() !== "") {
+                socket.send(message);
+                //inputElement.value = ""; // 清空输入框
+            } else {
+                let currTime = (new Date()).getTime();
+                socket.send(currTime.toString());
+            }
+        }
+
+        function start() {
+            setInterval(() => { sendMessage() }, 1000 / 26);
+        }
+
+    </script>
+
+
+</body>
+<div style="all: initial;">
+    <div id="__hcfy__" style="all: initial;"></div>
+</div>
+
+</html>

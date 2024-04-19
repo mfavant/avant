@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+enum ProtoCmd {
+  CS_REQ_EXAMPLE = 0;
+  CS_RES_EXAMPLE = 1;
+}

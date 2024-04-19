@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message ProtoPackage{
+    int32 cmd = 1;
+    bytes body = 2;
+}

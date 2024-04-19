@@ -1,0 +1,52 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+
+Makefile
+build/Makefile
+src/Makefile 
+CMakeFiles
+*.cmake
+*.make
+build/
+out/
+bin/tubekit
+.vscode/
+.vs/
+*.log
+CMakeCache.txt
+cmake_install.cmake
+
+protocol/proto_res/
+!protocol/Makefile
+
