@@ -1,6 +1,6 @@
 #include "utility/time.h"
 
-using namespace avant::utility::time;
+using namespace avant::utility;
 
 uint64_t time::get_milliseconds()
 {

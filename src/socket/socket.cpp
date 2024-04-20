@@ -432,13 +432,3 @@ void socket::set_ssl_accepted(bool accepted)
 {
     m_ssl_accepted = accepted;
 }
-
-void socket::set_gid(uint64_t gid)
-{
-    this->gid = gid;
-}
-
-uint64_t socket::get_gid()
-{
-    return this->gid;
-}

@@ -11,6 +11,7 @@
 #include "task/task_type.h"
 #include "event/event_poller.h"
 #include "socket/socket_pair.h"
+#include "connection/connection_mgr.h"
 
 namespace avant::server
 {
@@ -75,6 +76,7 @@ namespace avant::server
             m_app_id = app_id;
         }
         void set_listen_info(const std::string &ip, int port);
+        uint64_t gen_gid(uint64_t time_seconds, uint64_t gid_seq);
 
     private:
         std::string m_app_id{};
@@ -94,10 +96,11 @@ namespace avant::server
         volatile bool stop_flag{false};
 
         SSL_CTX *m_ssl_context{nullptr};
-        std::shared_ptr<avant::worker::worker[]> m_workers{nullptr};
+        avant::worker::worker *m_workers{nullptr};
         std::shared_ptr<std::atomic<int>> m_curr_connection_num{nullptr};
-        std::shared_ptr<std::shared_ptr<avant::socket::socket_pair>[]> m_main_worker_tunnel{nullptr};
+        avant::socket::socket_pair *m_main_worker_tunnel{nullptr};
 
-        avant::event::event_poller epoller;
+        avant::event::event_poller m_epoller;
+        avant::connection::connection_mgr m_main_connection_mgr;
     };
 }

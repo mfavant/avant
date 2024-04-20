@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <chrono>
 
-namespace avant::utility::time
+namespace avant::utility
 {
     class time
     {

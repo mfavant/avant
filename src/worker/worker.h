@@ -2,6 +2,7 @@
 #include <atomic>
 #include "event/event_poller.h"
 #include "socket/socket_pair.h"
+#include "connection/connection_mgr.h"
 #include <memory>
 
 namespace avant::worker
@@ -20,9 +21,9 @@ namespace avant::worker
 
         std::shared_ptr<std::atomic<int>> curr_connection_num{nullptr};
 
-        std::shared_ptr<avant::socket::socket_pair> main_worker_tunnel{nullptr};
+        avant::socket::socket_pair *main_worker_tunnel{nullptr};
 
         avant::event::event_poller epoller;
+        std::shared_ptr<avant::connection::connection_mgr> worker_connection_mgr{nullptr};
     };
 };
-// 000

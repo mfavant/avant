@@ -13,27 +13,43 @@ socket_pair::socket_pair()
 
 socket_pair::~socket_pair()
 {
-    for (int i = 0; i < m_fd_size; i++)
-    {
-        if (m_fd[i] > 0)
-        {
-            ::close(m_fd[i]);
-        }
-    }
 }
 
 int socket_pair::init()
 {
-    int iret = socketpair(AF_UNIX, SOCK_STREAM, 0, m_fd) < 0;
+    int iret = socketpair(AF_UNIX, SOCK_STREAM, 0, m_fd);
+    if (iret != 0)
+    {
+        return iret;
+    }
+    m_socket_obj[m_me_idx].set_fd(m_fd[m_me_idx]); // socket_obj auto ::close
+    m_socket_obj[m_me_idx].set_non_blocking();
+    m_socket_obj[m_me_idx].set_recv_buffer(65535);
+    m_socket_obj[m_me_idx].set_send_buffer(65535);
+
+    m_socket_obj[m_other_idx].set_fd(m_fd[m_other_idx]);
+    m_socket_obj[m_other_idx].set_non_blocking();
+    m_socket_obj[m_other_idx].set_recv_buffer(65535);
+    m_socket_obj[m_other_idx].set_send_buffer(65535);
     return iret;
 }
 
 int socket_pair::get_me()
 {
-    return m_fd[0];
+    return m_fd[m_me_idx];
 }
 
 int socket_pair::get_other()
 {
-    return m_fd[1];
+    return m_fd[m_other_idx];
+}
+
+avant::socket::socket &socket_pair::get_me_socket()
+{
+    return std::ref(m_socket_obj[m_me_idx]);
+}
+
+avant::socket::socket &socket_pair::get_other_socket()
+{
+    return std::ref(m_socket_obj[m_other_idx]);
 }

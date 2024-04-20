@@ -12,6 +12,7 @@
 #include "utility/singleton.h"
 #include "task/task_type.h"
 #include "socket/server_socket.h"
+#include "utility/time.h"
 
 using namespace std;
 using namespace avant::server;
@@ -31,6 +32,14 @@ server::~server()
     if (get_use_ssl() && m_ssl_context)
     {
         SSL_CTX_free(m_ssl_context);
+    }
+    if (m_main_worker_tunnel)
+    {
+        delete[] m_main_worker_tunnel;
+    }
+    if (m_workers)
+    {
+        delete[] m_workers;
     }
 }
 
@@ -223,13 +232,33 @@ SSL_CTX *server::get_ssl_ctx()
 
 void server::on_start()
 {
-    // main epoller
-    int iret = epoller.create(m_max_client_cnt * 2);
-    if (iret != 0)
+    // time
+    utility::time server_time;
+    server_time.update();
+    uint64_t latest_tick_time = server_time.get_seconds();
+    uint64_t gid_seq = 0;
+
+    // main m_epoller
+    int iret = 0;
     {
-        LOG_ERROR("epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
-        stop_flag = true;
-        return;
+        iret = m_epoller.create(m_max_client_cnt * 2);
+        if (iret != 0)
+        {
+            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
+            stop_flag = true;
+            return;
+        }
+    }
+
+    // main_connection_mgr
+    {
+        iret = m_main_connection_mgr.init(m_max_client_cnt);
+        if (iret != 0)
+        {
+            LOG_ERROR("m_main_connection_mgr.init failed[%d]", iret);
+            stop_flag = true;
+            return;
+        }
     }
 
     // m_curr_connection_num
@@ -238,155 +267,254 @@ void server::on_start()
         if (!m_curr_connection_num)
         {
             LOG_ERROR("new std::atomic<int> m_curr_connection_num err");
+            stop_flag = true;
             return;
         }
     }
 
     // main_worker_tunnel
     {
-        m_main_worker_tunnel.reset(new std::shared_ptr<avant::socket::socket_pair>[m_worker_cnt]);
+        m_main_worker_tunnel = new (std::nothrow) avant::socket::socket_pair[m_worker_cnt];
         if (!m_main_worker_tunnel)
         {
             LOG_ERROR("new socket_pair err");
+            stop_flag = true;
+            return;
+        }
+        // init tunnel
+        for (size_t i = 0; i < m_worker_cnt; i++)
+        {
+            iret = m_main_worker_tunnel[i].init();
+            if (iret != 0)
+            {
+                LOG_ERROR("m_main_worker_tunnel[%d] init failed", i);
+                stop_flag = true;
+                return;
+            }
+        }
+        for (size_t i = 0; i < m_worker_cnt; i++)
+        {
+            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, EPOLLIN | EPOLLERR, true))
+            {
+                LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed %d", errno);
+                stop_flag = true;
+                return;
+            }
+            // main alloc connection for tunnel
+            {
+                iret = m_main_connection_mgr.alloc_connection(m_main_worker_tunnel[i].get_me(), gen_gid(latest_tick_time, ++gid_seq));
+                if (iret != 0)
+                {
+                    LOG_ERROR("m_main_connection_mgr.alloc_connection return %d", iret);
+                    stop_flag = true;
+                    return;
+                }
+            }
+        }
+    }
+
+    // worker init
+    {
+        worker::worker *worker_arr = new worker::worker[m_worker_cnt];
+        m_workers = worker_arr;
+        if (!worker_arr)
+        {
+            LOG_ERROR("new worker::worker failed");
             return;
         }
         for (size_t i = 0; i < m_worker_cnt; i++)
         {
-            std::shared_ptr<avant::socket::socket_pair> new_item(new avant::socket::socket_pair);
-            m_main_worker_tunnel[i] = new_item;
-            iret = m_main_worker_tunnel[i]->init();
+            m_workers[i].worker_id = i;
+            m_workers[i].curr_connection_num = m_curr_connection_num;
+            m_workers[i].main_worker_tunnel = &m_main_worker_tunnel[i];
+
+            connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
+            if (!new_connection_mgr)
+            {
+                LOG_ERROR("new (std::nothrow) connection::connection_mgr failed");
+                stop_flag = true;
+                return;
+            }
+            std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
+            iret = new_connection_mgr->init(m_max_client_cnt);
             if (iret != 0)
             {
-                LOG_ERROR("m_main_worker_tunnel[%d] init failed", i);
+                LOG_ERROR("new_connection_mgr->init failed");
+                stop_flag = true;
+                return;
+            }
+            m_workers[i].worker_connection_mgr = new_connection_mgr_shared_ptr;
+            iret = m_workers[i].epoller.create(m_max_client_cnt * 2);
+            if (iret != 0)
+            {
+                LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
+                stop_flag = true;
+                return;
+            }
+
+            // tunnel to worker_epoller
+            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLERR, true))
+            {
+                LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
+                stop_flag = true;
+                return;
+            }
+            // TODO:worker alloc connection for tunnel
+            iret = m_workers[i].worker_connection_mgr->alloc_connection(m_workers[i].main_worker_tunnel->get_other(), gen_gid(latest_tick_time, ++gid_seq));
+            if (iret != 0)
+            {
+                LOG_ERROR("worker_connection_mgr.alloc_connection return %d", iret);
+                stop_flag = true;
                 return;
             }
         }
     }
 
-    worker::worker *worker_arr = new worker::worker[m_worker_cnt];
-    m_workers.reset(worker_arr);
-    for (size_t i = 0; i < m_worker_cnt; i++)
+    // worker thread start
     {
-        m_workers[i].worker_id = i;
-        m_workers[i].curr_connection_num = m_curr_connection_num;
-        m_workers[i].main_worker_tunnel = m_main_worker_tunnel[i];
-        iret = m_workers[i].epoller.create(m_max_client_cnt * 2);
-        if (iret != 0)
+        for (size_t i = 0; i < m_worker_cnt; i++)
         {
-            LOG_ERROR("epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
+            std::thread t(std::ref(m_workers[i]));
+            t.detach();
+        }
+    }
+
+    // listen_socket init
+    server_socket listen_socket(m_ip, m_port, m_max_client_cnt);
+    {
+        LOG_ERROR("IP %s PORT %d", m_ip.c_str(), m_port);
+        if (0 > listen_socket.get_fd())
+        {
+            LOG_ERROR("listen_socket failed get_fd() < 0");
+            stop_flag = true;
+            return;
+        }
+        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLERR, true))
+        {
+            LOG_ERROR("listen_socket m_epoller add failed");
             stop_flag = true;
             return;
         }
     }
 
-    for (size_t i = 0; i < m_worker_cnt; i++)
+    // main_event_loop begin
     {
-        std::thread t(std::ref(m_workers[i]));
-        t.detach();
-    }
+        uint32_t counter = 0;
+        bool sent = false;
+        uint32_t client_counter = 0;
 
-    LOG_ERROR("IP %s PORT %d", m_ip.c_str(), m_port);
-    server_socket listen_socket(m_ip, m_port, m_max_client_cnt);
-    if (0 > listen_socket.get_fd())
-    {
-        LOG_ERROR("listen_socket failed get_fd() < 0");
-        stop_flag = true;
-        return;
-    }
-    if (0 != epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLERR, true))
-    {
-        LOG_ERROR("listen_socket epoller add failed");
-        return;
-    }
-
-    uint32_t counter = 0;
-    bool sent = false;
-    uint32_t client_counter = 0;
-
-    while (true)
-    {
-        int num = epoller.wait(10);
-        if (num < 0)
+        while (true)
         {
-            LOG_ERROR("epoller.wait return [%d]", num);
-            if (errno == EINTR)
+            int num = m_epoller.wait(10);
+            // time update
             {
-                continue;
-            }
-            else
-            {
-                break;
-            }
-        }
-        for (int i = 0; i < num; i++)
-        {
-            if (epoller.m_events[i].data.fd == listen_socket.get_fd())
-            {
-                std::vector<int> clients_fd;
-                for (size_t loop = 0; loop < m_accept_per_tick; loop++)
+                server_time.update();
+                uint64_t now_tick_time = server_time.get_seconds();
+                if (latest_tick_time != now_tick_time)
                 {
-                    int new_client_fd = listen_socket.accept();
-                    if (new_client_fd < 0)
+                    bool flag = true;
+                    for (size_t i = 0; i < m_worker_cnt; i++)
+                    {
+                        if (!m_workers[i].is_stoped)
+                        {
+                            flag = false;
+                        }
+                    }
+                    if (flag)
                     {
                         break;
                     }
-                    else
-                    {
-                        clients_fd.push_back(new_client_fd);
-                        client_counter++;
-                        if (client_counter % 1000 == 0)
-                        {
-                            LOG_ERROR("client_counter[%u]", client_counter);
-                        }
-                    }
                 }
-                for (int new_client_fd : clients_fd)
+                gid_seq = 0;
+                latest_tick_time = now_tick_time;
+            }
+
+            if (num < 0)
+            {
+                LOG_ERROR("m_epoller.wait return [%d]", num);
+                if (errno == EINTR)
                 {
-                    // LOG_ERROR("new_client_fd[%d]", new_client_fd);
-                    ::close(new_client_fd);
+                    continue;
+                }
+                else
+                {
+                    break;
                 }
             }
-        }
-
-        if (counter != UINT32_MAX)
-        {
-            counter++;
-        }
-        else
-        {
-            if (sent == false)
+            for (int i = 0; i < num; i++)
             {
+                if (m_epoller.m_events[i].data.fd == listen_socket.get_fd())
+                {
+                    std::vector<int> clients_fd;
+                    for (size_t loop = 0; loop < m_accept_per_tick; loop++)
+                    {
+                        int new_client_fd = listen_socket.accept();
+                        if (new_client_fd < 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            clients_fd.push_back(new_client_fd);
+                            client_counter++;
+                            if (client_counter % 1000 == 0)
+                            {
+                                LOG_ERROR("client_counter[%u]", client_counter);
+                            }
+                        }
+                    }
+                    for (int new_client_fd : clients_fd)
+                    {
+                        // LOG_ERROR("new_client_fd[%d]", new_client_fd);
+                        ::close(new_client_fd);
+                    }
+                }
+            }
+
+            if (counter != UINT32_MAX)
+            {
+                counter++;
+            }
+            else
+            {
+                if (sent == false)
+                {
+                    sent = true;
+                    for (size_t i = 0; i < m_worker_cnt; i++)
+                    {
+                        m_workers[i].to_stop = true;
+                    }
+                }
+                else
+                {
+                    bool flag = true;
+                    for (size_t i = 0; i < m_worker_cnt; i++)
+                    {
+                        if (!m_workers[i].is_stoped)
+                        {
+                            flag = false;
+                        }
+                    }
+                    if (flag)
+                    {
+                        break;
+                    }
+                }
+            }
+            if (counter != UINT32_MAX && stop_flag)
+            {
+                counter = UINT32_MAX;
                 sent = true;
                 for (size_t i = 0; i < m_worker_cnt; i++)
                 {
                     m_workers[i].to_stop = true;
                 }
             }
-            else
-            {
-                bool flag = true;
-                for (size_t i = 0; i < m_worker_cnt; i++)
-                {
-                    if (!m_workers[i].is_stoped)
-                    {
-                        flag = false;
-                    }
-                }
-                if (flag)
-                {
-                    break;
-                }
-            }
         }
-        if (counter != UINT32_MAX && stop_flag)
-        {
-            counter = UINT32_MAX;
-            sent = true;
-            for (size_t i = 0; i < m_worker_cnt; i++)
-            {
-                m_workers[i].to_stop = true;
-            }
-        }
-    }
-    stop_flag = true;
+    } // main_event_loop end
+}
+
+uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
+{
+    return (time_seconds << 32) | gid_seq;
 }

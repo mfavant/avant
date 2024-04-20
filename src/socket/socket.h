@@ -42,14 +42,15 @@ namespace avant::socket
         bool set_reuse_addr();
         bool set_reuse_port();
         int get_fd();
+        inline void set_fd(int fd)
+        {
+            this->m_sockfd = fd;
+        }
 
         SSL *get_ssl_instance();
         void set_ssl_instance(SSL *ssl_instance);
         bool get_ssl_accepted();
         void set_ssl_accepted(bool accepted);
-
-        void set_gid(uint64_t gid);
-        uint64_t get_gid();
 
     protected:
         std::string m_ip{};
@@ -57,7 +58,6 @@ namespace avant::socket
         int m_sockfd{0};
         SSL *m_ssl_instance{nullptr};
         bool m_ssl_accepted{false};
-        uint64_t gid{0};
 
     public:
         std::function<void()> close_callback{nullptr};
