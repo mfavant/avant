@@ -100,6 +100,7 @@ namespace avant::server
         avant::worker::worker *m_workers{nullptr};
         std::shared_ptr<std::atomic<int>> m_curr_connection_num{nullptr};
         avant::socket::socket_pair *m_main_worker_tunnel{nullptr};
+        avant::socket::socket_pair m_third_party_tunnel;
         std::unordered_set<int> m_me_worker_tunnel_fd;
 
         avant::event::event_poller m_epoller;

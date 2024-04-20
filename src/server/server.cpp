@@ -249,7 +249,6 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
-            stop_flag = true;
             return;
         }
     }
@@ -260,7 +259,6 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("m_main_connection_mgr.init failed[%d]", iret);
-            stop_flag = true;
             return;
         }
     }
@@ -271,7 +269,6 @@ void server::on_start()
         if (!m_curr_connection_num)
         {
             LOG_ERROR("new std::atomic<int> m_curr_connection_num err");
-            stop_flag = true;
             return;
         }
     }
@@ -282,7 +279,6 @@ void server::on_start()
         if (!m_main_worker_tunnel)
         {
             LOG_ERROR("new socket_pair err");
-            stop_flag = true;
             return;
         }
         // init tunnel
@@ -292,7 +288,6 @@ void server::on_start()
             if (iret != 0)
             {
                 LOG_ERROR("m_main_worker_tunnel[%d] init failed", i);
-                stop_flag = true;
                 return;
             }
         }
@@ -301,7 +296,6 @@ void server::on_start()
             if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, EPOLLIN | EPOLLERR, true))
             {
                 LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed %d", errno);
-                stop_flag = true;
                 return;
             }
             // main alloc connection for tunnel
@@ -309,12 +303,35 @@ void server::on_start()
                 iret = m_main_connection_mgr.alloc_connection(m_main_worker_tunnel[i].get_me(), gen_gid(latest_tick_time, ++gid_seq));
                 if (iret != 0)
                 {
-                    LOG_ERROR("m_main_connection_mgr.alloc_connection return %d", iret);
-                    stop_flag = true;
+                    LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_worker_tunnel return %d", iret);
                     return;
                 }
             }
             m_me_worker_tunnel_fd.insert(m_main_worker_tunnel[i].get_me());
+        }
+    }
+
+    // m_third_party_tunnel
+    {
+        iret = m_third_party_tunnel.init();
+        if (iret != 0)
+        {
+            LOG_ERROR("main m_third_party_tunnel failed iret=%d", iret);
+            return;
+        }
+        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, EPOLLIN | EPOLLERR, true))
+        {
+            LOG_ERROR("main_epoller.add m_third_party_tunnel.get_me() failed %d", errno);
+            return;
+        }
+        // main alloc connection for tunnel
+        {
+            iret = m_main_connection_mgr.alloc_connection(m_third_party_tunnel.get_me(), gen_gid(latest_tick_time, ++gid_seq));
+            if (iret != 0)
+            {
+                LOG_ERROR("m_main_connection_mgr.alloc_connection for m_third_party_tunnel return %d", iret);
+                return;
+            }
         }
     }
 
@@ -338,7 +355,6 @@ void server::on_start()
             if (!new_connection_mgr)
             {
                 LOG_ERROR("new (std::nothrow) connection::connection_mgr failed");
-                stop_flag = true;
                 return;
             }
             std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
@@ -346,7 +362,6 @@ void server::on_start()
             if (iret != 0)
             {
                 LOG_ERROR("new_connection_mgr->init failed");
-                stop_flag = true;
                 return;
             }
             m_workers[i].worker_connection_mgr = new_connection_mgr_shared_ptr;
@@ -354,7 +369,6 @@ void server::on_start()
             if (iret != 0)
             {
                 LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
-                stop_flag = true;
                 return;
             }
 
@@ -362,7 +376,6 @@ void server::on_start()
             if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLERR, true))
             {
                 LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
-                stop_flag = true;
                 return;
             }
             // worker alloc connection for tunnel
@@ -370,7 +383,6 @@ void server::on_start()
             if (iret != 0)
             {
                 LOG_ERROR("worker_connection_mgr.alloc_connection return %d", iret);
-                stop_flag = true;
                 return;
             }
         }
@@ -392,13 +404,11 @@ void server::on_start()
         if (0 > listen_socket.get_fd())
         {
             LOG_ERROR("listen_socket failed get_fd() < 0");
-            stop_flag = true;
             return;
         }
         if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLERR, true))
         {
             LOG_ERROR("listen_socket m_epoller add failed");
-            stop_flag = true;
             return;
         }
     }
@@ -414,22 +424,25 @@ void server::on_start()
             uint64_t now_tick_time = server_time.get_seconds();
             if (latest_tick_time != now_tick_time)
             {
-                bool flag = true;
-                // checking all worker stoped
-                for (size_t i = 0; i < m_worker_cnt; i++)
+                if (stop_flag)
                 {
-                    if (!m_workers[i].is_stoped)
+                    bool flag = true;
+                    // checking all worker stoped
+                    for (size_t i = 0; i < m_worker_cnt; i++)
                     {
-                        flag = false;
+                        if (!m_workers[i].is_stoped)
+                        {
+                            flag = false;
+                        }
+                    }
+                    if (flag)
+                    {
+                        break;
                     }
                 }
-                if (flag)
-                {
-                    break;
-                }
+                gid_seq = 0;
+                latest_tick_time = now_tick_time;
             }
-            gid_seq = 0;
-            latest_tick_time = now_tick_time;
         }
 
         if (num < 0)
@@ -485,7 +498,12 @@ void server::on_start()
             // worker_tunnel_fd
             else if (m_me_worker_tunnel_fd.find(evented_fd) == m_me_worker_tunnel_fd.end())
             {
-                LOG_ERROR("main work_tunnel_fd coming");
+                LOG_ERROR("main work_tunnel_fd evented");
+            }
+            // third-party tunnel
+            else if (m_third_party_tunnel.get_me() == evented_fd)
+            {
+                LOG_ERROR("m_third_party_tunnel evented");
             }
             else
             {
