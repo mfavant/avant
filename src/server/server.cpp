@@ -332,6 +332,7 @@ void server::on_start()
             m_workers[i].worker_id = i;
             m_workers[i].curr_connection_num = m_curr_connection_num;
             m_workers[i].main_worker_tunnel = &m_main_worker_tunnel[i];
+            m_workers[i].use_ssl = m_use_ssl;
 
             connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
             if (!new_connection_mgr)
@@ -460,6 +461,12 @@ void server::on_start()
                     }
                     else
                     {
+                        if (*m_curr_connection_num >= (int)m_max_client_cnt)
+                        {
+                            LOG_ERROR("m_curr_connection_num >= m_max_client_cnt");
+                            ::close(new_client_fd);
+                            break;
+                        }
                         *m_curr_connection_num += 1;
                         clients_fd.push_back(new_client_fd);
                     }

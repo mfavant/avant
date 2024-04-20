@@ -18,6 +18,7 @@ namespace avant::worker
         bool is_stoped{false};
         int worker_id{-1};
         size_t max_client_num{0};
+        bool use_ssl{false};
 
         std::shared_ptr<std::atomic<int>> curr_connection_num{nullptr};
 
