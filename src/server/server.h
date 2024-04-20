@@ -10,6 +10,7 @@
 #include "worker/worker.h"
 #include "task/task_type.h"
 #include "event/event_poller.h"
+#include "socket/socket_pair.h"
 
 namespace avant::server
 {
@@ -94,9 +95,9 @@ namespace avant::server
 
         SSL_CTX *m_ssl_context{nullptr};
         std::shared_ptr<avant::worker::worker[]> m_workers{nullptr};
-        std::atomic<int> m_curr_connection_num{0};
+        std::shared_ptr<std::atomic<int>> m_curr_connection_num{nullptr};
+        std::shared_ptr<std::shared_ptr<avant::socket::socket_pair>[]> m_main_worker_tunnel{nullptr};
 
         avant::event::event_poller epoller;
-        
     };
 }

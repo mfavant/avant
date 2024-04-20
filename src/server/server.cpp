@@ -75,19 +75,21 @@ void server::start()
         }
     }
 
-    LOG_ERROR("m_app_id %s", m_app_id.c_str());
-    LOG_ERROR("m_ip %s", m_ip.c_str());
-    LOG_ERROR("m_port %d", m_port);
-    LOG_ERROR("m_worker_cnt %d", m_worker_cnt);
-    LOG_ERROR("m_max_client_cnt %d", m_max_client_cnt);
-    LOG_ERROR("m_epoll_wait_time %d", m_epoll_wait_time);
-    LOG_ERROR("m_accept_per_tick %d", m_accept_per_tick);
-    LOG_ERROR("m_http_static_dir %s", m_http_static_dir.c_str());
-    LOG_ERROR("m_lua_dir %s", m_lua_dir.c_str());
-    LOG_ERROR("m_task_type %s", m_task_type.c_str());
-    LOG_ERROR("m_use_ssl %d", (int)m_use_ssl);
-    LOG_ERROR("m_crt_pem %s", m_crt_pem.c_str());
-    LOG_ERROR("m_key_pem %s", m_key_pem.c_str());
+    {
+        LOG_ERROR("m_app_id %s", m_app_id.c_str());
+        LOG_ERROR("m_ip %s", m_ip.c_str());
+        LOG_ERROR("m_port %d", m_port);
+        LOG_ERROR("m_worker_cnt %d", m_worker_cnt);
+        LOG_ERROR("m_max_client_cnt %d", m_max_client_cnt);
+        LOG_ERROR("m_epoll_wait_time %d", m_epoll_wait_time);
+        LOG_ERROR("m_accept_per_tick %d", m_accept_per_tick);
+        LOG_ERROR("m_http_static_dir %s", m_http_static_dir.c_str());
+        LOG_ERROR("m_lua_dir %s", m_lua_dir.c_str());
+        LOG_ERROR("m_task_type %s", m_task_type.c_str());
+        LOG_ERROR("m_use_ssl %d", (int)m_use_ssl);
+        LOG_ERROR("m_crt_pem %s", m_crt_pem.c_str());
+        LOG_ERROR("m_key_pem %s", m_key_pem.c_str());
+    }
 
     on_start();
 }
@@ -221,6 +223,7 @@ SSL_CTX *server::get_ssl_ctx()
 
 void server::on_start()
 {
+    // main epoller
     int iret = epoller.create(m_max_client_cnt * 2);
     if (iret != 0)
     {
@@ -229,12 +232,44 @@ void server::on_start()
         return;
     }
 
+    // m_curr_connection_num
+    {
+        m_curr_connection_num.reset(new std::atomic<int>(0));
+        if (!m_curr_connection_num)
+        {
+            LOG_ERROR("new std::atomic<int> m_curr_connection_num err");
+            return;
+        }
+    }
+
+    // main_worker_tunnel
+    {
+        m_main_worker_tunnel.reset(new std::shared_ptr<avant::socket::socket_pair>[m_worker_cnt]);
+        if (!m_main_worker_tunnel)
+        {
+            LOG_ERROR("new socket_pair err");
+            return;
+        }
+        for (size_t i = 0; i < m_worker_cnt; i++)
+        {
+            std::shared_ptr<avant::socket::socket_pair> new_item(new avant::socket::socket_pair);
+            m_main_worker_tunnel[i] = new_item;
+            iret = m_main_worker_tunnel[i]->init();
+            if (iret != 0)
+            {
+                LOG_ERROR("m_main_worker_tunnel[%d] init failed", i);
+                return;
+            }
+        }
+    }
+
     worker::worker *worker_arr = new worker::worker[m_worker_cnt];
     m_workers.reset(worker_arr);
     for (size_t i = 0; i < m_worker_cnt; i++)
     {
         m_workers[i].worker_id = i;
-        m_workers[i].curr_connection_num = &m_curr_connection_num;
+        m_workers[i].curr_connection_num = m_curr_connection_num;
+        m_workers[i].main_worker_tunnel = m_main_worker_tunnel[i];
         iret = m_workers[i].epoller.create(m_max_client_cnt * 2);
         if (iret != 0)
         {
