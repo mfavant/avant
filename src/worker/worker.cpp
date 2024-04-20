@@ -17,33 +17,41 @@ void worker::operator()()
 {
     LOG_ERROR("worker::operator() start worker[%d]", this->worker_id);
 
-    int latest_show = 0;
     int num = -1;
     while (true)
     {
         num = this->epoller.wait(10);
+        if (this->to_stop)
+        {
+            break;
+        }
         if (num < 0)
         {
-            LOG_ERROR("epoller.wait return [%d]", num);
             if (errno == EINTR)
             {
                 continue;
             }
             else
             {
+                LOG_ERROR("worker epoller.wait return [%d] errno %d", num, errno);
                 break;
             }
         }
-
-        int inow = this->curr_connection_num->fetch_add(1);
-        if (inow - latest_show > 100)
+        for (int i = 0; i < num; i++)
         {
-            // LOG_ERROR("curr_connection_num %d", inow);
-            latest_show = inow;
-        }
-        if (this->to_stop)
-        {
-            break;
+            int evented_fd = this->epoller.m_events[i].data.fd;
+            // main worker tunnel fd
+            if (evented_fd == this->main_worker_tunnel->get_other())
+            {
+                LOG_ERROR("worker tunnel fd evented");
+            }
+            // default client fd
+            else
+            {
+                LOG_ERROR("worker client fd evented");
+                ::close(evented_fd);
+                this->epoller.del(evented_fd, nullptr, 0);
+            }
         }
     }
 

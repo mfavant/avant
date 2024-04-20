@@ -6,6 +6,7 @@
 #include <openssl/opensslv.h>
 #include <memory>
 #include <atomic>
+#include <unordered_set>
 
 #include "worker/worker.h"
 #include "task/task_type.h"
@@ -99,6 +100,7 @@ namespace avant::server
         avant::worker::worker *m_workers{nullptr};
         std::shared_ptr<std::atomic<int>> m_curr_connection_num{nullptr};
         avant::socket::socket_pair *m_main_worker_tunnel{nullptr};
+        std::unordered_set<int> m_me_worker_tunnel_fd;
 
         avant::event::event_poller m_epoller;
         avant::connection::connection_mgr m_main_connection_mgr;
