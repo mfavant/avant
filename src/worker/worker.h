@@ -26,5 +26,9 @@ namespace avant::worker
 
         avant::event::event_poller epoller;
         std::shared_ptr<avant::connection::connection_mgr> worker_connection_mgr{nullptr};
+
+    private:
+        void on_tunnel_event(uint32_t event);
+        void on_client_event(int fd, uint32_t event);
     };
 };

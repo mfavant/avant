@@ -43,18 +43,28 @@ void worker::operator()()
             // main worker tunnel fd
             if (evented_fd == this->main_worker_tunnel->get_other())
             {
-                LOG_ERROR("worker tunnel fd evented");
+                on_tunnel_event(this->epoller.m_events[i].events);
             }
             // default client fd
             else
             {
-                LOG_ERROR("worker client fd evented");
-                ::close(evented_fd);
-                this->epoller.del(evented_fd, nullptr, 0);
+                on_client_event(evented_fd, this->epoller.m_events[i].events);
             }
         }
     }
 
     LOG_ERROR("worker::operator() end worker[%d]", this->worker_id);
     this->is_stoped = true;
+}
+
+void worker::on_tunnel_event(uint32_t event)
+{
+    LOG_ERROR("worker tunnel fd evented");
+}
+
+void worker::on_client_event(int fd, uint32_t event)
+{
+    LOG_ERROR("worker client fd evented");
+    ::close(fd);
+    this->epoller.del(fd, nullptr, 0);
 }

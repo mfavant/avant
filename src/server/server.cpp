@@ -307,7 +307,7 @@ void server::on_start()
                     return;
                 }
             }
-            m_me_worker_tunnel_fd.insert(m_main_worker_tunnel[i].get_me());
+            m_main_worker_tunnel_fd2index.emplace(m_main_worker_tunnel[i].get_me(), i);
         }
     }
 
@@ -461,6 +461,7 @@ void server::on_start()
         for (int i = 0; i < num; i++)
         {
             int evented_fd = m_epoller.m_events[i].data.fd;
+            uint32_t event_come = m_epoller.m_events[i].events;
             // listen_fd
             if (evented_fd == listen_socket.get_fd())
             {
@@ -487,23 +488,21 @@ void server::on_start()
                 // new_client_fd come here
                 if (!clients_fd.empty())
                 {
-                    LOG_ERROR("new client coming");
                     for (int fd : clients_fd)
                     {
-                        ::close(fd);
-                        *m_curr_connection_num -= 1;
+                        on_listen_event(fd);
                     }
                 }
             }
             // worker_tunnel_fd
-            else if (m_me_worker_tunnel_fd.find(evented_fd) == m_me_worker_tunnel_fd.end())
+            else if (m_main_worker_tunnel_fd2index.find(evented_fd) != m_main_worker_tunnel_fd2index.end())
             {
-                LOG_ERROR("main work_tunnel_fd evented");
+                on_main_worker_tunnel_event(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[evented_fd]], event_come);
             }
             // third-party tunnel
             else if (m_third_party_tunnel.get_me() == evented_fd)
             {
-                LOG_ERROR("m_third_party_tunnel evented");
+                on_third_party_tunnel_event(m_third_party_tunnel, event_come);
             }
             else
             {
@@ -518,4 +517,21 @@ void server::on_start()
 uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
 {
     return (time_seconds << 32) | gid_seq;
+}
+
+void server::on_listen_event(int new_client_fd)
+{
+    LOG_ERROR("new client coming");
+    ::close(new_client_fd);
+    *m_curr_connection_num -= 1;
+}
+
+void server::on_main_worker_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
+{
+    LOG_ERROR("main work_tunnel_fd evented");
+}
+
+void server::on_third_party_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
+{
+    LOG_ERROR("m_third_party_tunnel evented");
 }

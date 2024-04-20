@@ -6,7 +6,7 @@
 #include <openssl/opensslv.h>
 #include <memory>
 #include <atomic>
-#include <unordered_set>
+#include <unordered_map>
 
 #include "worker/worker.h"
 #include "task/task_type.h"
@@ -79,6 +79,10 @@ namespace avant::server
         void set_listen_info(const std::string &ip, int port);
         uint64_t gen_gid(uint64_t time_seconds, uint64_t gid_seq);
 
+        void on_listen_event(int new_client_fd);
+        void on_main_worker_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
+        void on_third_party_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
+
     private:
         std::string m_app_id{};
         std::string m_ip{};
@@ -100,8 +104,8 @@ namespace avant::server
         avant::worker::worker *m_workers{nullptr};
         std::shared_ptr<std::atomic<int>> m_curr_connection_num{nullptr};
         avant::socket::socket_pair *m_main_worker_tunnel{nullptr};
+        std::unordered_map<int, int> m_main_worker_tunnel_fd2index;
         avant::socket::socket_pair m_third_party_tunnel;
-        std::unordered_set<int> m_me_worker_tunnel_fd;
 
         avant::event::event_poller m_epoller;
         avant::connection::connection_mgr m_main_connection_mgr;
