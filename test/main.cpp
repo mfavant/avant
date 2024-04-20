@@ -1,49 +1,29 @@
 #include <iostream>
-#include <memory>
+#include <string>
 using namespace std;
-
-class A
-{
-public:
-    A()
-    {
-        std::cout << "A" << std::endl;
-    }
-    ~A()
-    {
-        std::cout << "~A" << std::endl;
-    }
-};
 
 int main(int argc, char **argv)
 {
+    size_t bytes = 0;
+    for (int loop = 0; loop < 1000000000; loop++)
     {
-        std::cout << "test1" << std::endl;
-        std::shared_ptr<A[]> ptr2 = nullptr;
-        std::cout << "test2" << std::endl;
+        std::string str;
+        char buffer[1048576] = {1, 0, 1, 2, 3, 4, 5, 6, 7, 8};
+        // 1MB
+        str.append(buffer, 1048576);
+        // for (int i = 0; i < 20; i++)
+        // {
+        //     str += std::string(buffer, 1000000);
+        // }
+        bytes += str.size();
+        // for (char &ch : str)
+        // {
+        //     // std::cout << (int)ch << std::endl;
+        // }
+        if (loop % 100)
         {
-            std::shared_ptr<A[]> ptr1 = nullptr;
-            auto addr = new A[10];
-            std::cout << "testk" << std::endl;
-            ptr1.reset(addr);
-            ptr2 = ptr1;
-            std::cout << "test3" << std::endl;
+            std::cout << "bytes " << bytes / 1048576 << "MB" << std::endl;
         }
-        std::cout << "test4" << std::endl;
     }
-    std::cout << "test5" << std::endl;
-
-    std::shared_ptr<std::shared_ptr<A>[]> ptr4;
-    ptr4.reset(new std::shared_ptr<A>[4]);
-    std::shared_ptr<A> ptr5;
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            ptr4[i].reset(new A);
-        }
-        ptr5 = ptr4[0];
-    }
-    std::cout << "P" << std::endl;
-
     return 0;
 }
