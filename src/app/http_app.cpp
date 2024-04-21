@@ -157,7 +157,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             // and the response must be set response_end to true, then write after write_end_callback will be continuously recalled
             ctx.write_end_callback = [](connection::http_ctx &ctx) -> void
             {
-                constexpr int buffer_size = 102400;
+                constexpr int buffer_size = 1024000;
                 char buf[buffer_size] = {0};
                 int len = 0;
                 len = ::fread(buf, sizeof(char), buffer_size, (http_app_reponse::FD_TYPE *)((http_app_reponse *)ctx.ptr)->ptr);
@@ -228,7 +228,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 if (buffer_size > already_size)
                 {
                     size_t need_send = buffer_size - already_size;
-                    need_send = need_send > 102400 ? 102400 : need_send;
+                    need_send = need_send > 1024000 ? 1024000 : need_send;
                     ctx.conn_ptr->send_buffer.append(buffer_ptr, need_send);
                     already_size += need_send;
                 }

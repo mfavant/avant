@@ -202,7 +202,7 @@ void http_ctx::on_event(uint32_t event)
 
     // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER BEGIN==========================================
     {
-        // this->set_recv_end(true);
+        this->set_recv_end(true);
     }
     // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER END==========================================
 

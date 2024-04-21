@@ -448,8 +448,8 @@ void server::on_start()
             uint64_t now_tick_time = server_time.get_seconds();
             if (latest_tick_time != now_tick_time)
             {
-                int curr_connection_num = m_curr_connection_num->load();
-                LOG_ERROR("curr_connection_num %d", curr_connection_num);
+                // int curr_connection_num = m_curr_connection_num->load();
+                // LOG_ERROR("curr_connection_num %d", curr_connection_num);
 
                 if (stop_flag)
                 {
@@ -613,7 +613,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     // check if there is any content that needs to be read
     if (event & EPOLLIN)
     {
-        constexpr int buffer_size = 102400;
+        constexpr int buffer_size = 1024000;
         char buffer[buffer_size]{0};
         int buffer_used_idx{0};
 

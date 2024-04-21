@@ -84,7 +84,7 @@ void worker::on_tunnel_event(uint32_t event)
     // check if there is any content that needs to be read
     if (event & EPOLLIN)
     {
-        constexpr int buffer_size = 102400;
+        constexpr int buffer_size = 1024000;
         char buffer[buffer_size]{0};
         int buffer_used_idx{0};
 
