@@ -96,9 +96,9 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
     ctx.process_callback = [](avant::connection::http_ctx &ctx) -> void
     {
         {
-            const char *response = "HTTP/1.1 404 Not Found\r\nServer: tubekit\r\nContent-Type: text/text; charset=UTF-8\r\n\r\n";
+            const char *response = "HTTP/1.1 200 OK\r\nServer: tubekit\r\nContent-Type: text/text; charset=UTF-8\r\n\r\n";
             ctx.conn_ptr->send_buffer.append(response, strlen(response));
-            ctx.set_response_end(true);
+            ctx.set_process_end(true);
             return;
         }
         string url = utility::url::decode(ctx.url);

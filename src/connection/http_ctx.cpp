@@ -200,6 +200,12 @@ void http_ctx::on_event(uint32_t event)
         }
     } // ssl end
 
+    // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER BEGIN==========================================
+    {
+        // this->set_recv_end(true);
+    }
+    // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER END==========================================
+
     // read from socket
     if (!this->get_recv_end() && !this->get_everything_end())
     {
