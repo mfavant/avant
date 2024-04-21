@@ -7,6 +7,7 @@
 #include <memory>
 #include <atomic>
 #include <unordered_map>
+#include <vector>
 
 #include "worker/worker.h"
 #include "task/task_type.h"
@@ -83,7 +84,7 @@ namespace avant::server
         void set_listen_info(const std::string &ip, int port);
         uint64_t gen_gid(uint64_t time_seconds, uint64_t gid_seq);
 
-        void on_listen_event(int new_client_fd, uint64_t gid);
+        void on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid);
         void on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
         void on_tunnel_process(ProtoPackage &message);
 

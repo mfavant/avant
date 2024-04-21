@@ -6,13 +6,16 @@
 #include <thread>
 #include <avant-log/logger.h>
 #include <chrono>
-#include <vector>
 #include "server/server.h"
 #include "socket/socket.h"
 #include "utility/singleton.h"
 #include "task/task_type.h"
 #include "socket/server_socket.h"
 #include "utility/time.h"
+#include "hooks/tick.h"
+#include "hooks/init.h"
+#include "hooks/stop.h"
+#include "connection/http_ctx.h"
 
 using namespace std;
 using namespace avant::server;
@@ -32,14 +35,17 @@ server::~server()
     if (get_use_ssl() && m_ssl_context)
     {
         SSL_CTX_free(m_ssl_context);
+        m_ssl_context = nullptr;
     }
     if (m_main_worker_tunnel)
     {
         delete[] m_main_worker_tunnel;
+        m_main_worker_tunnel = nullptr;
     }
     if (m_workers)
     {
         delete[] m_workers;
+        m_workers = nullptr;
     }
 }
 
@@ -245,17 +251,17 @@ void server::on_start()
     // main m_epoller
     int iret = 0;
     {
-        iret = m_epoller.create(m_max_client_cnt * 2);
+        iret = m_epoller.create(m_max_client_cnt);
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
+            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt), iret);
             return;
         }
     }
 
     // main_connection_mgr
     {
-        iret = m_main_connection_mgr.init(m_max_client_cnt);
+        iret = m_main_connection_mgr.init(m_max_client_cnt / m_worker_cnt);
         if (iret != 0)
         {
             LOG_ERROR("m_main_connection_mgr.init failed[%d]", iret);
@@ -350,12 +356,15 @@ void server::on_start()
             LOG_ERROR("new worker::worker failed");
             return;
         }
+        worker::worker::http_static_dir = m_http_static_dir;
         for (size_t i = 0; i < m_worker_cnt; i++)
         {
             m_workers[i].worker_id = i;
             m_workers[i].curr_connection_num = m_curr_connection_num;
             m_workers[i].main_worker_tunnel = &m_main_worker_tunnel[i];
             m_workers[i].use_ssl = m_use_ssl;
+            m_workers[i].ssl_context = m_ssl_context;
+            m_workers[i].type = avant::task::str2task_type(m_task_type);
 
             connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
             if (!new_connection_mgr)
@@ -364,17 +373,17 @@ void server::on_start()
                 return;
             }
             std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
-            iret = new_connection_mgr->init(m_max_client_cnt);
+            iret = new_connection_mgr->init(m_max_client_cnt / m_worker_cnt);
             if (iret != 0)
             {
                 LOG_ERROR("new_connection_mgr->init failed");
                 return;
             }
             m_workers[i].worker_connection_mgr = new_connection_mgr_shared_ptr;
-            iret = m_workers[i].epoller.create(m_max_client_cnt * 2);
+            iret = m_workers[i].epoller.create(m_max_client_cnt / m_worker_cnt);
             if (iret != 0)
             {
-                LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt * 2), iret);
+                LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt / m_worker_cnt), iret);
                 return;
             }
 
@@ -422,13 +431,19 @@ void server::on_start()
         }
     }
 
-    // main_event_loop begin
+    // http-parser setting
+    {
+        connection::http_ctx::init_http_settings();
+    }
 
+    // main_event_loop begin
+    hooks::init::on_main_init(*this);
     while (true)
     {
         int num = m_epoller.wait(10);
         // time update
         {
+            hooks::tick::on_main_tick(*this);
             server_time.update();
             uint64_t now_tick_time = server_time.get_seconds();
             if (latest_tick_time != now_tick_time)
@@ -478,6 +493,7 @@ void server::on_start()
             if (evented_fd == listen_socket.get_fd())
             {
                 std::vector<int> clients_fd;
+                std::vector<uint64_t> gids;
                 for (size_t loop = 0; loop < m_accept_per_tick; loop++)
                 {
                     int new_client_fd = listen_socket.accept();
@@ -495,15 +511,13 @@ void server::on_start()
                         }
                         *m_curr_connection_num += 1;
                         clients_fd.push_back(new_client_fd);
+                        gids.push_back(gen_gid(latest_tick_time, ++gid_seq));
                     }
                 }
                 // new_client_fd come here
                 if (!clients_fd.empty())
                 {
-                    for (int fd : clients_fd)
-                    {
-                        on_listen_event(fd, gen_gid(latest_tick_time, ++gid_seq));
-                    }
+                    on_listen_event(clients_fd, gids);
                 }
             }
             // worker_tunnel_fd
@@ -524,6 +538,7 @@ void server::on_start()
             }
         }
     }
+    hooks::stop::on_main_stop(*this);
 }
 
 uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
@@ -531,45 +546,56 @@ uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
     return (time_seconds << 32) | gid_seq;
 }
 
-void server::on_listen_event(int new_client_fd, uint64_t gid)
+void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid)
 {
-    ProtoTunnelMain2WorkerNewClient main2worker_new_client;
-    main2worker_new_client.set_fd(new_client_fd);
-    main2worker_new_client.set_gid(gid);
-    std::string body_str;
-    body_str.resize(main2worker_new_client.ByteSizeLong());
-    main2worker_new_client.SerializeToString(&body_str);
-
-    ProtoPackage message;
-    message.set_cmd(ProtoCmd::TUNNEL_MAIN2WORKER_NEW_CLIENT);
-    message.set_body(body_str);
-
-    std::string data;
-    message.SerializeToString(&data);
-
+    std::vector<int> dirty_fd{};
+    for (size_t loop = 0; loop < vec_new_client_fd.size(); ++loop)
     {
-        uint64_t data_size = data.size();
-        data_size = ::htobe64(data_size);
-        char *data_size_arr = (char *)&data_size;
-        data.insert(0, data_size_arr, sizeof(data_size));
+        const int &new_client_fd = vec_new_client_fd[loop];
+        const uint64_t &gid = vec_gid[loop];
+
+        ProtoTunnelMain2WorkerNewClient main2worker_new_client;
+        main2worker_new_client.set_fd(new_client_fd);
+        main2worker_new_client.set_gid(gid);
+        std::string body_str;
+        body_str.resize(main2worker_new_client.ByteSizeLong());
+        main2worker_new_client.SerializeToString(&body_str);
+
+        ProtoPackage message;
+        message.set_cmd(ProtoCmd::TUNNEL_MAIN2WORKER_NEW_CLIENT);
+        message.set_body(body_str);
+
+        std::string data;
+        message.SerializeToString(&data);
+
+        {
+            uint64_t data_size = data.size();
+            data_size = ::htobe64(data_size);
+            char *data_size_arr = (char *)&data_size;
+            data.insert(0, data_size_arr, sizeof(data_size));
+        }
+
+        int target_worker_idx = gid % m_worker_cnt;
+
+        // send data to worker[target_worker_idx]
+        avant::socket::socket_pair &target_tunnel_sockpair = m_main_worker_tunnel[target_worker_idx];
+        connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(target_tunnel_sockpair.get_me());
+        if (!tunnel_conn)
+        {
+            LOG_ERROR("tunnel_conn is null target_worker_idx[%d]", target_worker_idx);
+            ::close(new_client_fd);
+            *m_curr_connection_num -= 1;
+            return;
+        }
+
+        tunnel_conn->send_buffer.append(data.c_str(), data.size());
+        dirty_fd.push_back(target_tunnel_sockpair.get_me());
     }
 
-    int target_worker_idx = gid % m_worker_cnt;
-
-    // send data to worker[target_worker_idx]
-    avant::socket::socket_pair &target_tunnel_sockpair = m_main_worker_tunnel[target_worker_idx];
-    connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(target_tunnel_sockpair.get_me());
-    if (!tunnel_conn)
+    for (size_t loop = 0; loop < dirty_fd.size(); ++loop)
     {
-        LOG_ERROR("tunnel_conn is null target_worker_idx[%d]", target_worker_idx);
-        ::close(new_client_fd);
-        *m_curr_connection_num -= 1;
-        return;
+        m_epoller.mod(dirty_fd[loop], nullptr, EPOLLIN | EPOLLOUT | EPOLLERR);
     }
-
-    tunnel_conn->send_buffer.append(data.c_str(), data.size());
-
-    m_epoller.mod(target_tunnel_sockpair.get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR);
 }
 
 void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)

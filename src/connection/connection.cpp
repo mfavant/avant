@@ -1,4 +1,7 @@
 #include "connection/connection.h"
+#include "connection/http_ctx.h"
+#include "connection/stream_ctx.h"
+#include "connection/websocket_ctx.h"
 
 using avant::connection::connection;
 
@@ -16,10 +19,26 @@ void connection::on_alloc()
 {
     recv_buffer.clear();
     send_buffer.clear();
+    closed_flag = false;
+    is_close = false;
 }
 
 void connection::on_release()
 {
+    if (http_ctx_ptr)
+    {
+        http_ctx_ptr->on_close();
+    }
+    if (stream_ctx_ptr)
+    {
+        stream_ctx_ptr->on_close();
+    }
+    if (websocket_ctx_ptr)
+    {
+        websocket_ctx_ptr->on_close();
+    }
     recv_buffer.clear();
     send_buffer.clear();
+    socket_obj.close();
+    closed_flag = true;
 }

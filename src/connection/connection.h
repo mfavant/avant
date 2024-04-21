@@ -3,12 +3,13 @@
 #include "socket/socket.h"
 #include <cstdint>
 #include <memory>
-#include "connection/http_ctx.h"
-#include "connection/stream_ctx.h"
-#include "connection/websocket_ctx.h"
 
 namespace avant::connection
 {
+    class http_ctx;
+    class stream_ctx;
+    class websocket_ctx;
+
     class connection
     {
     public:
@@ -21,8 +22,10 @@ namespace avant::connection
         avant::socket::socket socket_obj;
         void on_alloc();
         void on_release();
-        std::shared_ptr<avant::connection::http_ctx> http_ctx_ptr{nullptr};
-        std::shared_ptr<avant::connection::stream_ctx> stream_ctx_ptr{nullptr};
-        std::shared_ptr<avant::connection::websocket_ctx> websocket_ctx_ptr{nullptr};
+        std::shared_ptr<http_ctx> http_ctx_ptr{nullptr};
+        std::shared_ptr<stream_ctx> stream_ctx_ptr{nullptr};
+        std::shared_ptr<websocket_ctx> websocket_ctx_ptr{nullptr};
+        bool closed_flag{false};
+        bool is_close{false};
     };
-};
+}

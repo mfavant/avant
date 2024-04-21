@@ -26,11 +26,13 @@ int socket_pair::init()
     m_socket_obj[m_me_idx].set_non_blocking();
     m_socket_obj[m_me_idx].set_recv_buffer(65535);
     m_socket_obj[m_me_idx].set_send_buffer(65535);
+    m_socket_obj[m_me_idx].close_callback = nullptr;
 
     m_socket_obj[m_other_idx].set_fd(m_fd[m_other_idx]);
     m_socket_obj[m_other_idx].set_non_blocking();
     m_socket_obj[m_other_idx].set_recv_buffer(65535);
     m_socket_obj[m_other_idx].set_send_buffer(65535);
+    m_socket_obj[m_me_idx].close_callback = nullptr;
     return iret;
 }
 
