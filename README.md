@@ -1,12 +1,12 @@
-# avant
+# Avant
 
 Network Message Framework For Linux C++.
 
-CPP: `c++17`  
-Platform: `linux`  
-Protocol: `http` `tcp stream(protobuf)` `websocket`  
-Support TLS/SSL: `openssl`  
-Script: `lua`  
+CPP-MIN: `C++17`  
+PLATFORM: `linux`  
+PROTOCOL: `http` `tcp stream(protobuf)` `websocket`  
+TLS-SSL: `openssl`  
+SCRIPT: `lua`  
 
 ## Get Start
 
@@ -34,14 +34,14 @@ $ make -j4
 
 [centos8](./Centos8.md)
 
-### Config
+### Config File
 
 ```bash
 $ sudo mkdir /avant_static
 $ vim bin/config/main.ini
 ```
 
-### avant Start
+### Avant Start
 
 ```bash
 $ cd bin
@@ -66,7 +66,7 @@ support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
 3. [http app](https://github.com/crust-hub/avant/blob/main/src/app/http_app.cpp)
 4. [websocket app](https://github.com/crust-hub/avant/blob/main/src/app/websocket_app.cpp)
 
-## Requests Per Second
+## Response Per Second
 
 CPU: Intel(R) Core(TM) i5-9600KF CPU @ 3.70 GHz   
 OS : WSL2 Ubuntu Mem 8GB  (Windows 11)
@@ -78,19 +78,18 @@ config/main.ini
     accept_per_tick: 50  
 ```
 
-apache2-utils testing, avant http and node test/node_http_server.js .
+wrk testing, avant http and node test/node_http_server.js .
 
 ```bash
 # avant
-$ ab -c {{concurrency}} -n {{httpRequest}} http://IP:20023/node_http_server.js
+$ wrk -c {{connection_num}} -t {{concurrency}} http://IP:20023/node_http_server.js
 # nodejs
-$ ab -c {{concurrency}} -n {{httpRequest}} http://IP:20025/node_http_server.js
+$ wrk -c {{connection_num}} -n {{concurrency}} http://IP:20025/node_http_server.js
 ```
 
 ```bash
-# apache2-utils ab report
-# concurrency ./bin/avant        node node_http_server.js            httpRequest     responseBodySize
-
+# wrk report
+# connection_num ./bin/avant    node node_http_server.js    all_bytes
 ```
 
 ## Third-Party
@@ -98,4 +97,3 @@ $ ab -c {{concurrency}} -n {{httpRequest}} http://IP:20025/node_http_server.js
 1、[@http-parser](https://github.com/nodejs/http-parser)  2、[@lua](https://github.com/lua/lua)  
 3、[@protobuffer](https://github.com/protocolbuffers/protobuf)  4、[@openssl](https://github.com/openssl/openssl)  
 5、[@zlib](https://github.com/madler/zlib)  
-
