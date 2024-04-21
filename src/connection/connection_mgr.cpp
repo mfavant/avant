@@ -93,3 +93,18 @@ int connection_mgr::release_connection(int fd)
     connection_pool[index].on_release();
     return 0;
 }
+
+avant::connection::connection *connection_mgr::get_conn(int fd)
+{
+    auto fd2gid_iter = fd2gid.find(fd);
+    if (fd2gid_iter == fd2gid.end())
+    {
+        return nullptr;
+    }
+    auto gid2index_iter = gid2index.find(fd2gid_iter->second);
+    if (gid2index_iter == gid2index.end())
+    {
+        return nullptr;
+    }
+    return &connection_pool[gid2index_iter->second];
+}

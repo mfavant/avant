@@ -16,13 +16,12 @@ buffer::~buffer()
 {
     if (m_buffer)
     {
-        free(m_buffer);
+        ::free(m_buffer);
     }
 }
 
 uint64_t buffer::read(char *dest, uint64_t size)
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
     check_init();
     if (dest == nullptr || size == 0)
     {
@@ -47,7 +46,6 @@ uint64_t buffer::read(char *dest, uint64_t size)
 
 uint64_t buffer::write(const char *source, uint64_t size)
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
     check_init();
     if (source == nullptr || size == 0)
     {
@@ -125,7 +123,6 @@ uint64_t buffer::after_size()
 
 uint64_t buffer::can_readable_size()
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
     check_init();
     uint64_t size;
     get_readable_size(size);
@@ -140,7 +137,6 @@ void buffer::get_readable_size(uint64_t &out)
 
 void buffer::set_limit_max(uint64_t limit_max)
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
     if (limit_max < m_limit_max)
     {
         return;
@@ -150,13 +146,11 @@ void buffer::set_limit_max(uint64_t limit_max)
 
 uint64_t buffer::get_limit_max()
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
     return m_limit_max;
 }
 
 void buffer::clear()
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
     if (m_buffer)
     {
         free(m_buffer);
@@ -180,7 +174,6 @@ uint64_t buffer::copy_all(char *out, uint64_t out_len)
     {
         return 0;
     }
-    std::lock_guard<std::mutex> guard(m_mutex);
     check_init();
     uint64_t all_bytes = 0;
     get_readable_size(all_bytes);
@@ -198,7 +191,6 @@ bool buffer::read_ptr_move_n(uint64_t n)
     {
         return true;
     }
-    std::lock_guard<std::mutex> guard(m_mutex);
     check_init();
     uint64_t all_bytes = 0;
     get_readable_size(all_bytes);
@@ -217,7 +209,6 @@ char *buffer::force_get_read_ptr()
 
 uint64_t buffer::blank_space()
 {
-    std::lock_guard<std::mutex> guard(m_mutex);
     check_init();
     uint64_t u_after_size = after_size();
     uint64_t can_promote_bytes = m_limit_max - m_size;

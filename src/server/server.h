@@ -14,6 +14,10 @@
 #include "socket/socket_pair.h"
 #include "connection/connection_mgr.h"
 
+#include "proto_res/proto_cmd.pb.h"
+#include "proto_res/proto_message_head.pb.h"
+#include "proto_res/proto_tunnel.pb.h"
+
 namespace avant::server
 {
     class server
@@ -79,9 +83,9 @@ namespace avant::server
         void set_listen_info(const std::string &ip, int port);
         uint64_t gen_gid(uint64_t time_seconds, uint64_t gid_seq);
 
-        void on_listen_event(int new_client_fd);
-        void on_main_worker_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
-        void on_third_party_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
+        void on_listen_event(int new_client_fd, uint64_t gid);
+        void on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
+        void on_tunnel_process(ProtoPackage &message);
 
     private:
         std::string m_app_id{};

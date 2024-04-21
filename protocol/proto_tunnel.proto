@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+message ProtoTunnelMain2WorkerNewClient{
+    int32 fd = 1;
+    uint64 gid = 2;
+}

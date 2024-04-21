@@ -12,8 +12,6 @@ namespace avant::connection
         ~connection();
         avant::utility::vec_str_buffer recv_buffer;
         avant::utility::vec_str_buffer send_buffer;
-        size_t recv_buffer_byte_idx{0};
-        size_t send_buffer_byte_idx{0};
         int fd{0};
         uint64_t gid{0};
         avant::socket::socket socket_obj;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <iostream>
-#include <vector>
 #include <string>
 #include <thread>
 #include <chrono>
@@ -14,21 +13,17 @@ namespace avant::utility
     {
     public:
         vec_str_buffer();
-        void cache_swap();
-        std::string &push();
-        const std::string &first();
-        void pop();
+        ~vec_str_buffer();
+        const char *get_read_ptr();
+        void reserve(size_t bytes);
+        void move_read_ptr_n(size_t n);
+        void append(const char *bytes, size_t n);
+        void clear();
         bool empty();
+        size_t size();
 
-    public:
-        std::vector<std::string> data1;
-        std::vector<std::string> data2;
-        size_t reader_used_len;
-        size_t writer_used_len;
-        size_t reader_idx;
-        size_t writer_idx;
-        std::vector<std::string> *data_reader;
-        std::vector<std::string> *data_writer;
-        size_t read_out_idx;
+    private:
+        std::string data;
+        size_t before_reserve_bytes{0};
     };
 }

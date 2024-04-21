@@ -2,88 +2,50 @@
 
 using namespace avant::utility;
 
-vec_str_buffer::vec_str_buffer() : data1(10),
-                                   data2(10),
-                                   reader_used_len(10),
-                                   writer_used_len(10),
-                                   reader_idx(0),
-                                   writer_idx(0),
-                                   data_reader(&data1),
-                                   data_writer(&data2)
+vec_str_buffer::vec_str_buffer()
 {
 }
 
-void vec_str_buffer::cache_swap()
+vec_str_buffer::~vec_str_buffer()
 {
-    // 判断是否读完了
-    if (reader_idx != reader_used_len)
+}
+
+const char *vec_str_buffer::get_read_ptr()
+{
+    return data.c_str();
+}
+
+void vec_str_buffer::reserve(size_t bytes)
+{
+    if (bytes <= data.size() || bytes <= before_reserve_bytes)
     {
         return;
     }
-    // 没有其他数据
-    if (writer_used_len == 0)
-    {
-        return;
-    }
-
-    reader_idx = 0;
-    reader_used_len = writer_used_len;
-    writer_used_len = 0;
-    writer_idx = 0;
-    // swap cache
-    std::vector<std::string> *data_ptr = data_reader;
-    data_reader = data_writer;
-    data_writer = data_ptr;
-    read_out_idx = 0;
+    data.reserve(bytes);
+    before_reserve_bytes = bytes;
 }
 
-std::string &vec_str_buffer::push()
+void vec_str_buffer::move_read_ptr_n(size_t n)
 {
-    if (writer_idx == writer_used_len)
-    {
-        if (writer_used_len == data_writer->size()) // full
-        {
-            data_writer->push_back("");
-        }
-        writer_used_len++;
-    }
-
-    std::string &res = data_writer->at(writer_idx);
-    writer_idx++;
-    res.clear();
-    return res;
+    data.erase(0, n);
 }
 
-const std::string &vec_str_buffer::first()
+void vec_str_buffer::append(const char *bytes, size_t n)
 {
-    if (reader_idx == reader_used_len) // empty
-    {
-        if (data_reader->empty())
-        {
-            data_reader->push_back("");
-            return data_reader->at(0);
-        }
-        else
-        {
-            data_reader->at(0).clear();
-        }
-        return data_reader->at(0);
-    }
-    return data_reader->at(reader_idx);
+    data.append(bytes, n);
 }
 
-void vec_str_buffer::pop()
+void vec_str_buffer::clear()
 {
-    if (reader_idx <= reader_used_len)
-    {
-        data_reader->at(reader_idx).clear();
-        data_reader->at(reader_idx).resize(0);
-        reader_idx++;
-        read_out_idx++;
-    }
+    data.clear();
 }
 
 bool vec_str_buffer::empty()
 {
-    return (reader_idx >= reader_used_len);
+    return data.empty();
+}
+
+size_t vec_str_buffer::size()
+{
+    return data.size();
 }

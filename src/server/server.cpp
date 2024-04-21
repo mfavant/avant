@@ -293,7 +293,7 @@ void server::on_start()
         }
         for (size_t i = 0; i < m_worker_cnt; i++)
         {
-            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, EPOLLIN | EPOLLERR, true))
+            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
             {
                 LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed %d", errno);
                 return;
@@ -306,6 +306,9 @@ void server::on_start()
                     LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_worker_tunnel return %d", iret);
                     return;
                 }
+                connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_worker_tunnel[i].get_me());
+                tunnel_conn->recv_buffer.reserve(10485760); // 10MB
+                tunnel_conn->send_buffer.reserve(10485760); // 10MB
             }
             m_main_worker_tunnel_fd2index.emplace(m_main_worker_tunnel[i].get_me(), i);
         }
@@ -319,7 +322,7 @@ void server::on_start()
             LOG_ERROR("main m_third_party_tunnel failed iret=%d", iret);
             return;
         }
-        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, EPOLLIN | EPOLLERR, true))
+        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
         {
             LOG_ERROR("main_epoller.add m_third_party_tunnel.get_me() failed %d", errno);
             return;
@@ -332,6 +335,9 @@ void server::on_start()
                 LOG_ERROR("m_main_connection_mgr.alloc_connection for m_third_party_tunnel return %d", iret);
                 return;
             }
+            connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_third_party_tunnel.get_me());
+            tunnel_conn->recv_buffer.reserve(10485760); // 10MB
+            tunnel_conn->send_buffer.reserve(10485760); // 10MB
         }
     }
 
@@ -373,7 +379,7 @@ void server::on_start()
             }
 
             // tunnel to worker_epoller
-            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLERR, true))
+            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
             {
                 LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
                 return;
@@ -385,6 +391,9 @@ void server::on_start()
                 LOG_ERROR("worker_connection_mgr.alloc_connection return %d", iret);
                 return;
             }
+            connection::connection *tunnel_conn = m_workers[i].worker_connection_mgr->get_conn(m_workers[i].main_worker_tunnel->get_other());
+            tunnel_conn->recv_buffer.reserve(10485760); // 10MB
+            tunnel_conn->send_buffer.reserve(10485760); // 10MB
         }
     }
 
@@ -424,6 +433,9 @@ void server::on_start()
             uint64_t now_tick_time = server_time.get_seconds();
             if (latest_tick_time != now_tick_time)
             {
+                int curr_connection_num = m_curr_connection_num->load();
+                LOG_ERROR("curr_connection_num %d", curr_connection_num);
+
                 if (stop_flag)
                 {
                     bool flag = true;
@@ -490,19 +502,19 @@ void server::on_start()
                 {
                     for (int fd : clients_fd)
                     {
-                        on_listen_event(fd);
+                        on_listen_event(fd, gen_gid(latest_tick_time, ++gid_seq));
                     }
                 }
             }
             // worker_tunnel_fd
             else if (m_main_worker_tunnel_fd2index.find(evented_fd) != m_main_worker_tunnel_fd2index.end())
             {
-                on_main_worker_tunnel_event(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[evented_fd]], event_come);
+                on_tunnel_event(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[evented_fd]], event_come);
             }
             // third-party tunnel
             else if (m_third_party_tunnel.get_me() == evented_fd)
             {
-                on_third_party_tunnel_event(m_third_party_tunnel, event_come);
+                on_tunnel_event(m_third_party_tunnel, event_come);
             }
             else
             {
@@ -519,19 +531,146 @@ uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
     return (time_seconds << 32) | gid_seq;
 }
 
-void server::on_listen_event(int new_client_fd)
+void server::on_listen_event(int new_client_fd, uint64_t gid)
 {
-    LOG_ERROR("new client coming");
-    ::close(new_client_fd);
-    *m_curr_connection_num -= 1;
+    ProtoTunnelMain2WorkerNewClient main2worker_new_client;
+    main2worker_new_client.set_fd(new_client_fd);
+    main2worker_new_client.set_gid(gid);
+    std::string body_str;
+    body_str.resize(main2worker_new_client.ByteSizeLong());
+    main2worker_new_client.SerializeToString(&body_str);
+
+    ProtoPackage message;
+    message.set_cmd(ProtoCmd::TUNNEL_MAIN2WORKER_NEW_CLIENT);
+    message.set_body(body_str);
+
+    std::string data;
+    message.SerializeToString(&data);
+
+    {
+        uint64_t data_size = data.size();
+        data_size = ::htobe64(data_size);
+        char *data_size_arr = (char *)&data_size;
+        data.insert(0, data_size_arr, sizeof(data_size));
+    }
+
+    int target_worker_idx = gid % m_worker_cnt;
+
+    // send data to worker[target_worker_idx]
+    avant::socket::socket_pair &target_tunnel_sockpair = m_main_worker_tunnel[target_worker_idx];
+    connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(target_tunnel_sockpair.get_me());
+    if (!tunnel_conn)
+    {
+        LOG_ERROR("tunnel_conn is null target_worker_idx[%d]", target_worker_idx);
+        ::close(new_client_fd);
+        *m_curr_connection_num -= 1;
+        return;
+    }
+
+    tunnel_conn->send_buffer.append(data.c_str(), data.size());
+
+    m_epoller.mod(target_tunnel_sockpair.get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR);
 }
 
-void server::on_main_worker_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
+void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
 {
-    LOG_ERROR("main work_tunnel_fd evented");
+    // find conn
+    connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(tunnel.get_me());
+    if (!tunnel_conn)
+    {
+        LOG_ERROR("on_tunnel_event tunnel_conn is null, fd[%d]", tunnel.get_me());
+        return;
+    }
+
+    avant::socket::socket &sock = tunnel.get_me_socket();
+
+    // check if there is any content that needs to be read
+    if (event & EPOLLIN)
+    {
+        constexpr int buffer_size = 102400;
+        char buffer[buffer_size]{0};
+        int buffer_used_idx{0};
+
+        while (buffer_used_idx < buffer_size)
+        {
+            int len = 0;
+            int oper_errno = 0;
+            len = sock.recv(buffer + buffer_used_idx, buffer_size - buffer_used_idx, oper_errno);
+            if (len > 0)
+            {
+                buffer_used_idx += len;
+            }
+            else
+            {
+                if (oper_errno != EAGAIN && oper_errno != EINTR)
+                {
+                    LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                    to_stop();
+                }
+                break;
+            }
+        }
+        if (buffer_used_idx > 0)
+        {
+            tunnel_conn->recv_buffer.append(buffer, buffer_used_idx);
+        }
+
+        // parser protocol
+        while (!tunnel_conn->recv_buffer.empty())
+        {
+            ProtoPackage protoPackage;
+            uint64_t data_size = 0;
+            if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
+            {
+                data_size = *((uint64_t *)tunnel_conn->recv_buffer.get_read_ptr());
+                data_size = ::be64toh(data_size);
+                if (data_size + sizeof(data_size) > tunnel_conn->recv_buffer.size())
+                {
+                    break;
+                }
+            }
+            if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
+            {
+                break;
+            }
+            on_tunnel_process(protoPackage);
+            tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+        }
+    }
+
+    // check if there is any content that needs to be sent
+    while (event & EPOLLOUT)
+    {
+        if (tunnel_conn->send_buffer.empty())
+        {
+            m_epoller.mod(sock.get_fd(), nullptr, EPOLLIN | EPOLLERR);
+            break;
+        }
+
+        while (!tunnel_conn->send_buffer.empty())
+        {
+            int oper_errno = 0;
+            int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
+            if (len > 0)
+            {
+                tunnel_conn->send_buffer.move_read_ptr_n(len);
+            }
+            else
+            {
+                if (oper_errno != EAGAIN && oper_errno != EINTR)
+                {
+                    LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                    to_stop();
+                }
+                break;
+            }
+        }
+        break;
+    }
 }
 
-void server::on_third_party_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
+void server::on_tunnel_process(ProtoPackage &message)
 {
-    LOG_ERROR("m_third_party_tunnel evented");
+    int cmd = message.cmd();
+    LOG_ERROR("server::on_tunnel_process %d", cmd);
 }

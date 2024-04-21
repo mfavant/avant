@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdlib>
 #include <cstring>
-#include <mutex>
 #include <stdexcept>
 
 namespace avant
@@ -32,7 +31,6 @@ namespace avant
             char *m_read_ptr{nullptr};
             char *m_write_ptr{nullptr};
             char *m_buffer{nullptr};
-            std::mutex m_mutex;
 
         private:
             bool check_and_write(const char *source, uint64_t size);
