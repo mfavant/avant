@@ -1,7 +1,11 @@
 #pragma once
-#include <cstdint>
 #include "utility/vec_str_buffer.h"
 #include "socket/socket.h"
+#include <cstdint>
+#include <memory>
+#include "connection/http_ctx.h"
+#include "connection/stream_ctx.h"
+#include "connection/websocket_ctx.h"
 
 namespace avant::connection
 {
@@ -17,5 +21,8 @@ namespace avant::connection
         avant::socket::socket socket_obj;
         void on_alloc();
         void on_release();
+        std::shared_ptr<avant::connection::http_ctx> http_ctx_ptr{nullptr};
+        std::shared_ptr<avant::connection::stream_ctx> stream_ctx_ptr{nullptr};
+        std::shared_ptr<avant::connection::websocket_ctx> websocket_ctx_ptr{nullptr};
     };
 };
