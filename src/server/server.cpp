@@ -655,10 +655,24 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
                     break;
                 }
             }
-            if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
+            else
             {
                 break;
             }
+
+            if (data_size == 0)
+            {
+                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size));
+                break;
+            }
+
+            if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
+            {
+                LOG_ERROR("server parseFromArray err %llu", data_size);
+                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+                break;
+            }
+
             on_tunnel_process(protoPackage);
             tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
         }
