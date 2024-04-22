@@ -222,10 +222,10 @@ void worker::on_client_event(int fd, uint32_t event)
 void worker::on_tunnel_process(ProtoPackage &message)
 {
     int cmd = message.cmd();
-    if (cmd == ProtoCmd::TUNNEL_MAIN2WORKER_NEW_CLIENT)
+    if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT)
     {
         ProtoTunnelMain2WorkerNewClient package;
-        if (package.ParseFromString(message.body()))
+        if (package.ParseFromString(message.protocol()))
         {
             on_new_client_fd(package.fd(), package.gid());
         }

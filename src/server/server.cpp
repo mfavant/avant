@@ -562,8 +562,8 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
         main2worker_new_client.SerializeToString(&body_str);
 
         ProtoPackage message;
-        message.set_cmd(ProtoCmd::TUNNEL_MAIN2WORKER_NEW_CLIENT);
-        message.set_body(body_str);
+        message.set_cmd(ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT);
+        message.set_protocol(body_str);
 
         std::string data;
         message.SerializeToString(&data);

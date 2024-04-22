@@ -1,9 +1,13 @@
 syntax = "proto3";
 
-message ProtoCSReqExample{
+// PROTO_CMD_CS_REQ_EXAMPLE
+message ProtoCSReqExample
+{
     bytes testContext = 1;
 }
 
-message ProtoCSResExample{
+// PROTO_CMD_CS_RES_EXAMPLE
+message ProtoCSResExample
+{
     bytes testContext = 1;
 }

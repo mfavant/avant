@@ -1,6 +1,8 @@
 syntax = "proto3";
 
-message ProtoPackage{
+// ProtoCmd
+message ProtoPackage
+{
     int32 cmd = 1;
-    bytes body = 2;
+    bytes protocol = 2;
 }

@@ -1,6 +1,37 @@
 syntax = "proto3";
 
-message ProtoTunnelMain2WorkerNewClient{
+import "proto_message_head.proto";
+
+enum ProtoTunnelID
+{
+    PROTO_TUNNEL_WORKER_MIN = 0;
+    PROTO_TUNNEL_ID_OTHER = -1;
+    PROTO_TUNNEL_ID_MAIN = -2;
+}
+
+// PROTO_CMD_TUNNEL_PACKAGE
+message ProtoTunnelPackage
+{
+    // not null
+    int32 sourceTunnelsID = 1;
+    // count is zero then broadcast include self, main:-2 other:-1 worker_0:0 worker_1:1 worker_2:2...
+    repeated int32 targetTunnelsID = 2;
+    ProtoPackage innerProtoPackage = 4;
+}
+
+// PROTO_CMD_TUNNEL_CLIENT_MESSAGE
+message ProtoTunnelClientForwardMessage
+{
+    // not null
+    uint64 sourceGid = 1;
+    // count is zero then broadcast to all conn include self
+    repeated uint64 targetGid = 2;
+    ProtoPackage innerProtoPackage = 3;
+}
+
+// PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT
+message ProtoTunnelMain2WorkerNewClient
+{
     int32 fd = 1;
     uint64 gid = 2;
 }
