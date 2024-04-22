@@ -16,7 +16,8 @@ message ProtoTunnelPackage
     int32 sourceTunnelsID = 1;
     // count is zero then broadcast include self, main:-2 other:-1 worker_0:0 worker_1:1 worker_2:2...
     repeated int32 targetTunnelsID = 2;
-    ProtoPackage innerProtoPackage = 4;
+    bool targetAllWorker = 3;
+    ProtoPackage innerProtoPackage = 5;
 }
 
 // PROTO_CMD_TUNNEL_CLIENT_MESSAGE

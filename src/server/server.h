@@ -86,7 +86,10 @@ namespace avant::server
 
         void on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid);
         void on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
+
+        // other-main-worker.. forward center
         void on_tunnel_process(ProtoPackage &message);
+        void tunnel_forward(int source_tunnelid, int dest_tunnel_id, const ProtoPackage &message);
 
     private:
         std::string m_app_id{};
