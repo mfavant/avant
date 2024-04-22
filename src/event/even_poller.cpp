@@ -51,7 +51,7 @@ int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=tr
     ev.data.fd = fd;
     if (et)
     {
-        ev.events = events | EPOLLET; // decause epoll default LT
+        events = events | EPOLLET; // decause epoll default LT
         /*
         epoll是linux系统最新的处理多连接的高效率模型， 工作在两种方式下， EPOLLLT方式和EPOLLET方式。
         EPOLLLT是系统默认， 工作在这种方式下， 程序员不易出问题， 在接收数据时，只要socket输入缓存有数据，
@@ -65,25 +65,61 @@ int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=tr
         未读完， 那么后一个epoll_wait事件时， 也会得到读的通知， 但前一个读完的情况下， 后一个epoll就不会得到读事件的通知了
         */
     }
-    else
-    {
-        ev.events = events;
-    }
+    ev.events = events;
     return epoll_ctl(m_epfd, op, fd, &ev);
 }
 
 int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=true*/)
 {
-    return ctrl(fd, ptr, events, EPOLL_CTL_ADD, et);
+    if (et)
+    {
+        events |= EPOLLET;
+    }
+    auto iter = fd_curr_reg_event.find(fd);
+    if (iter != fd_curr_reg_event.end())
+    {
+        if (iter->second == events) // no change
+        {
+            return 0;
+        }
+    }
+    int iret = ctrl(fd, ptr, events, EPOLL_CTL_ADD, et);
+    if (iret == 0)
+    {
+        fd_curr_reg_event[fd] = events;
+    }
+    return iret;
 }
 
 int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=true*/)
 {
-    return ctrl(fd, ptr, events, EPOLL_CTL_MOD, et);
+    if (et)
+    {
+        events |= EPOLLET;
+    }
+    auto iter = fd_curr_reg_event.find(fd);
+    if (iter != fd_curr_reg_event.end())
+    {
+        if (iter->second == events) // no change
+        {
+            return 0;
+        }
+    }
+    int iret = ctrl(fd, ptr, events, EPOLL_CTL_MOD, et);
+    if (iret == 0)
+    {
+        fd_curr_reg_event[fd] = events;
+    }
+    return iret;
 }
 
 int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=true*/)
 {
+    auto iter = fd_curr_reg_event.find(fd);
+    if (iter != fd_curr_reg_event.end())
+    {
+        fd_curr_reg_event.erase(iter);
+    }
     return ctrl(fd, ptr, events, EPOLL_CTL_DEL, et);
 }
 

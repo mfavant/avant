@@ -154,7 +154,7 @@ void worker::on_tunnel_event(uint32_t event)
     {
         if (tunnel_conn->send_buffer.empty())
         {
-            this->epoller.mod(sock.get_fd(), nullptr, EPOLLIN | EPOLLERR);
+            this->epoller.mod(sock.get_fd(), nullptr, EPOLLIN | EPOLLERR, false);
             break;
         }
 
@@ -325,7 +325,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         conn->socket_obj.set_send_buffer(65536);
         conn->socket_obj.set_recv_buffer(65536);
 
-        iret = this->epoller.add(fd, nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+        iret = this->epoller.add(fd, nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
         if (iret != 0)
         {
             LOG_ERROR("this->epoller.add failed");
@@ -396,7 +396,7 @@ void worker::send_pack_to_tunnel(ProtoPackage &message)
         return;
     }
     tunnel_conn->send_buffer.append(data.c_str(), data.size());
-    this->epoller.mod(this->main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR);
+    this->epoller.mod(this->main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false);
 }
 
 void worker::on_client_event_http(int fd, uint32_t event)

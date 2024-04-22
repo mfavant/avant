@@ -128,6 +128,8 @@ namespace avant::event
          */
         int m_max_connections{0};
 
+        std::unordered_map<int, uint32_t> fd_curr_reg_event;
+
     public:
         /**
          * @brief 事件数组

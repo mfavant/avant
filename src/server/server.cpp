@@ -299,7 +299,7 @@ void server::on_start()
         }
         for (size_t i = 0; i < m_worker_cnt; i++)
         {
-            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
+            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
             {
                 LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed %d", errno);
                 return;
@@ -328,7 +328,7 @@ void server::on_start()
             LOG_ERROR("main m_third_party_tunnel failed iret=%d", iret);
             return;
         }
-        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
+        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
         {
             LOG_ERROR("main_epoller.add m_third_party_tunnel.get_me() failed %d", errno);
             return;
@@ -388,7 +388,7 @@ void server::on_start()
             }
 
             // tunnel to worker_epoller
-            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
+            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
             {
                 LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
                 return;
@@ -424,7 +424,7 @@ void server::on_start()
             LOG_ERROR("listen_socket failed get_fd() < 0");
             return;
         }
-        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
+        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
         {
             LOG_ERROR("listen_socket m_epoller add failed");
             return;
@@ -594,7 +594,7 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
 
     for (size_t loop = 0; loop < dirty_fd.size(); ++loop)
     {
-        m_epoller.mod(dirty_fd[loop], nullptr, EPOLLIN | EPOLLOUT | EPOLLERR);
+        m_epoller.mod(dirty_fd[loop], nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false);
     }
 }
 
@@ -683,7 +683,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     {
         if (tunnel_conn->send_buffer.empty())
         {
-            m_epoller.mod(sock.get_fd(), nullptr, EPOLLIN | EPOLLERR);
+            m_epoller.mod(sock.get_fd(), nullptr, EPOLLIN | EPOLLERR, false);
             break;
         }
 

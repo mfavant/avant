@@ -179,7 +179,7 @@ void http_ctx::on_event(uint32_t event)
         else if (0 == ssl_status)
         {
             // need more data or space
-            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
             return;
         }
         else
@@ -188,19 +188,19 @@ void http_ctx::on_event(uint32_t event)
             if (ssl_error == SSL_ERROR_WANT_READ)
             {
                 // need more data or space
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
                 return;
             }
             else if (ssl_error == SSL_ERROR_WANT_WRITE)
             {
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
                 return;
             }
             else
             {
                 LOG_ERROR("SSL_accept ssl_status[%d] error: %s", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
                 conn_ptr->is_close = true;
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
                 return;
             }
         }
@@ -340,19 +340,19 @@ void http_ctx::on_event(uint32_t event)
     // continue to epoll_wait
     if (!this->get_everything_end() && !this->get_recv_end()) // next loop for reading
     {
-        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
         return;
     }
 
     if (!this->get_everything_end())
     {
-        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
         return;
     }
 
     this->set_everything_end(true);
     conn_ptr->is_close = true;
-    this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP);
+    this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
 }
 
 void http_ctx::set_recv_end(bool recv_end)
