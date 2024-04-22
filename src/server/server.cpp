@@ -261,7 +261,7 @@ void server::on_start()
 
     // main_connection_mgr
     {
-        iret = m_main_connection_mgr.init(m_max_client_cnt / m_worker_cnt);
+        iret = m_main_connection_mgr.init(m_max_client_cnt);
         if (iret != 0)
         {
             LOG_ERROR("m_main_connection_mgr.init failed[%d]", iret);
@@ -373,17 +373,17 @@ void server::on_start()
                 return;
             }
             std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
-            iret = new_connection_mgr->init(m_max_client_cnt / m_worker_cnt);
+            iret = new_connection_mgr->init(m_max_client_cnt);
             if (iret != 0)
             {
                 LOG_ERROR("new_connection_mgr->init failed");
                 return;
             }
             m_workers[i].worker_connection_mgr = new_connection_mgr_shared_ptr;
-            iret = m_workers[i].epoller.create(m_max_client_cnt / m_worker_cnt);
+            iret = m_workers[i].epoller.create(m_max_client_cnt);
             if (iret != 0)
             {
-                LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt / m_worker_cnt), iret);
+                LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt), iret);
                 return;
             }
 
@@ -424,7 +424,7 @@ void server::on_start()
             LOG_ERROR("listen_socket failed get_fd() < 0");
             return;
         }
-        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLERR, true))
+        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, true))
         {
             LOG_ERROR("listen_socket m_epoller add failed");
             return;

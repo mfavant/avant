@@ -185,7 +185,11 @@ void worker::close_client_fd(int fd)
     if (this->worker_connection_mgr->get_conn(fd))
     {
         this->epoller.del(fd, nullptr, 0);
-        this->worker_connection_mgr->release_connection(fd);
+        int iret = this->worker_connection_mgr->release_connection(fd);
+        if (iret != 0)
+        {
+            LOG_ERROR("worker_connection_mgr->release_connection(%d) failed", fd);
+        }
     }
     else
     {

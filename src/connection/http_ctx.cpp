@@ -142,6 +142,12 @@ void http_ctx::on_event(uint32_t event)
         this->conn_ptr->socket_obj.close_callback = [socket_ptr]() {
         };
     }
+
+    if (event & (EPOLLHUP | EPOLLRDHUP | EPOLLERR))
+    {
+        conn_ptr->is_close = true;
+    }
+
     if (conn_ptr->is_close)
     {
         if (this->destory_callback)
@@ -202,16 +208,16 @@ void http_ctx::on_event(uint32_t event)
 
     // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER BEGIN==========================================
     {
-        this->set_recv_end(true);
+        // this->set_recv_end(true);
     }
     // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER END==========================================
 
     // read from socket
-    if (!this->get_recv_end() && !this->get_everything_end())
+    if (!this->get_recv_end() && !this->get_everything_end() && (event & EPOLLIN))
     {
         int oper_errno = 0;
         int len = -1;
-        constexpr int buffer_size = 102400;
+        constexpr int buffer_size = 1024;
         char buffer[buffer_size]{0};
         while (true)
         {
@@ -275,7 +281,7 @@ void http_ctx::on_event(uint32_t event)
     if (!this->get_everything_end() && this->get_process_end())
     {
         // from conn send buffer to socket
-        while (!conn_ptr->send_buffer.empty())
+        while (!conn_ptr->send_buffer.empty() && (event & EPOLLOUT))
         {
             int oper_errno = 0;
             int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
