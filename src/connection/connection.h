@@ -20,7 +20,7 @@ namespace avant::connection
         int fd{0};
         uint64_t gid{0};
         avant::socket::socket socket_obj;
-        void on_alloc();
+        void on_alloc(int fd);
         void on_release();
         std::shared_ptr<http_ctx> http_ctx_ptr{nullptr};
         std::shared_ptr<stream_ctx> stream_ctx_ptr{nullptr};

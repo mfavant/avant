@@ -89,7 +89,10 @@ namespace avant::server
 
         // other-main-worker.. forward center
         void on_tunnel_process(ProtoPackage &message);
-        void tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message);
+        int tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message);
+
+        connection::connection *get_main2worker_tunnel(int worker_tunnel_id);
+        connection::connection *get_main2other_tunnel();
 
     private:
         std::string m_app_id{};

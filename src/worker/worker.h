@@ -42,9 +42,9 @@ namespace avant::worker
     private:
         void on_tunnel_event(uint32_t event);
         void on_client_event(int fd, uint32_t event);
+        int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message);
         void on_tunnel_process(ProtoPackage &message);
         void on_new_client_fd(int fd, uint64_t gid);
-        void send_pack_to_tunnel(ProtoPackage &message);
 
         void on_client_event_http(int fd, uint32_t event);
         void on_client_event_stream(int fd, uint32_t event);

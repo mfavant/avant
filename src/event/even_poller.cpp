@@ -44,7 +44,7 @@ int event_poller::create(int max_connections)
     return 0;
 }
 
-int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=true*/)
+int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=false*/)
 {
     struct ::epoll_event ev;
     ev.data.ptr = ptr;
@@ -69,7 +69,7 @@ int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=tr
     return epoll_ctl(m_epfd, op, fd, &ev);
 }
 
-int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=true*/)
+int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 {
     if (et)
     {
@@ -91,7 +91,7 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=true*/)
     return iret;
 }
 
-int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=true*/)
+int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 {
     if (et)
     {
@@ -113,7 +113,7 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=true*/)
     return iret;
 }
 
-int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=true*/)
+int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 {
     auto iter = fd_curr_reg_event.find(fd);
     if (iter != fd_curr_reg_event.end())

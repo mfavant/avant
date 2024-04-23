@@ -96,7 +96,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
     ctx.process_callback = [](avant::connection::http_ctx &ctx) -> void
     {
         {
-            const char *response = "HTTP/1.1 200 OK\r\nServer: tubekit\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
+            const char *response = "HTTP/1.1 200 OK\r\nServer: tubekit\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
             ctx.conn_ptr->send_buffer.append(response, strlen(response));
             ctx.set_process_end(true);
             return;

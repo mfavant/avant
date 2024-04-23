@@ -12,6 +12,13 @@ namespace avant::event
     class event_poller
     {
     public:
+        static constexpr uint32_t READ = EPOLLIN;
+        static constexpr uint32_t WRITE = EPOLLOUT;
+        static constexpr uint32_t ERR = EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+        static constexpr uint32_t RWE = READ | WRITE | ERR;
+        static constexpr uint32_t RE = READ | ERR;
+        static constexpr uint32_t WE = WRITE | ERR;
+
         event_poller();
         ~event_poller();
 
@@ -42,7 +49,7 @@ namespace avant::event
          *               这样前面的socket就不会出现竞态。
          * @param et
          */
-        int add(int fd, void *ptr, uint32_t events, bool et = true);
+        int add(int fd, void *ptr, uint32_t events, bool et = false);
 
         /**
          * @brief epoll句柄更新已存在的epoll_event
@@ -64,7 +71,7 @@ namespace avant::event
          *               这样前面的socket就不会出现竞态。
          * @param et
          */
-        int mod(int fd, void *ptr, uint32_t events, bool et = true);
+        int mod(int fd, void *ptr, uint32_t events, bool et = false);
 
         /**
          * @brief 从epoll句柄删除epoll_event
@@ -86,7 +93,7 @@ namespace avant::event
          *               这样前面的socket就不会出现竞态。
          * @param et
          */
-        int del(int fd, void *ptr, uint32_t events, bool et = true);
+        int del(int fd, void *ptr, uint32_t events, bool et = false);
 
         /**
          * @brief 获取epoll事件
@@ -114,7 +121,7 @@ namespace avant::event
          *                 EPOLL_CTL_DEL：从 epfd中删除一个fd；
          * @param et
          */
-        int ctrl(int fd, void *ptr, uint32_t events, int op, bool et = true);
+        int ctrl(int fd, void *ptr, uint32_t events, int op, bool et = false);
 
     protected:
         /**

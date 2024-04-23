@@ -5,14 +5,19 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
+#include <unordered_set>
 #include "hooks/tick.h"
 #include "hooks/init.h"
 #include "hooks/stop.h"
 #include "connection/http_ctx.h"
 #include "connection/websocket_ctx.h"
 #include "connection/stream_ctx.h"
+#include "global/tunnel_id.h"
+#include "proto/proto_util.h"
 
 using namespace avant::worker;
+using namespace avant::global;
+using namespace avant::proto;
 
 std::string worker::http_static_dir;
 
@@ -82,7 +87,7 @@ void worker::on_tunnel_event(uint32_t event)
     avant::socket::socket &sock = tunnel.get_other_socket();
 
     // check if there is any content that needs to be read
-    if (event & EPOLLIN)
+    if (event & event::event_poller::READ)
     {
         constexpr int buffer_size = 1024000;
         char buffer[buffer_size]{0};
@@ -99,7 +104,7 @@ void worker::on_tunnel_event(uint32_t event)
             }
             else
             {
-                if (oper_errno != EAGAIN && oper_errno != EINTR)
+                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
                     LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
                     this->to_stop = true;
@@ -120,7 +125,7 @@ void worker::on_tunnel_event(uint32_t event)
             if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
             {
                 data_size = *((uint64_t *)tunnel_conn->recv_buffer.get_read_ptr());
-                data_size = ::be64toh(data_size);
+                data_size = avant::proto::toh64(data_size);
                 if (data_size + sizeof(data_size) > tunnel_conn->recv_buffer.size())
                 {
                     break;
@@ -144,17 +149,19 @@ void worker::on_tunnel_event(uint32_t event)
                 break;
             }
 
+            // LOG_ERROR("worker recv datasize %llu", sizeof(data_size) + data_size);
+
             on_tunnel_process(protoPackage);
             tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
         }
     }
 
     // check if there is any content that needs to be sent
-    while (event & EPOLLOUT)
+    while (event & event::event_poller::WRITE)
     {
         if (tunnel_conn->send_buffer.empty())
         {
-            this->epoller.mod(sock.get_fd(), nullptr, EPOLLIN | EPOLLERR, false);
+            this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
             break;
         }
 
@@ -168,7 +175,7 @@ void worker::on_tunnel_event(uint32_t event)
             }
             else
             {
-                if (oper_errno != EAGAIN && oper_errno != EINTR)
+                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
                     LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
                     this->to_stop = true;
@@ -219,24 +226,89 @@ void worker::on_client_event(int fd, uint32_t event)
     }
 }
 
+int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message)
+{
+    std::unordered_set<int> dest_tunnel_id_set;
+    // filter
+    for (const int &dest : dest_tunnel_id)
+    {
+        if (tunnel_id::get().get_main_tunnel_id() == dest)
+        {
+            LOG_ERROR("worker::tunnel_forward tunnel_id::get().get_main_tunnel_id() == dest");
+            continue;
+        }
+        if (!tunnel_id::get().is_tunnel_id(dest))
+        {
+            LOG_ERROR("worker::tunnel_forward !tunnel_id::get().is_tunnel_id(dest)");
+            continue;
+        }
+        dest_tunnel_id_set.insert(dest);
+    }
+
+    if (dest_tunnel_id_set.empty())
+    {
+        LOG_ERROR("worker::tunnel_forward dest_tunnel_id_set.empty()");
+        return -1;
+    }
+
+    ProtoTunnelPackage tunnelPackage;
+    tunnelPackage.set_sourcetunnelsid(tunnel_id::get().get_worker_tunnel_id(this->worker_id)); // this worker
+    for (const int &dest : dest_tunnel_id_set)
+    {
+        tunnelPackage.mutable_targettunnelsid()->Add(dest);
+    }
+    tunnelPackage.mutable_innerprotopackage()->CopyFrom(message);
+
+    // send to main
+    std::string data;
+    proto::pack_package(data, tunnelPackage, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE);
+
+    connection::connection *tunnel_conn = this->worker_connection_mgr->get_conn(main_worker_tunnel->get_other());
+    if (!tunnel_conn)
+    {
+        LOG_ERROR("tunnel_conn get failed");
+        return -2;
+    }
+
+    tunnel_conn->send_buffer.append(data.c_str(), data.size());
+    this->epoller.mod(this->main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false);
+    return 0;
+}
+
 void worker::on_tunnel_process(ProtoPackage &message)
 {
     int cmd = message.cmd();
-    if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT)
+
+    if (cmd != ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE)
+    {
+        LOG_ERROR("cmd %d != PROTO_CMD_TUNNEL_PACKAGE", cmd);
+        return;
+    }
+
+    ProtoTunnelPackage tunnelPackage;
+    if (!tunnelPackage.ParseFromString(message.protocol()))
+    {
+        LOG_ERROR("worker !tunnelPackage.ParseFromString(message.protocol())");
+        return;
+    }
+
+    int inner_cmd = tunnelPackage.innerprotopackage().cmd();
+
+    if (inner_cmd == ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT)
     {
         ProtoTunnelMain2WorkerNewClient package;
-        if (package.ParseFromString(message.protocol()))
+        if (package.ParseFromString(tunnelPackage.innerprotopackage().protocol()))
         {
             on_new_client_fd(package.fd(), package.gid());
         }
         else
         {
-            LOG_ERROR("package.ParseFromString(message.body()) failed cmd %d", cmd);
+            LOG_ERROR("ProtoTunnelMain2WorkerNewClient.ParseFromString failed cmd %d", inner_cmd);
         }
     }
     else
     {
-        LOG_ERROR("worker::on_tunnel_process undefine cmd %d", cmd);
+        LOG_ERROR("inner_cmd logic undefine inner_cmd %d", inner_cmd);
     }
 }
 
@@ -325,7 +397,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         conn->socket_obj.set_send_buffer(65536);
         conn->socket_obj.set_recv_buffer(65536);
 
-        iret = this->epoller.add(fd, nullptr, EPOLLIN | EPOLLOUT | EPOLLHUP | EPOLLERR | EPOLLRDHUP, false);
+        iret = this->epoller.add(fd, nullptr, event::event_poller::RWE, false);
         if (iret != 0)
         {
             LOG_ERROR("this->epoller.add failed");
@@ -377,26 +449,6 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
     {
         LOG_ERROR("create_conn_succ failed");
     }
-}
-
-void worker::send_pack_to_tunnel(ProtoPackage &message)
-{
-    std::string data;
-    message.SerializeToString(&data);
-    {
-        uint64_t data_size = data.size();
-        data_size = ::htobe64(data_size);
-        char *data_size_arr = (char *)&data_size;
-        data.insert(0, data_size_arr, sizeof(data_size));
-    }
-    connection::connection *tunnel_conn = this->worker_connection_mgr->get_conn(main_worker_tunnel->get_other());
-    if (!tunnel_conn)
-    {
-        LOG_ERROR("tunnel_conn get failed");
-        return;
-    }
-    tunnel_conn->send_buffer.append(data.c_str(), data.size());
-    this->epoller.mod(this->main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false);
 }
 
 void worker::on_client_event_http(int fd, uint32_t event)

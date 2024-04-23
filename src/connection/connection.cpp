@@ -15,10 +15,11 @@ connection::~connection()
 {
 }
 
-void connection::on_alloc()
+void connection::on_alloc(int fd)
 {
     recv_buffer.clear();
     send_buffer.clear();
+    this->fd = fd;
     closed_flag = false;
     is_close = false;
 }
@@ -41,4 +42,5 @@ void connection::on_release()
     send_buffer.clear();
     socket_obj.close();
     closed_flag = true;
+    fd = -1;
 }

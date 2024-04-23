@@ -46,6 +46,28 @@ namespace avant::global
             return gid % m_worker_cnt;
         }
 
+        inline bool is_tunnel_id(int id)
+        {
+            if (get_worker_tunnel_id_min() <= id && id <= get_worker_tunnel_id_max())
+            {
+                return true;
+            }
+            if (get_other_tunnel_id() == id)
+            {
+                return true;
+            }
+            if (get_main_tunnel_id() == id)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        inline bool is_worker_tunnel_id(int id)
+        {
+            return (get_worker_tunnel_id_min() <= id && id <= get_worker_tunnel_id_max());
+        }
+
     private:
         size_t m_worker_cnt;
         static std::shared_ptr<tunnel_id> ptr;

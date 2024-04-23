@@ -202,14 +202,13 @@ int socket::recv(char *buf, size_t len, int &oper_errno)
         else
         {
             int ssl_error = SSL_get_error(m_ssl_instance, bytes_received);
-            if (ssl_error != SSL_ERROR_WANT_READ || ssl_error != SSL_ERROR_WANT_WRITE)
+            if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE)
             {
                 oper_errno = EAGAIN;
             }
             else
             {
-                oper_errno = ssl_error;
-                LOG_ERROR("ssl err %d", ssl_error);
+                oper_errno = errno;
             }
         }
         return bytes_received;
@@ -248,14 +247,13 @@ int socket::send(const char *buf, size_t len, int &oper_errno)
         else
         {
             int ssl_error = SSL_get_error(m_ssl_instance, bytes_written);
-            if (ssl_error != SSL_ERROR_WANT_READ || ssl_error != SSL_ERROR_WANT_WRITE)
+            if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE)
             {
                 oper_errno = EAGAIN;
             }
             else
             {
-                oper_errno = ssl_error;
-                LOG_ERROR("ssl err %d", ssl_error);
+                oper_errno = errno;
             }
         }
         return bytes_written;

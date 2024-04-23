@@ -18,6 +18,7 @@
 #include "connection/http_ctx.h"
 #include <unordered_set>
 #include "global/tunnel_id.h"
+#include "proto/proto_util.h"
 
 using namespace std;
 using namespace avant::server;
@@ -27,6 +28,7 @@ using namespace avant::task;
 using namespace avant::worker;
 using namespace avant::socket;
 using namespace avant::global;
+using namespace avant::proto;
 
 server::server()
 {
@@ -309,7 +311,7 @@ void server::on_start()
         }
         for (size_t i = 0; i < m_worker_cnt; i++)
         {
-            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
+            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, event::event_poller::RWE, false))
             {
                 LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed %d", errno);
                 return;
@@ -338,7 +340,7 @@ void server::on_start()
             LOG_ERROR("main m_third_party_tunnel failed iret=%d", iret);
             return;
         }
-        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
+        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, event::event_poller::RWE, false))
         {
             LOG_ERROR("main_epoller.add m_third_party_tunnel.get_me() failed %d", errno);
             return;
@@ -398,7 +400,7 @@ void server::on_start()
             }
 
             // tunnel to worker_epoller
-            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
+            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
             {
                 LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
                 return;
@@ -434,7 +436,7 @@ void server::on_start()
             LOG_ERROR("listen_socket failed get_fd() < 0");
             return;
         }
-        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false))
+        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, event::event_poller::RWE, false))
         {
             LOG_ERROR("listen_socket m_epoller add failed");
             return;
@@ -558,7 +560,6 @@ uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
 
 void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid)
 {
-    std::vector<int> dirty_fd{};
     for (size_t loop = 0; loop < vec_new_client_fd.size(); ++loop)
     {
         const int &new_client_fd = vec_new_client_fd[loop];
@@ -567,44 +568,21 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
         ProtoTunnelMain2WorkerNewClient main2worker_new_client;
         main2worker_new_client.set_fd(new_client_fd);
         main2worker_new_client.set_gid(gid);
-        std::string body_str;
-        body_str.resize(main2worker_new_client.ByteSizeLong());
-        main2worker_new_client.SerializeToString(&body_str);
 
-        ProtoPackage message;
-        message.set_cmd(ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT);
-        message.set_protocol(body_str);
+        ProtoPackage need_forward_package;
+        proto::pack_package(need_forward_package, main2worker_new_client, ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT);
+        // LOG_ERROR("need_forward_package %d", need_forward_package.cmd());
 
-        std::string data;
-        message.SerializeToString(&data);
+        int target_worker_tunnel_id = tunnel_id::get().hash_gid_2_worker_tunnel_id(gid);
 
+        int forward_ret = tunnel_forward(tunnel_id::get().get_main_tunnel_id(), target_worker_tunnel_id, need_forward_package);
+
+        if (0 != forward_ret)
         {
-            uint64_t data_size = data.size();
-            data_size = ::htobe64(data_size);
-            char *data_size_arr = (char *)&data_size;
-            data.insert(0, data_size_arr, sizeof(data_size));
-        }
-
-        int target_worker_idx = gid % m_worker_cnt;
-
-        // send data to worker[target_worker_idx]
-        avant::socket::socket_pair &target_tunnel_sockpair = m_main_worker_tunnel[target_worker_idx];
-        connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(target_tunnel_sockpair.get_me());
-        if (!tunnel_conn)
-        {
-            LOG_ERROR("tunnel_conn is null target_worker_idx[%d]", target_worker_idx);
+            LOG_ERROR("tunnel_forward err %d target_worker_tunnel_id %d", forward_ret, target_worker_tunnel_id);
             ::close(new_client_fd);
             *m_curr_connection_num -= 1;
-            return;
         }
-
-        tunnel_conn->send_buffer.append(data.c_str(), data.size());
-        dirty_fd.push_back(target_tunnel_sockpair.get_me());
-    }
-
-    for (size_t loop = 0; loop < dirty_fd.size(); ++loop)
-    {
-        m_epoller.mod(dirty_fd[loop], nullptr, EPOLLIN | EPOLLOUT | EPOLLERR, false);
     }
 }
 
@@ -621,7 +599,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     avant::socket::socket &sock = tunnel.get_me_socket();
 
     // check if there is any content that needs to be read
-    if (event & EPOLLIN)
+    if (event & event::event_poller::READ)
     {
         constexpr int buffer_size = 1024000;
         char buffer[buffer_size]{0};
@@ -638,7 +616,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
             }
             else
             {
-                if (oper_errno != EAGAIN && oper_errno != EINTR)
+                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
                     LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
                     to_stop();
@@ -659,7 +637,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
             if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
             {
                 data_size = *((uint64_t *)tunnel_conn->recv_buffer.get_read_ptr());
-                data_size = ::be64toh(data_size);
+                data_size = avant::proto::toh64(data_size);
                 if (data_size + sizeof(data_size) > tunnel_conn->recv_buffer.size())
                 {
                     break;
@@ -689,11 +667,11 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     }
 
     // check if there is any content that needs to be sent
-    while (event & EPOLLOUT)
+    while (event & event::event_poller::WRITE)
     {
         if (tunnel_conn->send_buffer.empty())
         {
-            m_epoller.mod(sock.get_fd(), nullptr, EPOLLIN | EPOLLERR, false);
+            m_epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
             break;
         }
 
@@ -707,7 +685,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
             }
             else
             {
-                if (oper_errno != EAGAIN && oper_errno != EINTR)
+                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
                     LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
                     to_stop();
@@ -816,14 +794,67 @@ void server::on_tunnel_process(ProtoPackage &message)
     }
 }
 
-void server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message)
+int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message)
 {
-    // TODO:
-    // tunnel message from source to dest wrap with ProtoTunnelPackage
-    // just only forward
-    // find dest_tunnel_id tunnel
+    if (!tunnel_id::get().is_tunnel_id(source_tunnelid))
+    {
+        LOG_ERROR("source_tunnel_id %d is not tunnel_id message cmd %d", source_tunnelid, message.cmd());
+        return -1;
+    }
+    if (!tunnel_id::get().is_tunnel_id(dest_tunnel_id))
+    {
+        LOG_ERROR("dest_tunnel_id %d is not tunnel_id message cmd %d", dest_tunnel_id, message.cmd());
+        return -2;
+    }
+
+    if (tunnel_id::get().get_other_tunnel_id() == dest_tunnel_id)
+    {
+        LOG_ERROR("forward to other tunnel is not support now");
+        return -4;
+    }
+
+    // find target tunnel
+    connection::connection *dest_tunnel_conn_ptr = nullptr;
+
+    if (tunnel_id::get().is_worker_tunnel_id(dest_tunnel_id))
+    {
+        dest_tunnel_conn_ptr = get_main2worker_tunnel(dest_tunnel_id);
+    }
+    else if (tunnel_id::get().get_other_tunnel_id() == dest_tunnel_id)
+    {
+        dest_tunnel_conn_ptr = get_main2other_tunnel();
+    }
+
+    if (!dest_tunnel_conn_ptr)
+    {
+        LOG_ERROR("dest_tunnel_id %d connection not be found", dest_tunnel_id);
+        return -3;
+    }
+
     ProtoTunnelPackage package;
     package.set_sourcetunnelsid(source_tunnelid);
     package.add_targettunnelsid(dest_tunnel_id);
-    package.set_allocated_innerprotopackage(&message);
+    package.mutable_innerprotopackage()->CopyFrom(message);
+
+    std::string data;
+    proto::pack_package(data, package, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE);
+    // LOG_ERROR("forward datasize %llu cmd %d", data.size(), package.innerprotopackage().cmd());
+
+    dest_tunnel_conn_ptr->send_buffer.append(data.c_str(), data.size());
+    m_epoller.mod(dest_tunnel_conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+    return 0;
+}
+
+avant::connection::connection *server::get_main2worker_tunnel(int worker_tunnel_id)
+{
+    if (!tunnel_id::get().is_worker_tunnel_id(worker_tunnel_id))
+    {
+        return nullptr;
+    }
+    return m_main_connection_mgr.get_conn(m_main_worker_tunnel[worker_tunnel_id].get_me());
+}
+
+avant::connection::connection *server::get_main2other_tunnel()
+{
+    return m_main_connection_mgr.get_conn(m_third_party_tunnel.get_me());
 }
