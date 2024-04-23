@@ -89,7 +89,7 @@ namespace avant::server
 
         // other-main-worker.. forward center
         void on_tunnel_process(ProtoPackage &message);
-        void tunnel_forward(int source_tunnelid, int dest_tunnel_id, const ProtoPackage &message);
+        void tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message);
 
     private:
         std::string m_app_id{};

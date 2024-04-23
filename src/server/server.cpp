@@ -17,6 +17,7 @@
 #include "hooks/stop.h"
 #include "connection/http_ctx.h"
 #include <unordered_set>
+#include "global/tunnel_id.h"
 
 using namespace std;
 using namespace avant::server;
@@ -25,6 +26,7 @@ using namespace avant::utility;
 using namespace avant::task;
 using namespace avant::worker;
 using namespace avant::socket;
+using namespace avant::global;
 
 server::server()
 {
@@ -89,6 +91,13 @@ void server::start()
             LOG_ERROR("SSL_CTX_use_PrivateKey_file error: %s", ERR_error_string(ERR_get_error(), nullptr));
             return;
         }
+    }
+
+    int i_ret = tunnel_id::init(m_worker_cnt);
+    if (0 != i_ret)
+    {
+        LOG_ERROR("avant::global::tunnel_id::init(%llu) failed return %d", m_worker_cnt, i_ret);
+        return;
     }
 
     {
@@ -733,25 +742,25 @@ void server::on_tunnel_process(ProtoPackage &message)
     std::unordered_set<int> all_target;
 
     // from other tunnel
-    if (source == ProtoTunnelID::PROTO_TUNNEL_ID_OTHER)
+    if (source == tunnel_id::get().get_other_tunnel_id())
     {
         // send to all worker
         if (target.empty())
         {
-            for (size_t i = 0; i < m_worker_cnt; i++)
+            for (int i = tunnel_id::get().get_worker_tunnel_id_min(); i <= tunnel_id::get().get_worker_tunnel_id_max(); i++)
             {
-                all_target.insert(ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + i);
+                all_target.insert(i);
             }
         }
         else // send to special worker
         {
-            for (int i = 0; i < target.empty(); i++)
+            for (int i = 0; i < target.size(); i++)
             {
-                if (target.Get(i) == ProtoTunnelID::PROTO_TUNNEL_ID_MAIN)
+                if (target.Get(i) == tunnel_id::get().get_main_tunnel_id())
                 {
                     continue;
                 }
-                if (target.Get(i) >= ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN && target.Get(i) < ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + (int)m_worker_cnt)
+                if (target.Get(i) >= tunnel_id::get().get_worker_tunnel_id_min() && target.Get(i) <= tunnel_id::get().get_worker_tunnel_id_max())
                 {
                     all_target.insert(target.Get(i));
                     continue;
@@ -761,30 +770,31 @@ void server::on_tunnel_process(ProtoPackage &message)
         }
     }
     // from worker
-    else if (source >= ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN && source < ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + (int)m_worker_cnt)
+    else if (source >= tunnel_id::get().get_worker_tunnel_id_min() && source <= tunnel_id::get().get_worker_tunnel_id_max())
     {
         // send to all worker exclude other
         if (target.empty())
         {
-            for (size_t i = 0; i < m_worker_cnt; i++) // include from_worker self
+            // include from_worker self
+            for (int i = tunnel_id::get().get_worker_tunnel_id_min(); i <= tunnel_id::get().get_worker_tunnel_id_max(); i++)
             {
-                all_target.insert(ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + i);
+                all_target.insert(i);
             }
         }
         else
         {
-            for (int i = 0; i < target.empty(); i++)
+            for (int i = 0; i < target.size(); i++)
             {
-                if (target.Get(i) == ProtoTunnelID::PROTO_TUNNEL_ID_MAIN)
+                if (target.Get(i) == tunnel_id::get().get_main_tunnel_id())
                 {
                     continue;
                 }
-                if (target.Get(i) == ProtoTunnelID::PROTO_TUNNEL_ID_OTHER)
+                if (target.Get(i) == tunnel_id::get().get_other_tunnel_id())
                 {
                     all_target.insert(target.Get(i));
                     continue;
                 }
-                if (target.Get(i) >= ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN && target.Get(i) < ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + (int)m_worker_cnt)
+                if (target.Get(i) >= tunnel_id::get().get_worker_tunnel_id_min() && target.Get(i) <= tunnel_id::get().get_worker_tunnel_id_max())
                 {
                     all_target.insert(target.Get(i));
                     continue;
@@ -802,11 +812,11 @@ void server::on_tunnel_process(ProtoPackage &message)
 
     for (int target_tunnel_id : all_target)
     {
-        tunnel_forward(source, target_tunnel_id, tunnelPackage.innerprotopackage());
+        tunnel_forward(source, target_tunnel_id, *tunnelPackage.mutable_innerprotopackage());
     }
 }
 
-void server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, const ProtoPackage &message)
+void server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message)
 {
     // TODO:
     // tunnel message from source to dest wrap with ProtoTunnelPackage
@@ -815,5 +825,5 @@ void server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, const Proto
     ProtoTunnelPackage package;
     package.set_sourcetunnelsid(source_tunnelid);
     package.add_targettunnelsid(dest_tunnel_id);
-    package.mutable_innerprotopackage()->CopyFrom(message);
+    package.set_allocated_innerprotopackage(&message);
 }
