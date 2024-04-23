@@ -2,11 +2,11 @@
 
 Network Message Framework For Linux C++.
 
-CPP-MIN: `C++17`  
-PLATFORM: `linux`  
-PROTOCOL: `http` `tcp stream(protobuf)` `websocket`  
-TLS-SSL: `openssl`  
-SCRIPT: `lua`  
+cpp-min: `C++17`  
+os: `linux`  
+protocol: `http` `tcp stream(protobuf)` `websocket`  
+tls/ssl: `openssl`  
+script: `lua`  
 
 ## Get Start
 
@@ -49,7 +49,7 @@ $ ./avant
 $ ps -ef | grep avant
 ```
 
-## Docker Example
+## Example
 
 ```bash
 $ docker run -it --privileged -p 20023:20023 -v ${LOCAL_HTTP_DIR_PATH}:/avant_static gaowanlu/avant:latest bash
@@ -66,30 +66,24 @@ support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
 3. [http app](https://github.com/crust-hub/avant/blob/main/src/app/http_app.cpp)
 4. [websocket app](https://github.com/crust-hub/avant/blob/main/src/app/websocket_app.cpp)
 
-## Response Per Second
+## QPS
 
 CPU: Intel(R) Core(TM) i5-9600KF CPU @ 3.70 GHz   
 OS : WSL2 Ubuntu Mem 8GB  (Windows 11)
 
 ```ini
 config/main.ini 
-    theads:6  
-    max_conn:10000  
-    accept_per_tick: 50  
+    worker_cnt:8  
+    max_client_cnt:10000  
+    accept_per_tick: 100  
 ```
 
-wrk testing, avant http and node test/node_http_server.js .
+wrk testing, avant http
 
 ```bash
 # avant
-$ wrk -c {{connection_num}} -t {{concurrency}} http://IP:20023/node_http_server.js
-# nodejs
-$ wrk -c {{connection_num}} -n {{concurrency}} http://IP:20025/node_http_server.js
-```
-
-```bash
-# wrk report
-# connection_num ./bin/avant    node node_http_server.js    all_bytes
+$ wrk -c {{connection_num}} -t {{threads}} http://IP:20023/
+$ wrk -c {{connection_num}} -t {{threads}} -d60s --header "Connection: keep-alive" http://127.0.0.1:20023/
 ```
 
 ## Third-Party
