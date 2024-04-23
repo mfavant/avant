@@ -102,7 +102,7 @@ http_ctx::~http_ctx()
 {
 }
 
-void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj)
+void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj, bool keep_live /*= false*/)
 {
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
@@ -121,7 +121,16 @@ void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj
     this->response_end = false;
     this->everything_end = false;
 
-    if (!worker_obj.use_ssl)
+    if (keep_live)
+    {
+        this->keep_live_counter++;
+    }
+    else
+    {
+        this->keep_live_counter = 0;
+    }
+
+    if (!worker_obj.use_ssl || keep_live)
     {
         app::http_app::on_new_connection(*this);
     }
@@ -150,6 +159,7 @@ void http_ctx::on_event(uint32_t event)
 
     if (conn_ptr->is_close)
     {
+        // LOG_ERROR("keep_live_counter %llu", this->keep_live_counter);
         if (this->destory_callback)
         {
             try
@@ -205,12 +215,6 @@ void http_ctx::on_event(uint32_t event)
             }
         }
     } // ssl end
-
-    // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER BEGIN==========================================
-    {
-        // this->set_recv_end(true);
-    }
-    // ==========================================TEST MAX HTTP QPS NOT USE HTTP-PARSER END==========================================
 
     // read from socket
     if (!this->get_recv_end() && !this->get_everything_end() && (event & EPOLLIN))
@@ -334,6 +338,41 @@ void http_ctx::on_event(uint32_t event)
             {
                 this->set_everything_end(true);
             }
+        }
+    }
+
+    // keep-live
+    if (this->get_everything_end())
+    {
+        if (this->destory_callback)
+        {
+            try
+            {
+                this->destory_callback(*this);
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR(e.what());
+            }
+            this->destory_callback = nullptr;
+        }
+        bool exist_keep_live = false;
+        if (this->headers.find("Connection") != this->headers.end())
+        {
+            for (const std::string &str : this->headers.find("Connection")->second)
+            {
+                if (str == "keep-alive")
+                {
+                    exist_keep_live = true;
+                    break;
+                }
+            }
+        }
+        if (exist_keep_live)
+        {
+            // reuse connection
+            this->conn_ptr->on_alloc();
+            this->on_create(*this->conn_ptr, *this->worker_ptr, true);
         }
     }
 

@@ -14,7 +14,7 @@ namespace avant::connection
     public:
         http_ctx();
         ~http_ctx();
-        void on_create(connection &conn_obj, worker::worker &worker_obj);
+        void on_create(connection &conn_obj, worker::worker &worker_obj, bool keep_live = false);
         void on_close();
         void on_event(uint32_t event);
 
@@ -51,5 +51,7 @@ namespace avant::connection
         bool process_end{false};
         bool response_end{false};
         bool everything_end{false};
+
+        uint64_t keep_live_counter{0};
     };
 }
