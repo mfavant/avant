@@ -254,11 +254,13 @@ void http_ctx::on_event(uint32_t event)
     {
         int oper_errno = 0;
         int len = -1;
-        constexpr int buffer_size = 1024;
+        constexpr int buffer_size = 10240;
         char buffer[buffer_size]{0};
-        while (true)
+        int buffer_len = 0;
+
+        while (buffer_len < buffer_size)
         {
-            len = socket_ptr->recv(buffer, buffer_size, oper_errno);
+            len = socket_ptr->recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
             if (len == -1 && (oper_errno == EAGAIN || oper_errno == EWOULDBLOCK))
             {
                 len = 0;
@@ -271,7 +273,8 @@ void http_ctx::on_event(uint32_t event)
             }
             else if (len > 0)
             {
-                int nparsed = http_parser_execute(&this->http_parser_obj, http_ctx::settings.get(), buffer, len);
+                int nparsed = http_parser_execute(&this->http_parser_obj, http_ctx::settings.get(), buffer + buffer_len, len);
+                buffer_len += len;
                 if (this->http_parser_obj.upgrade)
                 {
                 }
@@ -404,7 +407,7 @@ void http_ctx::on_event(uint32_t event)
         if (exist_keep_live)
         {
             // reuse connection
-            this->conn_ptr->on_alloc(this->conn_ptr->fd);
+            this->conn_ptr->on_alloc(this->conn_ptr->fd, this->conn_ptr->gid);
             // reuse context
             this->on_create(*this->conn_ptr, *this->worker_ptr, true);
         }

@@ -38,4 +38,12 @@ namespace avant::proto
         package.set_protocol(body_str);
         return package;
     }
+
+    template <typename T>
+    bool parse(T &t, const ProtoPackage &package)
+    {
+        return t.ParseFromArray(package.protocol().c_str(), package.protocol().size());
+    }
+
+    std::string &pack_package(std::string &data, const ProtoPackage &package);
 };

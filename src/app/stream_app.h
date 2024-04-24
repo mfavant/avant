@@ -28,11 +28,13 @@ namespace avant
 
             static void on_worker_tick(avant::worker::worker &worker_obj);
 
+            static bool on_recved_packsize(avant::connection::stream_ctx &ctx, uint64_t size);
+
             static void on_new_connection(avant::connection::stream_ctx &ctx);
             static void on_close_connection(avant::connection::stream_ctx &ctx);
             static void on_process_connection(avant::connection::stream_ctx &ctx, ProtoPackage &package);
             static int send_async_package(const std::unordered_set<uint64_t> &dest_conn_gid, ProtoPackage &package);
-            static int send_sync_package(avant::connection::connection &dest_conn, ProtoPackage &package);
+            static int send_sync_package(avant::connection::stream_ctx &ctx, ProtoPackage &package);
 
             static void on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package);
         };

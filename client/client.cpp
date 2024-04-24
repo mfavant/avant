@@ -40,9 +40,9 @@ int main(int argc, const char **argv)
     int n;
     bool stop_flag = false;
 
-    constexpr int thread_count = 20;
+    constexpr int thread_count = 4;
 
-    constexpr int client_cnt = 50;
+    constexpr int client_cnt = 1;
 
     constexpr int pingpong_cnt = 1;
     // 350KB/s
@@ -55,11 +55,11 @@ int main(int argc, const char **argv)
             {
                 ProtoPackage message;
                 ProtoCSReqExample exampleReq;
-                constexpr uint send_all_string_bytes = 800000;
+                constexpr uint send_all_string_bytes = 8;
                 std::string send_str(send_all_string_bytes, 'a');
                 // send_str = argv[1];
                 exampleReq.set_testcontext(send_str);
-                message.set_cmd(ProtoCmd::CS_REQ_EXAMPLE);
+                message.set_cmd(ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE);
                 // 30MB * 2000 = 60 000MB = 60GB
                 uint64_t send_size = 0;
                 uint64_t recv_size = 0;
@@ -141,11 +141,13 @@ int main(int argc, const char **argv)
                         }
                         std::string str;
                         exampleReq.SerializeToString(&str);
-                        message.set_body(str);
+                        message.set_protocol(str);
                         std::string data;
                         message.SerializeToString(&data);
 
                         uint64_t packageLen = data.size();
+                        packageLen = ::htobe64(packageLen);
+                        data.insert(0, (char *)&packageLen, sizeof(packageLen));
 
                         // every client pingpong 1
                         for (int i = 0; i < pingpong_cnt; i++)
@@ -169,6 +171,7 @@ int main(int argc, const char **argv)
                                 {
                                     sended += len;
                                 }
+                                std::this_thread::sleep_for(std::chrono::microseconds(1));
                             }
                             send_size++;
                             // printf("Send all bytes package %ld body %ld all %ld\n", data.size(), body_str.size(), data.size() + body_str.size());
@@ -176,11 +179,13 @@ int main(int argc, const char **argv)
 
                             // block read res package
                             char buffer[5024000]{0};
-                            uint32_t data_len = 0;
+                            uint64_t data_len = 0;
 
                             // std::cout << "pong" << std::endl;
                             // std::cout <<"recv.."<<std::endl;
                             // std::cout << "reading=======================================================================>" << std::endl;
+
+                            std::this_thread::sleep_for(std::chrono::microseconds(1));
                             while (true)
                             {
                                 int recv_len = read(client_socket, buffer + data_len, 5024000);
@@ -200,28 +205,43 @@ int main(int argc, const char **argv)
                                 // printf("data_len[%u] += recv_len[%d]\n", data_len, recv_len);
                                 data_len += recv_len;
 
+                                if (data_len < sizeof(uint64_t))
+                                {
+                                    std::this_thread::sleep_for(std::chrono::microseconds(1));
+                                    continue;
+                                }
+
+                                uint64_t packSize = ::be64toh(*((uint64_t *)buffer));
+
+                                if (data_len < packSize + sizeof(uint64_t))
+                                {
+                                    std::this_thread::sleep_for(std::chrono::microseconds(1));
+                                    continue;
+                                }
+
                                 ProtoPackage protoPackage;
                                 // std::cout << "ParseFromArray recv_len[" << recv_len << "]"
                                 //           << "data_len=" << data_len << std::endl;
-                                if (!protoPackage.ParseFromArray(buffer, data_len))
+                                if (!protoPackage.ParseFromArray(buffer + sizeof(uint64_t), packSize))
                                 {
                                     // std::cout << "Failed" << std::endl;
                                     // std::cout << "ParseFromArray recv_len[" << recv_len << "]"
                                     //           << "data_len=" << data_len << std::endl;
                                     // std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                                    continue;
+                                    std::cout << "ParseFromArrayErr" << std::endl;
+                                    return;
                                 }
                                 else
                                 {
-                                    if (protoPackage.cmd() == ProtoCmd::CS_RES_EXAMPLE)
+                                    if (protoPackage.cmd() == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
                                     {
                                         ProtoCSResExample exampleRes;
-                                        if (exampleRes.ParseFromString(protoPackage.body()))
+                                        if (exampleRes.ParseFromString(protoPackage.protocol()))
                                         {
                                             recv_size++;
 
                                             uint64_t now_time = std::time(nullptr);
-                                            if ((recv_size - last_print_size) >= 0)
+                                            if ((recv_size - last_print_size) >= 100)
                                             {
                                                 // printf("RES(thread[%d] seconds[%lu] send_size[%lu],recv_size[%lu])\n", loop, now_time - last_time, send_size, recv_size);
                                                 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
@@ -252,8 +272,9 @@ int main(int argc, const char **argv)
                             // std::cout << "pong OK" << std::endl;
                             // std::cout << "pingpong OK" << std::endl;
                         }
+
+                        std::this_thread::sleep_for(std::chrono::microseconds(5));
                     }
-                    std::this_thread::sleep_for(std::chrono::microseconds(10));
                 }
             });
         m_thread.detach();

@@ -15,11 +15,12 @@ connection::~connection()
 {
 }
 
-void connection::on_alloc(int fd)
+void connection::on_alloc(int fd, uint64_t gid)
 {
     recv_buffer.clear();
     send_buffer.clear();
     this->fd = fd;
+    this->gid = gid;
     closed_flag = false;
     is_close = false;
 }

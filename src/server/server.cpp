@@ -378,6 +378,7 @@ void server::on_start()
             m_workers[i].worker_id = i;
             m_workers[i].curr_connection_num = m_curr_connection_num;
             m_workers[i].main_worker_tunnel = &m_main_worker_tunnel[i];
+            m_workers[i].epoll_wait_time = m_epoll_wait_time;
             m_workers[i].use_ssl = m_use_ssl;
             m_workers[i].ssl_context = m_ssl_context;
             m_workers[i].type = avant::task::str2task_type(m_task_type);
@@ -456,7 +457,7 @@ void server::on_start()
     hooks::init::on_main_init(*this);
     while (true)
     {
-        int num = m_epoller.wait(10);
+        int num = m_epoller.wait(m_epoll_wait_time);
         // time update
         {
             hooks::tick::on_main_tick(*this);
@@ -464,8 +465,8 @@ void server::on_start()
             uint64_t now_tick_time = server_time.get_seconds();
             if (latest_tick_time != now_tick_time)
             {
-                int curr_connection_num = m_curr_connection_num->load();
-                LOG_ERROR("curr_connection_num %d", curr_connection_num);
+                // int curr_connection_num = m_curr_connection_num->load();
+                // LOG_ERROR("curr_connection_num %d", curr_connection_num);
 
                 if (stop_flag)
                 {
@@ -636,7 +637,6 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
         // parser protocol
         while (!tunnel_conn->recv_buffer.empty())
         {
-            ProtoPackage protoPackage;
             uint64_t data_size = 0;
             if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
             {
@@ -658,6 +658,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
                 break;
             }
 
+            ProtoPackage protoPackage;
             if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
                 LOG_ERROR("server parseFromArray err %llu", data_size);
@@ -697,7 +698,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
                 break;
             }
         }
-        break;
+        break; // important
     }
 }
 

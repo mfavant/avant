@@ -25,6 +25,7 @@ namespace avant::worker
         int worker_id{-1};
         size_t max_client_num{0};
         bool use_ssl{false};
+        size_t epoll_wait_time{0};
         SSL_CTX *ssl_context{nullptr};
         static std::string http_static_dir;
 

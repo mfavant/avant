@@ -39,7 +39,7 @@ void worker::operator()()
     int num = -1;
     while (true)
     {
-        num = this->epoller.wait(10);
+        num = this->epoller.wait(this->epoll_wait_time);
         if (this->to_stop)
         {
             break;
@@ -94,16 +94,16 @@ void worker::on_tunnel_event(uint32_t event)
     {
         constexpr int buffer_size = 1024000;
         char buffer[buffer_size]{0};
-        int buffer_used_idx{0};
+        int buffer_len = 0;
 
-        while (buffer_used_idx < buffer_size)
+        while (buffer_len < buffer_size)
         {
             int len = 0;
             int oper_errno = 0;
-            len = sock.recv(buffer + buffer_used_idx, buffer_size - buffer_used_idx, oper_errno);
+            len = sock.recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
             if (len > 0)
             {
-                buffer_used_idx += len;
+                buffer_len += len;
             }
             else
             {
@@ -115,15 +115,14 @@ void worker::on_tunnel_event(uint32_t event)
                 break;
             }
         }
-        if (buffer_used_idx > 0)
+        if (buffer_len > 0)
         {
-            tunnel_conn->recv_buffer.append(buffer, buffer_used_idx);
+            tunnel_conn->recv_buffer.append(buffer, buffer_len);
         }
 
         // parser protocol
         while (!tunnel_conn->recv_buffer.empty())
         {
-            ProtoPackage protoPackage;
             uint64_t data_size = 0;
             if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
             {
@@ -145,6 +144,7 @@ void worker::on_tunnel_event(uint32_t event)
                 break;
             }
 
+            ProtoPackage protoPackage;
             if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
                 LOG_ERROR("worker parseFromArray err %llu", data_size);
@@ -186,7 +186,7 @@ void worker::on_tunnel_event(uint32_t event)
                 break;
             }
         }
-        break;
+        break; // important
     }
 }
 
@@ -338,7 +338,6 @@ void worker::on_tunnel_process(ProtoPackage &message)
 
 void worker::on_new_client_fd(int fd, uint64_t gid)
 {
-    // LOG_ERROR("on_new_client fd");
     // create new conn
     int iret = this->worker_connection_mgr->alloc_connection(fd, gid);
     if (iret != 0)
@@ -510,6 +509,14 @@ void worker::on_client_event_http(int fd, uint32_t event)
 
 void worker::on_client_event_stream(int fd, uint32_t event)
 {
+    auto conn = this->worker_connection_mgr->get_conn(fd);
+    if (!conn)
+    {
+        LOG_ERROR("worker_connection_mgr->get_conn failed");
+        close_client_fd(fd);
+        return;
+    }
+    conn->stream_ctx_ptr->on_event(event);
 }
 
 void worker::on_client_event_websocket(int fd, uint32_t event)

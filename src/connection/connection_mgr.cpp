@@ -61,7 +61,7 @@ int connection_mgr::alloc_connection(int fd, uint64_t gid)
     gid2fd[gid] = fd;
     gid2index[gid] = new_index;
 
-    connection_pool[new_index].on_alloc(fd);
+    connection_pool[new_index].on_alloc(fd, gid);
 
     return 0;
 }
