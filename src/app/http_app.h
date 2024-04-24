@@ -1,5 +1,6 @@
 #pragma once
 #include "connection/http_ctx.h"
+#include "proto_res/proto_message_head.pb.h"
 
 namespace avant
 {
@@ -30,6 +31,8 @@ namespace avant
             static void on_main_tick(avant::server::server &server_obj);
 
             static void on_worker_tick(avant::worker::worker &worker_obj);
+
+            static void on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package);
         };
     }
 }

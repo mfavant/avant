@@ -285,3 +285,8 @@ void http_app::on_main_tick(avant::server::server &server_obj)
 void http_app::on_worker_tick(avant::worker::worker &worker_obj)
 {
 }
+
+void http_app::on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package)
+{
+    LOG_ERROR("http_app on_worker_tunnel cmd %d", package.cmd());
+}

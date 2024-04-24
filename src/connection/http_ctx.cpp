@@ -132,7 +132,21 @@ void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj
 
     if (!worker_obj.use_ssl || keep_live)
     {
-        app::http_app::on_new_connection(*this);
+        bool err = false;
+        try
+        {
+            app::http_app::on_new_connection(*this);
+        }
+        catch (const std::exception &e)
+        {
+            err = true;
+            LOG_ERROR(e.what());
+        }
+        if (err)
+        {
+            conn_ptr->is_close = true;
+            this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
+        }
     }
 }
 
@@ -160,17 +174,21 @@ void http_ctx::on_event(uint32_t event)
     if (conn_ptr->is_close)
     {
         // LOG_ERROR("keep_live_counter %llu", this->keep_live_counter);
-        if (this->destory_callback)
+        if (!this->worker_ptr->use_ssl || socket_ptr->get_ssl_accepted())
         {
-            try
+            if (this->destory_callback)
             {
-                this->destory_callback(*this);
-            }
-            catch (const std::exception &e)
-            {
-                LOG_ERROR(e.what());
+                try
+                {
+                    this->destory_callback(*this);
+                }
+                catch (const std::exception &e)
+                {
+                    LOG_ERROR(e.what());
+                }
             }
         }
+
         this->worker_ptr->close_client_fd(socket_ptr->get_fd());
         return;
     }
@@ -184,7 +202,22 @@ void http_ctx::on_event(uint32_t event)
         {
             socket_ptr->set_ssl_accepted(true);
             // triger new connection hook
-            app::http_app::on_new_connection(*this);
+            bool err = false;
+            try
+            {
+                app::http_app::on_new_connection(*this);
+            }
+            catch (const std::exception &e)
+            {
+                err = true;
+                LOG_ERROR(e.what());
+            }
+            if (err)
+            {
+                conn_ptr->is_close = true;
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                return;
+            }
         }
         else if (0 == ssl_status)
         {

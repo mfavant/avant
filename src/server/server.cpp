@@ -240,6 +240,10 @@ bool server::on_stop()
 
 void server::to_stop()
 {
+    if (stop_flag)
+    {
+        return;
+    }
     stop_flag = true;
     for (size_t i = 0; i < m_worker_cnt; i++)
     {

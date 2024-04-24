@@ -14,6 +14,9 @@
 #include "connection/stream_ctx.h"
 #include "global/tunnel_id.h"
 #include "proto/proto_util.h"
+#include "app/http_app.h"
+#include "app/stream_app.h"
+#include "app/websocket_app.h"
 
 using namespace avant::worker;
 using namespace avant::global;
@@ -306,9 +309,30 @@ void worker::on_tunnel_process(ProtoPackage &message)
             LOG_ERROR("ProtoTunnelMain2WorkerNewClient.ParseFromString failed cmd %d", inner_cmd);
         }
     }
-    else
+    else // user's protocol
     {
-        LOG_ERROR("inner_cmd logic undefine inner_cmd %d", inner_cmd);
+        try
+        {
+            switch (this->type)
+            {
+            case task::task_type::HTTP_TASK:
+                avant::app::http_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage());
+                break;
+            case task::task_type::STREAM_TASK:
+                avant::app::stream_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage());
+                break;
+            case task::task_type::WEBSOCKET_TASK:
+                avant::app::websocket_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage());
+                break;
+            default:
+                LOG_ERROR("task type err");
+                break;
+            }
+        }
+        catch (const std::exception &e)
+        {
+            LOG_ERROR("app on_worker_tunnel throw exception cmd %d", tunnelPackage.innerprotopackage().cmd());
+        }
     }
 }
 
