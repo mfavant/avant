@@ -338,6 +338,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
 
 void worker::on_new_client_fd(int fd, uint64_t gid)
 {
+    // LOG_ERROR("on_new_client fd");
     // create new conn
     int iret = this->worker_connection_mgr->alloc_connection(fd, gid);
     if (iret != 0)
@@ -354,6 +355,10 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         close_client_fd(fd);
         return;
     }
+
+    // connection alloc success for new client fd
+
+    // create task context for connection
     bool create_conn_succ = false;
     if (this->type == task::task_type::HTTP_TASK)
     {
@@ -396,6 +401,8 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
             if (!new_ctx)
             {
                 LOG_ERROR("new connection::websocket_ctx failed");
+                close_client_fd(fd);
+                return;
             }
             conn->websocket_ctx_ptr = new_ctx;
         }
@@ -405,13 +412,23 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
     {
         LOG_ERROR("this->type == task::task_type::NONE");
         close_client_fd(fd);
+        return;
     }
     else
     {
         LOG_ERROR("this->type == undefine");
         close_client_fd(fd);
+        return;
     }
-    if (create_conn_succ)
+
+    if (!create_conn_succ)
+    {
+        LOG_ERROR("create_conn_succ failed");
+        close_client_fd(fd);
+        return;
+    }
+
+    // create context for connection success, to reset it
     {
         // reset socket
         conn->socket_obj.set_fd(fd);
@@ -432,6 +449,12 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         // SSL
         if (use_ssl)
         {
+            if (conn->socket_obj.get_ssl_instance())
+            {
+                LOG_ERROR("SSL conn->socket_obj.get_ssl_instance() already not null");
+                close_client_fd(fd);
+                return;
+            }
             bool ssl_err = false;
             SSL *ssl_instance = SSL_new(this->ssl_context);
             if (!ssl_instance)
@@ -449,29 +472,27 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                 conn->socket_obj.set_ssl_instance(ssl_instance);
                 conn->socket_obj.set_ssl_accepted(false);
             }
-            else
+            else // ssl failed
             {
                 LOG_ERROR("SSL ERR");
                 close_client_fd(fd);
+                return;
             }
         }
 
+        // triger context be created for connection
         if (conn->http_ctx_ptr)
         {
             conn->http_ctx_ptr->on_create(*conn, *this);
         }
-        if (conn->stream_ctx_ptr)
+        else if (conn->stream_ctx_ptr)
         {
             conn->stream_ctx_ptr->on_create(*conn, *this);
         }
-        if (conn->websocket_ctx_ptr)
+        else if (conn->websocket_ctx_ptr)
         {
             conn->websocket_ctx_ptr->on_create(*conn, *this);
         }
-    }
-    else
-    {
-        LOG_ERROR("create_conn_succ failed");
     }
 }
 

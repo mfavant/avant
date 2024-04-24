@@ -464,8 +464,8 @@ void server::on_start()
             uint64_t now_tick_time = server_time.get_seconds();
             if (latest_tick_time != now_tick_time)
             {
-                // int curr_connection_num = m_curr_connection_num->load();
-                // LOG_ERROR("curr_connection_num %d", curr_connection_num);
+                int curr_connection_num = m_curr_connection_num->load();
+                LOG_ERROR("curr_connection_num %d", curr_connection_num);
 
                 if (stop_flag)
                 {

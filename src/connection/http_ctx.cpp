@@ -405,6 +405,7 @@ void http_ctx::on_event(uint32_t event)
         {
             // reuse connection
             this->conn_ptr->on_alloc(this->conn_ptr->fd);
+            // reuse context
             this->on_create(*this->conn_ptr, *this->worker_ptr, true);
         }
     }

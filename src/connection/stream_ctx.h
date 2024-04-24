@@ -10,8 +10,12 @@ namespace avant::connection
     public:
         stream_ctx();
         ~stream_ctx();
+
+        // context create success
         void on_create(connection &conn_obj, worker::worker &worker_obj);
+        // context destory
         void on_close();
+
         void on_event(uint32_t event);
         connection *conn_ptr{nullptr};
         worker::worker *worker_ptr{nullptr};

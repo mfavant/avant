@@ -14,8 +14,12 @@ namespace avant::connection
     public:
         http_ctx();
         ~http_ctx();
+
+        // context create success
         void on_create(connection &conn_obj, worker::worker &worker_obj, bool keep_live = false);
+        // context destory
         void on_close();
+
         void on_event(uint32_t event);
 
         void set_recv_end(bool recv_end);
