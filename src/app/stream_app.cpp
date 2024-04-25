@@ -103,7 +103,7 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
                 ProtoCSResExample res;
                 res.set_testcontext(req.testcontext());
 
-                // broase cast all connection in the process including this ctx self, async
+                // broadcast all connection in the process including this ctx self, async
                 ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {ctx.conn_ptr->gid}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
                 // send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
             }

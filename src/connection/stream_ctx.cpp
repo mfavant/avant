@@ -228,6 +228,19 @@ void stream_ctx::on_event(uint32_t event)
 
 int stream_ctx::send_data(const std::string &data)
 {
+    if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
+    {
+        LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data %llu", this->conn_ptr->gid);
+        return -1;
+    }
+
+    // if need ssl but is not ready, forbiden to send_data
+    if (this->worker_ptr->use_ssl && !this->conn_ptr->socket_obj.get_ssl_accepted())
+    {
+        LOG_ERROR("this->worker_ptr->use_ssl && !this->conn_ptr->socket_obj.get_ssl_accepted() %llu", this->conn_ptr->gid);
+        return -2;
+    }
+
     this->conn_ptr->send_buffer.append(data.c_str(), data.size());
     this->worker_ptr->epoller.mod(this->conn_ptr->fd, nullptr, event::event_poller::RWE, false);
     return 0;

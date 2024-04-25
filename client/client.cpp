@@ -42,7 +42,7 @@ int main(int argc, const char **argv)
 
     constexpr int thread_count = 1;
 
-    constexpr int client_cnt = 500;
+    constexpr int client_cnt = 1;
 
     constexpr int pingpong_cnt = 1;
     // 350KB/s

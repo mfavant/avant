@@ -280,6 +280,11 @@ int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage 
 
 void worker::handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message)
 {
+    if (conn_ptr->closed_flag || conn_ptr->is_close)
+    {
+        return;
+    }
+
     try
     {
         switch (this->type)
@@ -363,7 +368,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
             uint64_t all_conn_in_this_worker = this->worker_connection_mgr->size();
             for (size_t i = 0; i < all_conn_in_this_worker; i++)
             {
-                // maybe here conn_ptr is tunnel conn
+                // maybe here conn_ptr is tunnel conn、ssl not ready、already marked close
                 auto conn_ptr = this->worker_connection_mgr->get_conn_by_idx(i);
                 if (!conn_ptr)
                 {
