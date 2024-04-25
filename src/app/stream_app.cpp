@@ -46,25 +46,71 @@ void stream_app::on_close_connection(avant::connection::stream_ctx &ctx)
     // LOG_ERROR("stream_app on_close_connection gid %llu", ctx.conn_ptr->gid);
 }
 
-void stream_app::on_process_connection(avant::connection::stream_ctx &ctx, ProtoPackage &package)
+void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
 {
     // LOG_ERROR("stream_app on_process_connection gid %llu", ctx.conn_ptr->gid);
-    if (package.cmd() == ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
+    auto conn_ptr = ctx.conn_ptr;
+    auto socket_ptr = &ctx.conn_ptr->socket_obj;
+    // parse protocol
+    while (!conn_ptr->recv_buffer.empty())
     {
-        ProtoCSReqExample req;
-        if (avant::proto::parse(req, package))
+        uint64_t data_size = 0;
+        if (conn_ptr->recv_buffer.size() >= sizeof(data_size))
         {
-            ProtoPackage resPackage;
-            ProtoCSResExample res;
-            res.set_testcontext(req.testcontext());
-            send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+            data_size = *((uint64_t *)conn_ptr->recv_buffer.get_read_ptr());
+            data_size = avant::proto::toh64(data_size);
+
+            if (!avant::app::stream_app::on_recved_packsize(ctx, data_size))
+            {
+                conn_ptr->is_close = true;
+                conn_ptr->stream_ctx_ptr->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                return;
+            }
+
+            if (data_size + sizeof(data_size) > conn_ptr->recv_buffer.size())
+            {
+                break;
+            }
+        }
+        else
+        {
+            break;
+        }
+
+        if (data_size == 0)
+        {
+            conn_ptr->recv_buffer.move_read_ptr_n(sizeof(data_size));
+            break;
+        }
+
+        ProtoPackage protoPackage;
+        if (!protoPackage.ParseFromArray(conn_ptr->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
+        {
+            LOG_ERROR("stream ctx client protoPackage.ParseFromArra failed %llu", data_size);
+            conn_ptr->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+            break;
+        }
+
+        conn_ptr->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+
+        if (protoPackage.cmd() == ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
+        {
+            ProtoCSReqExample req;
+            if (avant::proto::parse(req, protoPackage))
+            {
+                ProtoPackage resPackage;
+                ProtoCSResExample res;
+                res.set_testcontext(req.testcontext());
+                stream_app::send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+            }
         }
     }
 }
 
 int stream_app::send_sync_package(avant::connection::stream_ctx &ctx, ProtoPackage &package)
 {
-    return ctx.send_package(package);
+    std::string data;
+    return ctx.send_data(avant::proto::pack_package(data, package));
 }
 
 // TODO:
