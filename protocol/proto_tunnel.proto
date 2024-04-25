@@ -20,7 +20,7 @@ message ProtoTunnelPackage
     ProtoPackage innerProtoPackage = 5;
 }
 
-// PROTO_CMD_TUNNEL_CLIENT_MESSAGE
+// PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE
 message ProtoTunnelClientForwardMessage
 {
     // not null

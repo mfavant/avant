@@ -40,15 +40,20 @@ namespace avant::worker
 
         void close_client_fd(int fd);
 
+    public:
+        int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message);
+        int send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package);
+
     private:
         void on_tunnel_event(uint32_t event);
         void on_client_event(int fd, uint32_t event);
-        int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message);
         void on_tunnel_process(ProtoPackage &message);
         void on_new_client_fd(int fd, uint64_t gid);
 
         void on_client_event_http(int fd, uint32_t event);
         void on_client_event_stream(int fd, uint32_t event);
         void on_client_event_websocket(int fd, uint32_t event);
+
+        void handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message);
     };
 }

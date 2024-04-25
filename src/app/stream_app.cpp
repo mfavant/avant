@@ -4,6 +4,7 @@
 #include <avant-log/logger.h>
 #include "proto_res/proto_example.pb.h"
 #include "proto/proto_util.h"
+#include "global/tunnel_id.h"
 
 using namespace avant::app;
 
@@ -101,27 +102,44 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
                 ProtoPackage resPackage;
                 ProtoCSResExample res;
                 res.set_testcontext(req.testcontext());
-                stream_app::send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+
+                // broase cast all connection in the process including this ctx self, async
+                ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {ctx.conn_ptr->gid}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+                // send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
             }
         }
     }
 }
 
-int stream_app::send_sync_package(avant::connection::stream_ctx &ctx, ProtoPackage &package)
+int stream_app::send_sync_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package)
 {
     std::string data;
     return ctx.send_data(avant::proto::pack_package(data, package));
 }
 
-// TODO:
-// forward to main, main to worker
-int stream_app::send_async_package(const std::unordered_set<uint64_t> &dest_conn_gid, ProtoPackage &package)
-{
-    return 0;
-}
-
-// TODO:
 void stream_app::on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package)
 {
-    LOG_ERROR("stream_app on_worker_tunnel cmd %d", package.cmd());
+    int cmd = package.cmd();
+    LOG_ERROR("not exist handler %d", cmd);
+}
+
+// APP DEMO
+void stream_app::on_client_forward_message(avant::connection::stream_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self)
+{
+    int cmd = message.innerprotopackage().cmd();
+    if (self)
+    {
+        if (cmd == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
+        {
+            stream_app::send_sync_package(ctx, message.innerprotopackage());
+        }
+        else
+        {
+            LOG_ERROR("not exit handler %d", cmd);
+        }
+    }
+    else
+    {
+        LOG_ERROR("not exit handler %d", cmd);
+    }
 }

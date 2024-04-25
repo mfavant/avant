@@ -108,3 +108,30 @@ avant::connection::connection *connection_mgr::get_conn(int fd)
     }
     return &connection_pool[gid2index_iter->second];
 }
+
+avant::connection::connection *connection_mgr::get_conn_by_gid(uint64_t gid)
+{
+    auto gid2index_iter = gid2index.find(gid);
+    if (gid2index_iter == gid2index.end())
+    {
+        return nullptr;
+    }
+    return &connection_pool[gid2index_iter->second];
+}
+
+uint64_t connection_mgr::size()
+{
+    return fd2gid.size();
+}
+
+connection *connection_mgr::get_conn_by_idx(uint64_t idx)
+{
+    auto iter = fd2gid.begin();
+    std::advance(iter, idx);
+    if (iter == fd2gid.end())
+    {
+        return nullptr;
+    }
+    uint64_t gid = iter->second;
+    return get_conn_by_gid(gid);
+}

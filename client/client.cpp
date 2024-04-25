@@ -40,9 +40,9 @@ int main(int argc, const char **argv)
     int n;
     bool stop_flag = false;
 
-    constexpr int thread_count = 4;
+    constexpr int thread_count = 1;
 
-    constexpr int client_cnt = 1;
+    constexpr int client_cnt = 500;
 
     constexpr int pingpong_cnt = 1;
     // 350KB/s
@@ -171,7 +171,7 @@ int main(int argc, const char **argv)
                                 {
                                     sended += len;
                                 }
-                                std::this_thread::sleep_for(std::chrono::microseconds(1));
+                                // std::this_thread::sleep_for(std::chrono::microseconds(1));
                             }
                             send_size++;
                             // printf("Send all bytes package %ld body %ld all %ld\n", data.size(), body_str.size(), data.size() + body_str.size());
@@ -185,7 +185,7 @@ int main(int argc, const char **argv)
                             // std::cout <<"recv.."<<std::endl;
                             // std::cout << "reading=======================================================================>" << std::endl;
 
-                            std::this_thread::sleep_for(std::chrono::microseconds(1));
+                            // std::this_thread::sleep_for(std::chrono::microseconds(1));
                             while (true)
                             {
                                 int recv_len = read(client_socket, buffer + data_len, 5024000);
@@ -198,7 +198,7 @@ int main(int argc, const char **argv)
                                 if (recv_len == -1)
                                 {
                                     std::cout << "recv err" << std::endl;
-                                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                    // std::this_thread::sleep_for(std::chrono::milliseconds(1));
                                     continue;
                                 }
                                 // 6000 * 20 * 2MB = 6 000 * 2 0 * 2=240 000MB = 240GB
@@ -207,7 +207,7 @@ int main(int argc, const char **argv)
 
                                 if (data_len < sizeof(uint64_t))
                                 {
-                                    std::this_thread::sleep_for(std::chrono::microseconds(1));
+                                    // std::this_thread::sleep_for(std::chrono::microseconds(1));
                                     continue;
                                 }
 
@@ -215,7 +215,7 @@ int main(int argc, const char **argv)
 
                                 if (data_len < packSize + sizeof(uint64_t))
                                 {
-                                    std::this_thread::sleep_for(std::chrono::microseconds(1));
+                                    // std::this_thread::sleep_for(std::chrono::microseconds(1));
                                     continue;
                                 }
 
@@ -272,9 +272,8 @@ int main(int argc, const char **argv)
                             // std::cout << "pong OK" << std::endl;
                             // std::cout << "pingpong OK" << std::endl;
                         }
-
-                        std::this_thread::sleep_for(std::chrono::microseconds(5));
                     }
+                    std::this_thread::sleep_for(std::chrono::microseconds(10));
                 }
             });
         m_thread.detach();

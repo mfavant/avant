@@ -278,6 +278,47 @@ int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage 
     return 0;
 }
 
+void worker::handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message)
+{
+    try
+    {
+        switch (this->type)
+        {
+        case task::task_type::HTTP_TASK:
+        {
+            if (conn_ptr->http_ctx_ptr && (!this->use_ssl || conn_ptr->socket_obj.get_ssl_accepted()))
+            {
+                LOG_ERROR("task type err");
+            }
+            break;
+        }
+        case task::task_type::STREAM_TASK:
+        {
+            if (conn_ptr->stream_ctx_ptr && (!this->use_ssl || conn_ptr->socket_obj.get_ssl_accepted())) // is stream task,here important
+            {
+                avant::app::stream_app::on_client_forward_message(*conn_ptr->stream_ctx_ptr, message, conn_ptr->gid == message.sourcegid());
+            }
+            break;
+        }
+        case task::task_type::WEBSOCKET_TASK:
+        {
+            if (conn_ptr->websocket_ctx_ptr && (!this->use_ssl || conn_ptr->socket_obj.get_ssl_accepted()))
+            {
+                LOG_ERROR("task type err");
+            }
+            break;
+        }
+        default:
+            LOG_ERROR("task type err");
+            break;
+        }
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR("process PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE err");
+    }
+}
+
 void worker::on_tunnel_process(ProtoPackage &message)
 {
     int cmd = message.cmd();
@@ -300,13 +341,55 @@ void worker::on_tunnel_process(ProtoPackage &message)
     if (inner_cmd == ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT)
     {
         ProtoTunnelMain2WorkerNewClient package;
-        if (package.ParseFromString(tunnelPackage.innerprotopackage().protocol()))
+        if (!avant::proto::parse(package, tunnelPackage.innerprotopackage()))
         {
-            on_new_client_fd(package.fd(), package.gid());
+            LOG_ERROR("ProtoTunnelMain2WorkerNewClient.ParseFromString failed cmd %d", inner_cmd);
+            return;
+        }
+        on_new_client_fd(package.fd(), package.gid());
+    }
+    else if (inner_cmd == ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE)
+    {
+        ProtoTunnelClientForwardMessage message;
+        if (!avant::proto::parse(message, tunnelPackage.innerprotopackage()))
+        {
+            LOG_ERROR("parse ProtoTunnelClientForwardMessage err");
+            return;
+        }
+        int this_worker_tunnelid = avant::global::tunnel_id::get().get_worker_tunnel_id(this->worker_id);
+        // checking target Gid
+        if (message.targetgid().empty()) // broadcase all client conn
+        {
+            uint64_t all_conn_in_this_worker = this->worker_connection_mgr->size();
+            for (size_t i = 0; i < all_conn_in_this_worker; i++)
+            {
+                // maybe here conn_ptr is tunnel conn
+                auto conn_ptr = this->worker_connection_mgr->get_conn_by_idx(i);
+                if (!conn_ptr)
+                {
+                    break;
+                }
+                this->handle_tunnel_client_forward_message(conn_ptr, message);
+            }
         }
         else
         {
-            LOG_ERROR("ProtoTunnelMain2WorkerNewClient.ParseFromString failed cmd %d", inner_cmd);
+            for (int i = 0; i < message.targetgid().size(); i++)
+            {
+                uint64_t target_gid = message.targetgid().Get(i);
+                if (this_worker_tunnelid != avant::global::tunnel_id::get().hash_gid_2_worker_tunnel_id(target_gid))
+                {
+                    LOG_ERROR("it's not the worker client gid");
+                    continue;
+                }
+                auto conn_ptr = this->worker_connection_mgr->get_conn_by_gid(target_gid);
+                if (!conn_ptr)
+                {
+                    LOG_ERROR("process ProtoTunnelClientForwardMessage can not find targetgid %llu conn_ptr", target_gid);
+                    continue;
+                }
+                this->handle_tunnel_client_forward_message(conn_ptr, message);
+            }
         }
     }
     else // user's protocol
@@ -521,4 +604,54 @@ void worker::on_client_event_stream(int fd, uint32_t event)
 
 void worker::on_client_event_websocket(int fd, uint32_t event)
 {
+    // TODO
+}
+
+int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package)
+{
+    if (avant::global::tunnel_id::get().hash_gid_2_worker_tunnel_id(source_gid) != avant::global::tunnel_id::get().get_worker_tunnel_id(this->worker_id))
+    {
+        LOG_ERROR("source id err");
+        return -1;
+    }
+
+    std::unordered_map<uint64_t, std::vector<uint64_t>> target_tunnel_id;
+    for (const uint64_t &conn_gid : dest_conn_gid)
+    {
+        target_tunnel_id[avant::global::tunnel_id::get().hash_gid_2_worker_tunnel_id(conn_gid)].push_back(conn_gid);
+    }
+
+    ProtoTunnelClientForwardMessage forwardMessage;
+    forwardMessage.set_sourcegid(source_gid);
+    forwardMessage.mutable_innerprotopackage()->CopyFrom(package);
+
+    if (dest_conn_gid.empty())
+    {
+        // send to all worker
+        std::vector<int> all_target_tunnel;
+        for (int i = avant::global::tunnel_id::get().get_worker_tunnel_id_min(); i <= avant::global::tunnel_id::get().get_worker_tunnel_id_max(); i++)
+        {
+            all_target_tunnel.push_back(i);
+        }
+        ProtoPackage willBeForward;
+        tunnel_forward(all_target_tunnel, avant::proto::pack_package(willBeForward, forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE));
+    }
+    else
+    {
+        ProtoPackage willBeForward;
+        std::vector<int> all_target_tunnel;
+        for (const auto &tunnel_id : target_tunnel_id)
+        {
+            forwardMessage.mutable_targetgid()->Clear();
+            for (const auto &conn_gid : tunnel_id.second)
+            {
+                forwardMessage.mutable_targetgid()->Add(conn_gid);
+            }
+            all_target_tunnel.clear();
+            all_target_tunnel.push_back(tunnel_id.first);
+            tunnel_forward(all_target_tunnel, avant::proto::pack_package(willBeForward, forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE));
+        }
+    }
+
+    return 0;
 }
