@@ -19,6 +19,7 @@
 #include <unordered_set>
 #include "global/tunnel_id.h"
 #include "proto/proto_util.h"
+#include "connection/websocket_ctx.h"
 
 using namespace std;
 using namespace avant::server;
@@ -454,6 +455,10 @@ void server::on_start()
     // http-parser setting
     {
         connection::http_ctx::init_http_settings();
+    }
+    // ws-http-parser setting
+    {
+        connection::websocket_ctx::init_ws_http_settings();
     }
 
     // main_event_loop begin

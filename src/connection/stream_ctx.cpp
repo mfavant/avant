@@ -216,9 +216,8 @@ void stream_ctx::on_event(uint32_t event)
                 {
                     // LOG_ERROR("stream ctx client sock send data oper_errno %d", oper_errno);
                     conn_ptr->is_close = true;
-                    this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
-                    return;
                 }
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
                 break;
             }
         }

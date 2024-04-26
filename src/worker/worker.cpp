@@ -609,7 +609,14 @@ void worker::on_client_event_stream(int fd, uint32_t event)
 
 void worker::on_client_event_websocket(int fd, uint32_t event)
 {
-    // TODO
+    auto conn = this->worker_connection_mgr->get_conn(fd);
+    if (!conn)
+    {
+        LOG_ERROR("worker_connection_mgr->get_conn failed");
+        close_client_fd(fd);
+        return;
+    }
+    conn->websocket_ctx_ptr->on_event(event);
 }
 
 int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package)

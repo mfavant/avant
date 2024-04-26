@@ -27,6 +27,10 @@ namespace avant
             static void on_worker_tick(avant::worker::worker &worker_obj);
 
             static void on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package);
+
+            static void on_new_connection(avant::connection::websocket_ctx &ctx);
+            static void on_close_connection(avant::connection::websocket_ctx &ctx);
+            static void on_process_connection(avant::connection::websocket_ctx &ctx);
         };
     }
 }
