@@ -11,6 +11,12 @@
 #include <endian.h>
 #include <thread>
 #include <chrono>
+#include <unistd.h>
+#include <sys/epoll.h>
+#include <cstring>
+#include <vector>
+#include <fcntl.h>
+#include <atomic>
 
 #include "../protocol/proto_res/proto_cmd.pb.h"
 #include "../protocol/proto_res/proto_example.pb.h"
@@ -24,6 +30,15 @@ static bool is_ipv6(std::string ip)
     }
     return true;
 }
+
+struct conn
+{
+    int fd{0};
+    int sended{0};
+    char recv_buffer[30]{0};
+    uint64_t recv_data_len = 0;
+    int status{0}; // 0 发 1读
+};
 
 int main(int argc, const char **argv)
 {
@@ -40,19 +55,22 @@ int main(int argc, const char **argv)
     int n;
     bool stop_flag = false;
 
-    constexpr int thread_count = 1;
+    constexpr int thread_count = 3;
 
-    constexpr int client_cnt = 1;
+    constexpr int client_cnt = 100;
 
-    constexpr int pingpong_cnt = 1;
+    constexpr int pingpong_cnt = 20;
     // 350KB/s
+
+    std::atomic<uint64_t> recv_size = 0;
 
     // 1024KB
     for (int loop = 0; loop < thread_count; loop++)
     {
         std::thread m_thread(
-            [server_port, server_ip, argv, loop, &stop_flag, &client_cnt, &pingpong_cnt]()
+            [server_port, server_ip, argv, loop, &stop_flag, &client_cnt, &pingpong_cnt, &recv_size]()
             {
+                std::atomic<uint64_t> last_print_size = 0;
                 ProtoPackage message;
                 ProtoCSReqExample exampleReq;
                 constexpr uint send_all_string_bytes = 8;
@@ -62,11 +80,20 @@ int main(int argc, const char **argv)
                 message.set_cmd(ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE);
                 // 30MB * 2000 = 60 000MB = 60GB
                 uint64_t send_size = 0;
-                uint64_t recv_size = 0;
-                uint64_t last_print_size = 0;
+
                 uint64_t last_time = std::time(nullptr);
 
                 int client_socket_arr[client_cnt]{0};
+                conn conn_arr[client_cnt];
+                struct epoll_event event, events[client_cnt];
+                // epoll
+                int epoll_fd = epoll_create(client_cnt);
+                if (epoll_fd == -1)
+                {
+                    std::cerr << "epoll_create1 failed" << std::endl;
+                    return;
+                }
+
                 for (int client_idx = 0; client_idx < client_cnt; client_idx++)
                 {
                     int &client_socket = client_socket_arr[client_idx];
@@ -117,10 +144,57 @@ int main(int argc, const char **argv)
                             return;
                         }
                     }
+
+                    {
+                        // 在创建套接字后立即设置为非阻塞模式
+                        int flags = fcntl(client_socket, F_GETFL, 0);
+                        if (flags == -1)
+                        {
+                            perror("fcntl F_GETFL");
+                            exit(EXIT_FAILURE);
+                        }
+                        if (fcntl(client_socket, F_SETFL, flags | O_NONBLOCK) == -1)
+                        {
+                            perror("fcntl F_SETFL O_NONBLOCK");
+                            exit(EXIT_FAILURE);
+                        }
+                    }
+
+                    conn_arr[client_idx].fd = client_socket;
+                    conn_arr[client_idx].recv_data_len = 0;
+                    conn_arr[client_idx].sended = 0;
+                    // 添加fd到epoll
+                    event.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+                    // event.data.fd = client_socket;
+                    event.data.ptr = &conn_arr[client_idx];
+                    // printf("EPOLL ADD fd %d\n", client_socket);
+                    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event) == -1)
+                    {
+                        std::cerr << "epoll_ctl failed" << std::endl;
+                        exit(EXIT_FAILURE);
+                    }
                 }
+
+                std::string str;
+                exampleReq.SerializeToString(&str);
+                message.set_protocol(str);
+                message.set_cmd(ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE);
+                std::string data;
+                message.SerializeToString(&data);
+
+                uint64_t packageLen = data.size();
+                packageLen = ::htobe64(packageLen);
+                data.insert(0, (char *)&packageLen, sizeof(packageLen));
 
                 while (true)
                 {
+                    int nfds = epoll_wait(epoll_fd, events, client_cnt, 10);
+                    if (nfds == -1 && errno != EINTR)
+                    {
+                        perror("epoll_wait err");
+                        exit(EXIT_FAILURE);
+                    }
+
                     if (stop_flag)
                     {
                         for (int i = 0; i < client_cnt; i++)
@@ -132,149 +206,154 @@ int main(int argc, const char **argv)
                         }
                         return;
                     }
-                    for (int client_idx = 0; client_idx < client_cnt; client_idx++)
+
+                    for (int event_idx = 0; event_idx < nfds; event_idx++)
                     {
-                        int &client_socket = client_socket_arr[client_idx];
-                        if (client_socket <= 0)
+                        conn *client_conn = (conn *)events[event_idx].data.ptr;
+                        int client_socket = client_conn->fd;
+                        if (events[event_idx].events & (EPOLLERR | EPOLLRDHUP | EPOLLHUP))
                         {
-                            continue;
+                            perror("EPOLLERR | EPOLLRDHUP | EPOLLHUP");
+                            exit(EXIT_FAILURE);
                         }
-                        std::string str;
-                        exampleReq.SerializeToString(&str);
-                        message.set_protocol(str);
-                        std::string data;
-                        message.SerializeToString(&data);
-
-                        uint64_t packageLen = data.size();
-                        packageLen = ::htobe64(packageLen);
-                        data.insert(0, (char *)&packageLen, sizeof(packageLen));
-
-                        // every client pingpong 1
-                        for (int i = 0; i < pingpong_cnt; i++)
+                        while ((events[event_idx].events & EPOLLOUT) && client_conn->status == 0)
                         {
-                            std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-                            std::chrono::milliseconds send_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-                            // std::cout << "ping" << std::endl;
-                            uint64_t sended = 0;
-                            while (data.size() != sended)
+                            while (data.size() != client_conn->sended)
                             {
-                                // std::cout<<"send.. data.size() - sended = "<< ( data.size() - sended) <<std::endl;
-                                int len = send(client_socket, data.c_str() + sended, data.size() - sended, 0);
-                                if (len <= 0)
+                                int len = send(client_socket, data.c_str() + client_conn->sended, data.size() - client_conn->sended, 0);
+                                if (len <= 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
                                 {
                                     perror("Send Head failed");
-                                    close(client_socket);
-                                    client_socket = 0;
-                                    return;
+                                    printf(" errno %d", errno);
+                                    exit(EXIT_FAILURE);
                                 }
-                                else
+                                else if (len <= 0)
                                 {
-                                    sended += len;
-                                }
-                                // std::this_thread::sleep_for(std::chrono::microseconds(1));
-                            }
-                            send_size++;
-                            // printf("Send all bytes package %ld body %ld all %ld\n", data.size(), body_str.size(), data.size() + body_str.size());
-                            // std::cout << "ping OK" << std::endl;
-
-                            // block read res package
-                            char buffer[5024000]{0};
-                            uint64_t data_len = 0;
-
-                            // std::cout << "pong" << std::endl;
-                            // std::cout <<"recv.."<<std::endl;
-                            // std::cout << "reading=======================================================================>" << std::endl;
-
-                            // std::this_thread::sleep_for(std::chrono::microseconds(1));
-                            while (true)
-                            {
-                                int recv_len = read(client_socket, buffer + data_len, 5024000);
-                                if (recv_len == 0)
-                                {
-                                    close(client_socket);
-                                    client_socket = 0;
                                     break;
                                 }
-                                if (recv_len == -1)
+                                else if (len > 0)
                                 {
-                                    std::cout << "recv err" << std::endl;
-                                    // std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                                    continue;
+                                    client_conn->sended += len;
                                 }
-                                // 6000 * 20 * 2MB = 6 000 * 2 0 * 2=240 000MB = 240GB
-                                // printf("data_len[%u] += recv_len[%d]\n", data_len, recv_len);
-                                data_len += recv_len;
-
-                                if (data_len < sizeof(uint64_t))
+                            }
+                            // send over
+                            if (data.size() == client_conn->sended)
+                            {
+                                client_conn->sended = 0;
+                                client_conn->recv_data_len = 0;
+                                client_conn->status = 1; // 监听读
+                                event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+                                // event.data.fd = client_socket;
+                                event.data.ptr = client_conn;
+                                if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_socket, &event) == -1)
                                 {
-                                    // std::this_thread::sleep_for(std::chrono::microseconds(1));
-                                    continue;
+                                    std::cerr << "epoll_ctl failed" << std::endl;
+                                    exit(EXIT_FAILURE);
                                 }
-
-                                uint64_t packSize = ::be64toh(*((uint64_t *)buffer));
-
-                                if (data_len < packSize + sizeof(uint64_t))
+                                // printf("send a package\n");
+                                break;
+                            }
+                            break;
+                        }
+                        while ((events[event_idx].events & EPOLLIN) && client_conn->status == 1)
+                        {
+                            // printf("try read");
+                            while (22 != client_conn->recv_data_len)
+                            {
+                                int read_len = read(client_socket, client_conn->recv_buffer + client_conn->recv_data_len, sizeof(client_conn->recv_buffer));
+                                // printf("read len %d", read_len);
+                                if (read_len <= 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
                                 {
-                                    // std::this_thread::sleep_for(std::chrono::microseconds(1));
-                                    continue;
+                                    perror("Read Head failed");
+                                    exit(EXIT_FAILURE);
                                 }
-
-                                ProtoPackage protoPackage;
-                                // std::cout << "ParseFromArray recv_len[" << recv_len << "]"
-                                //           << "data_len=" << data_len << std::endl;
-                                if (!protoPackage.ParseFromArray(buffer + sizeof(uint64_t), packSize))
+                                else if (read_len <= 0)
                                 {
-                                    // std::cout << "Failed" << std::endl;
-                                    // std::cout << "ParseFromArray recv_len[" << recv_len << "]"
-                                    //           << "data_len=" << data_len << std::endl;
-                                    // std::this_thread::sleep_for(std::chrono::milliseconds(1));
-                                    std::cout << "ParseFromArrayErr" << std::endl;
-                                    return;
+                                    break;
                                 }
                                 else
                                 {
-                                    if (protoPackage.cmd() == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
+                                    client_conn->recv_data_len += read_len;
+                                }
+                            }
+                            // read over
+                            if (22 == client_conn->recv_data_len)
+                            {
+                                // 解包处理
+                                {
+                                    if (client_conn->recv_data_len < sizeof(uint64_t))
                                     {
-                                        ProtoCSResExample exampleRes;
-                                        if (exampleRes.ParseFromString(protoPackage.protocol()))
-                                        {
-                                            recv_size++;
+                                        perror("client_conn->recv_data_len < sizeof(uint64_t)");
+                                        exit(EXIT_FAILURE);
+                                    }
+                                    uint64_t packSize = ::be64toh(*((uint64_t *)client_conn->recv_buffer));
 
-                                            uint64_t now_time = std::time(nullptr);
-                                            if ((recv_size - last_print_size) >= 100)
-                                            {
-                                                // printf("RES(thread[%d] seconds[%lu] send_size[%lu],recv_size[%lu])\n", loop, now_time - last_time, send_size, recv_size);
-                                                std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
-                                                std::chrono::milliseconds recv_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-                                                std::cout << "pingpong " << recv_ms.count() - send_ms.count() << " ms cnt " << recv_size << "  " << send_all_string_bytes << " bytes " << std::endl;
-                                                last_print_size = recv_size;
-                                            }
-                                            last_time = now_time;
-                                            break;
-                                        }
-                                        else
-                                        {
-                                            std::cout << "exampleRes.ParseFromString(protoPackage.body()) failed" << std::endl;
-                                            close(client_socket);
-                                            break;
-                                        }
+                                    if (client_conn->recv_data_len < packSize + sizeof(uint64_t))
+                                    {
+                                        perror("client_conn->recv_data_len < packSize + sizeof(uint64_t)");
+                                        exit(EXIT_FAILURE);
+                                    }
+
+                                    ProtoPackage protoPackage;
+                                    if (!protoPackage.ParseFromArray(client_conn->recv_buffer + sizeof(uint64_t), packSize))
+                                    {
+                                        perror("protoPackage.ParseFromArray err");
+                                        exit(EXIT_FAILURE);
                                     }
                                     else
                                     {
-                                        std::cout << "res package cmd is not CS_RES_EXAMPLE" << std::endl;
-                                        close(client_socket);
-                                        client_socket = 0;
-                                        break;
+                                        if (protoPackage.cmd() == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
+                                        {
+                                            ProtoCSResExample exampleRes;
+                                            if (exampleRes.ParseFromString(protoPackage.protocol()))
+                                            {
+                                                recv_size.fetch_add(1);
+
+                                                // uint64_t now_time = std::time(nullptr);
+                                                if ((recv_size - last_print_size) >= 100000)
+                                                {
+                                                    // std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+                                                    // std::chrono::milliseconds recv_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+                                                    std::cout << "pingpong cnt " << recv_size << "  " << send_all_string_bytes << " bytes " << std::endl;
+                                                    last_print_size.store(recv_size);
+                                                }
+                                                // last_time = now_time;
+                                                // printf("recv a package\n");
+                                            }
+                                            else
+                                            {
+                                                perror("exampleRes.ParseFromString err");
+                                                exit(EXIT_FAILURE);
+                                                break;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            perror("protoPackage.cmd() != ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE");
+                                            exit(EXIT_FAILURE);
+                                        }
                                     }
                                 }
-                            }
 
-                            // std::cout << "pong OK" << std::endl;
-                            // std::cout << "pingpong OK" << std::endl;
+                                client_conn->sended = 0;
+                                client_conn->recv_data_len = 0;
+                                client_conn->status = 0; // 监听发
+                                event.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+                                // event.data.fd = client_socket;
+                                event.data.ptr = client_conn;
+                                if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, client_socket, &event) == -1)
+                                {
+                                    std::cerr << "epoll_ctl failed" << std::endl;
+                                    exit(EXIT_FAILURE);
+                                }
+                                // printf("recv over,loop status to send");
+                                break;
+                            }
+                            break;
                         }
-                    }
-                    std::this_thread::sleep_for(std::chrono::microseconds(10));
-                }
+                    } // for event num
+
+                } // while(true);
             });
         m_thread.detach();
     }
