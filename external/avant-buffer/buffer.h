@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
+#include <cstdint>
 
 namespace avant
 {
