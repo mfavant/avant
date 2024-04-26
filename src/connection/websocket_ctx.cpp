@@ -61,13 +61,16 @@ void websocket_ctx::init_ws_http_settings()
 
     settings->on_headers_complete = [](http_parser *parser) -> auto
     {
-        websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
-        ctx->http_processed = true;
+        // websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         return 0;
     };
 
     settings->on_body = [](http_parser *parser, const char *at, size_t length) -> auto
     {
+        if (length > 0)
+        {
+            return -1;
+        }
         return 0;
     };
 
