@@ -291,7 +291,7 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         {
         case task::task_type::HTTP_TASK:
         {
-            if (conn_ptr->http_ctx_ptr && (!this->use_ssl || conn_ptr->socket_obj.get_ssl_accepted()))
+            if (conn_ptr->is_ready && conn_ptr->http_ctx_ptr)
             {
                 LOG_ERROR("task type err");
             }
@@ -299,7 +299,7 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         }
         case task::task_type::STREAM_TASK:
         {
-            if (conn_ptr->stream_ctx_ptr && (!this->use_ssl || conn_ptr->socket_obj.get_ssl_accepted())) // is stream task,here important
+            if (conn_ptr->is_ready && conn_ptr->stream_ctx_ptr) // is stream task,here is_ready important
             {
                 avant::app::stream_app::on_client_forward_message(*conn_ptr->stream_ctx_ptr, message, conn_ptr->gid == message.sourcegid());
             }
@@ -307,7 +307,7 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         }
         case task::task_type::WEBSOCKET_TASK:
         {
-            if (conn_ptr->websocket_ctx_ptr && (!this->use_ssl || conn_ptr->socket_obj.get_ssl_accepted()))
+            if (conn_ptr->is_ready && conn_ptr->websocket_ctx_ptr)
             {
                 LOG_ERROR("task type err");
             }
@@ -543,7 +543,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                 return;
             }
             bool ssl_err = false;
-            SSL *ssl_instance = SSL_new(this->ssl_context);
+            SSL *ssl_instance = SSL_new(this->ssl_context); // socket close auto free SSL Object
             if (!ssl_instance)
             {
                 ssl_err = true;

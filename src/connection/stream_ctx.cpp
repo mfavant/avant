@@ -19,8 +19,9 @@ void stream_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_o
 {
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
-    if (!worker_obj.use_ssl)
+    if (!this->worker_ptr->use_ssl)
     {
+        this->conn_ptr->is_ready = true;
         bool err = false;
         try
         {
@@ -62,7 +63,7 @@ void stream_ctx::on_event(uint32_t event)
 
     if (conn_ptr->is_close)
     {
-        if (!this->worker_ptr->use_ssl || socket_ptr->get_ssl_accepted())
+        if (conn_ptr->is_ready)
         {
             try
             {
@@ -78,7 +79,7 @@ void stream_ctx::on_event(uint32_t event)
         return;
     }
 
-    // ssl begin
+    // ssl not ready, ssl begin
     if (this->worker_ptr->use_ssl && !socket_ptr->get_ssl_accepted())
     {
         int ssl_status = SSL_accept(socket_ptr->get_ssl_instance());
@@ -86,6 +87,7 @@ void stream_ctx::on_event(uint32_t event)
         if (1 == ssl_status)
         {
             socket_ptr->set_ssl_accepted(true);
+            conn_ptr->is_ready = true;
             // triger new connection hook
             bool err = false;
             try
@@ -212,7 +214,7 @@ void stream_ctx::on_event(uint32_t event)
             {
                 if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
-                    LOG_ERROR("stream ctx client sock send data oper_errno %d", oper_errno);
+                    // LOG_ERROR("stream ctx client sock send data oper_errno %d", oper_errno);
                     conn_ptr->is_close = true;
                     this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
                     return;
@@ -234,10 +236,10 @@ int stream_ctx::send_data(const std::string &data)
         return -1;
     }
 
-    // if need ssl but is not ready, forbiden to send_data
-    if (this->worker_ptr->use_ssl && !this->conn_ptr->socket_obj.get_ssl_accepted())
+    // need conn ready, forbiden to send_data
+    if (!this->conn_ptr->is_ready)
     {
-        LOG_ERROR("this->worker_ptr->use_ssl && !this->conn_ptr->socket_obj.get_ssl_accepted() %llu", this->conn_ptr->gid);
+        LOG_ERROR("!this->conn_ptr->is_ready %llu", this->conn_ptr->gid);
         return -2;
     }
 

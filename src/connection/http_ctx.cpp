@@ -130,8 +130,9 @@ void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj
         this->keep_live_counter = 0;
     }
 
-    if (!worker_obj.use_ssl || keep_live)
+    if (!this->worker_ptr->use_ssl || keep_live)
     {
+        this->conn_ptr->is_ready = true;
         bool err = false;
         try
         {
@@ -146,6 +147,7 @@ void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj
         {
             conn_ptr->is_close = true;
             this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
+            return;
         }
     }
 }
@@ -173,34 +175,29 @@ void http_ctx::on_event(uint32_t event)
 
     if (conn_ptr->is_close)
     {
-        // LOG_ERROR("keep_live_counter %llu", this->keep_live_counter);
-        if (!this->worker_ptr->use_ssl || socket_ptr->get_ssl_accepted())
+        if (this->destory_callback)
         {
-            if (this->destory_callback)
+            try
             {
-                try
-                {
-                    this->destory_callback(*this);
-                }
-                catch (const std::exception &e)
-                {
-                    LOG_ERROR(e.what());
-                }
+                this->destory_callback(*this);
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR(e.what());
             }
         }
-
         this->worker_ptr->close_client_fd(socket_ptr->get_fd());
         return;
     }
 
-    // ssl begin
-    if (this->worker_ptr->use_ssl && !socket_ptr->get_ssl_accepted())
+    if (this->worker_ptr->use_ssl && !socket_ptr->get_ssl_accepted()) // ssl not ready
     {
         int ssl_status = SSL_accept(socket_ptr->get_ssl_instance());
 
         if (1 == ssl_status)
         {
             socket_ptr->set_ssl_accepted(true);
+            conn_ptr->is_ready = true;
             // triger new connection hook
             bool err = false;
             try

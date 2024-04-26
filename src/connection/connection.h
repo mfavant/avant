@@ -27,5 +27,6 @@ namespace avant::connection
         std::shared_ptr<websocket_ctx> websocket_ctx_ptr{nullptr};
         bool closed_flag{false};
         bool is_close{false};
+        bool is_ready{false}; // will be setting true on notify app new_connection
     };
 }

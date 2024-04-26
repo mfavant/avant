@@ -331,6 +331,7 @@ void server::on_start()
                 connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_worker_tunnel[i].get_me());
                 tunnel_conn->recv_buffer.reserve(10485760); // 10MB
                 tunnel_conn->send_buffer.reserve(10485760); // 10MB
+                tunnel_conn->is_ready = true;
             }
             m_main_worker_tunnel_fd2index.emplace(m_main_worker_tunnel[i].get_me(), i);
         }
@@ -360,6 +361,7 @@ void server::on_start()
             connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_third_party_tunnel.get_me());
             tunnel_conn->recv_buffer.reserve(10485760); // 10MB
             tunnel_conn->send_buffer.reserve(10485760); // 10MB
+            tunnel_conn->is_ready = true;
         }
     }
 
@@ -420,6 +422,7 @@ void server::on_start()
             connection::connection *tunnel_conn = m_workers[i].worker_connection_mgr->get_conn(m_workers[i].main_worker_tunnel->get_other());
             tunnel_conn->recv_buffer.reserve(10485760); // 10MB
             tunnel_conn->send_buffer.reserve(10485760); // 10MB
+            tunnel_conn->is_ready = true;
         }
     }
 

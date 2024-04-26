@@ -104,8 +104,11 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
                 res.set_testcontext(req.testcontext());
 
                 // broadcast all connection in the process including this ctx self, async
-                ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {ctx.conn_ptr->gid}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+                // ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+
                 // send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+
+                ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {ctx.conn_ptr->gid}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
             }
         }
     }
@@ -127,15 +130,11 @@ void stream_app::on_worker_tunnel(avant::worker::worker &worker_obj, const Proto
 void stream_app::on_client_forward_message(avant::connection::stream_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self)
 {
     int cmd = message.innerprotopackage().cmd();
-    if (self)
+    if (cmd == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
     {
-        if (cmd == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
+        if (self)
         {
             stream_app::send_sync_package(ctx, message.innerprotopackage());
-        }
-        else
-        {
-            LOG_ERROR("not exit handler %d", cmd);
         }
     }
     else

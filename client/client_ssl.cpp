@@ -80,7 +80,7 @@ int main(int argc, const char **argv)
 
     // const char *server_ip = "61.171.51.135";
     const char *server_ip = "127.0.0.1";
-    int server_port = ::atoi(argv[0]);
+    int server_port = ::atoi(argv[1]);
 
     int n;
     bool stop_flag = false;
