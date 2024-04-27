@@ -427,15 +427,6 @@ void server::on_start()
         }
     }
 
-    // worker thread start
-    {
-        for (size_t i = 0; i < m_worker_cnt; i++)
-        {
-            std::thread t(std::ref(m_workers[i]));
-            t.detach();
-        }
-    }
-
     // listen_socket init
     server_socket listen_socket(m_ip, m_port, m_max_client_cnt);
     {
@@ -462,108 +453,126 @@ void server::on_start()
     }
 
     // main_event_loop begin
-    hooks::init::on_main_init(*this);
-    while (true)
     {
-        int num = m_epoller.wait(m_epoll_wait_time);
-        // time update
+        hooks::init::on_main_init(*this);
+    }
+    // worker thread start
+    {
+        for (size_t i = 0; i < m_worker_cnt; i++)
         {
-            hooks::tick::on_main_tick(*this);
-            server_time.update();
-            uint64_t now_tick_time = server_time.get_seconds();
-            if (latest_tick_time != now_tick_time)
-            {
-                // int curr_connection_num = m_curr_connection_num->load();
-                // LOG_ERROR("curr_connection_num %d", curr_connection_num);
+            std::thread t(std::ref(m_workers[i]));
+            t.detach();
+        }
+    }
 
-                if (stop_flag)
+    // main event_loop
+    {
+        while (true)
+        {
+            int num = m_epoller.wait(m_epoll_wait_time);
+            // time update
+            {
+                hooks::tick::on_main_tick(*this);
+                server_time.update();
+                uint64_t now_tick_time = server_time.get_seconds();
+                if (latest_tick_time != now_tick_time)
                 {
-                    bool flag = true;
-                    // checking all worker stoped
-                    for (size_t i = 0; i < m_worker_cnt; i++)
+                    // int curr_connection_num = m_curr_connection_num->load();
+                    // LOG_ERROR("curr_connection_num %d", curr_connection_num);
+
+                    if (stop_flag)
                     {
-                        if (!m_workers[i].is_stoped)
+                        bool flag = true;
+                        // checking all worker stoped
+                        for (size_t i = 0; i < m_worker_cnt; i++)
                         {
-                            flag = false;
+                            if (!m_workers[i].is_stoped)
+                            {
+                                flag = false;
+                            }
                         }
-                    }
-                    if (flag)
-                    {
-                        break;
-                    }
-                }
-                gid_seq = 0;
-                latest_tick_time = now_tick_time;
-            }
-        }
-
-        if (num < 0)
-        {
-            if (errno == EINTR)
-            {
-                continue;
-            }
-            else
-            {
-                LOG_ERROR("main epoller.wait return %num errno %d", num, errno);
-                break;
-            }
-        }
-
-        for (int i = 0; i < num; i++)
-        {
-            int evented_fd = m_epoller.m_events[i].data.fd;
-            uint32_t event_come = m_epoller.m_events[i].events;
-            // listen_fd
-            if (evented_fd == listen_socket.get_fd())
-            {
-                std::vector<int> clients_fd;
-                std::vector<uint64_t> gids;
-                for (size_t loop = 0; loop < m_accept_per_tick; loop++)
-                {
-                    int new_client_fd = listen_socket.accept();
-                    if (new_client_fd < 0)
-                    {
-                        break;
-                    }
-                    else
-                    {
-                        if (*m_curr_connection_num >= (int)m_max_client_cnt)
+                        if (flag)
                         {
-                            LOG_ERROR("m_curr_connection_num >= m_max_client_cnt");
-                            ::close(new_client_fd);
                             break;
                         }
-                        *m_curr_connection_num += 1;
-                        clients_fd.push_back(new_client_fd);
-                        gids.push_back(gen_gid(latest_tick_time, ++gid_seq));
+                    }
+                    gid_seq = 0;
+                    latest_tick_time = now_tick_time;
+                }
+            }
+
+            if (num < 0)
+            {
+                if (errno == EINTR)
+                {
+                    continue;
+                }
+                else
+                {
+                    LOG_ERROR("main epoller.wait return %num errno %d", num, errno);
+                    break;
+                }
+            }
+
+            for (int i = 0; i < num; i++)
+            {
+                int evented_fd = m_epoller.m_events[i].data.fd;
+                uint32_t event_come = m_epoller.m_events[i].events;
+                // listen_fd
+                if (evented_fd == listen_socket.get_fd())
+                {
+                    std::vector<int> clients_fd;
+                    std::vector<uint64_t> gids;
+                    for (size_t loop = 0; loop < m_accept_per_tick; loop++)
+                    {
+                        int new_client_fd = listen_socket.accept();
+                        if (new_client_fd < 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            if (*m_curr_connection_num >= (int)m_max_client_cnt)
+                            {
+                                LOG_ERROR("m_curr_connection_num >= m_max_client_cnt");
+                                ::close(new_client_fd);
+                                break;
+                            }
+                            *m_curr_connection_num += 1;
+                            clients_fd.push_back(new_client_fd);
+                            gids.push_back(gen_gid(latest_tick_time, ++gid_seq));
+                        }
+                    }
+                    // new_client_fd come here
+                    if (!clients_fd.empty())
+                    {
+                        on_listen_event(clients_fd, gids);
                     }
                 }
-                // new_client_fd come here
-                if (!clients_fd.empty())
+                // worker_tunnel_fd
+                else if (m_main_worker_tunnel_fd2index.find(evented_fd) != m_main_worker_tunnel_fd2index.end())
                 {
-                    on_listen_event(clients_fd, gids);
+                    on_tunnel_event(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[evented_fd]], event_come);
                 }
-            }
-            // worker_tunnel_fd
-            else if (m_main_worker_tunnel_fd2index.find(evented_fd) != m_main_worker_tunnel_fd2index.end())
-            {
-                on_tunnel_event(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[evented_fd]], event_come);
-            }
-            // third-party tunnel
-            else if (m_third_party_tunnel.get_me() == evented_fd)
-            {
-                on_tunnel_event(m_third_party_tunnel, event_come);
-            }
-            else
-            {
-                LOG_ERROR("main epoller, undefined type fd");
-                m_epoller.del(evented_fd, nullptr, 0);
-                ::close(evented_fd);
+                // third-party tunnel
+                else if (m_third_party_tunnel.get_me() == evented_fd)
+                {
+                    on_tunnel_event(m_third_party_tunnel, event_come);
+                }
+                else
+                {
+                    LOG_ERROR("main epoller, undefined type fd");
+                    m_epoller.del(evented_fd, nullptr, 0);
+                    ::close(evented_fd);
+                }
             }
         }
     }
-    hooks::stop::on_main_stop(*this);
+
+    // main event_loop stoped
+    {
+        hooks::stop::on_main_stop(*this);
+    }
 }
 
 uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)

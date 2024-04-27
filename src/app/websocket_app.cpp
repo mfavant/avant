@@ -1,9 +1,102 @@
+/**
+ * @file websocket_app.cpp
+ * @author gaowanlu
+ * @brief now only support text and binary frame, other be not supported
+ * @version 0.1
+ * @date 2024-04-27
+ *
+ * @copyright Copyright (c) 2024
+ *
+ */
+
 #include "app/websocket_app.h"
 #include "server/server.h"
 #include "worker/worker.h"
 #include <avant-log/logger.h>
+#include "proto/proto_util.h"
 
 using namespace avant::app;
+
+websocket_app::websocket_frame_type websocket_app::n_2_websocket_frame_type(uint8_t n)
+{
+    n = n & 0x0f;
+    if (n == 0x1)
+    {
+        return websocket_frame_type::TEXT_FRAME;
+    }
+    else if (n == 0x2)
+    {
+        return websocket_frame_type::BINARY_FRAME;
+    }
+    else
+    {
+        if (n == 0x0)
+        {
+            return websocket_frame_type::CONTINUATION_FRAME;
+        }
+        else if (n >= 0x3 && n <= 0x7)
+        {
+            return websocket_frame_type::FURTHER_NON_CONTROL;
+        }
+        else if (n >= 0xb && n <= 0xf)
+        {
+            return websocket_frame_type::FURTHER_CONTROL;
+        }
+        else if (n == 0x8)
+        {
+            return websocket_frame_type::CONNECTION_CLOSE_FRAME;
+        }
+        else if (n == 0x9)
+        {
+            return websocket_frame_type::PING;
+        }
+        else if (n == 0xa)
+        {
+            return websocket_frame_type::PONG;
+        }
+    }
+    return websocket_frame_type::ERROR;
+}
+
+uint8_t websocket_app::websocket_frame_type_2_n(websocket_frame_type type, uint8_t idx /*= 0x0*/)
+{
+    if (type == websocket_frame_type::TEXT_FRAME)
+    {
+        return 0x1;
+    }
+    else if (type == websocket_frame_type::BINARY_FRAME)
+    {
+        return 0x2;
+    }
+    else
+    {
+        if (type == websocket_frame_type::CONTINUATION_FRAME)
+        {
+            return 0x0;
+        }
+        else if (type == websocket_frame_type::FURTHER_NON_CONTROL && idx >= 0x0 && idx <= 0x4)
+        {
+            return 0x3 + idx;
+        }
+        else if (type == websocket_frame_type::FURTHER_CONTROL && idx >= 0x0 && idx <= 0x5)
+        {
+            return 0xb + idx;
+        }
+        else if (type == websocket_frame_type::CONNECTION_CLOSE_FRAME)
+        {
+            return 0x8;
+        }
+        else if (type == websocket_frame_type::PING)
+        {
+            return 0x9;
+        }
+        else if (type == websocket_frame_type::PONG)
+        {
+            return 0xa;
+        }
+    }
+    return 0x8;
+}
 
 void websocket_app::on_main_init(avant::server::server &server_obj)
 {
@@ -49,15 +142,206 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
     connection::connection *conn_ptr = ctx.conn_ptr;
     socket::socket *socket_ptr = &ctx.conn_ptr->socket_obj;
 
-    constexpr int max_recv_buffer = 1024000;
-    if (conn_ptr->recv_buffer.size() > max_recv_buffer)
+    uint64_t all_data_len = conn_ptr->recv_buffer.size();
+    if (all_data_len == 0)
     {
-        LOG_ERROR("conn_ptr max_recv_buffer content oversize %d", max_recv_buffer);
-        conn_ptr->is_close = true;
-        ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
         return;
     }
-    // tmp clear
-    conn_ptr->recv_buffer.clear();
-    // LOG_ERROR("websocket_app::on_process_connection");
+    const char *data = conn_ptr->recv_buffer.get_read_ptr();
+    size_t index = 0;
+
+    while (true)
+    {
+        if (index >= all_data_len)
+        {
+            break;
+        }
+        size_t start_index = index;
+        websocket_frame frame;
+        uint8_t opcode = (uint8_t)data[index] & 0x0f;
+        websocket_frame_type type = n_2_websocket_frame_type(opcode);
+        if (type != websocket_frame_type::TEXT_FRAME && type != websocket_frame_type::BINARY_FRAME)
+        {
+            LOG_ERROR("it's not text or binary frame type = %d", opcode);
+            conn_ptr->is_close = true;
+            ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+            break;
+        }
+
+        frame.fin = (data[index] & 0x80) != 0;
+        frame.opcode = data[index] & 0x0F;
+        index++;
+        if (index >= all_data_len)
+        {
+            // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
+            break;
+        }
+        frame.mask = (data[index] & 0x80) != 0;
+        frame.payload_length = data[index] & 0x7F;
+        index++;
+        if (index >= all_data_len)
+        {
+            // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
+            break;
+        }
+
+        if (frame.payload_length == 126)
+        {
+            frame.payload_length = 0;
+            if (index + 2 >= all_data_len)
+            {
+                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index + 2, all_data_len);
+                break;
+            }
+            uint16_t tmp = 0;
+            u_char *ph = nullptr;
+            ph = (u_char *)&tmp;
+            *ph++ = data[index];
+            *ph++ = data[index + 1];
+            tmp = ::ntohs(tmp);
+            frame.payload_length = tmp;
+            index += 2;
+        }
+        else if (frame.payload_length == 127)
+        {
+            frame.payload_length = 0;
+            if (index + 8 >= all_data_len)
+            {
+                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index + 8, all_data_len);
+                break;
+            }
+            uint32_t tmp = 0;
+            u_char *ph = (u_char *)&tmp;
+            *ph++ = data[index++];
+            *ph++ = data[index++];
+            *ph++ = data[index++];
+            *ph++ = data[index++];
+            frame.payload_length = ntohl(tmp);
+            frame.payload_length = frame.payload_length << 32;
+            ph = (u_char *)&tmp;
+            *ph++ = data[index++];
+            *ph++ = data[index++];
+            *ph++ = data[index++];
+            *ph++ = data[index++];
+            tmp = ntohl(tmp);
+            frame.payload_length = frame.payload_length | tmp;
+        }
+
+        if (frame.payload_length == 0)
+        {
+            break;
+        }
+
+        if (frame.mask)
+        {
+            if (index + 4 >= all_data_len)
+            {
+                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index + 3, all_data_len);
+                break;
+            }
+            frame.masking_key = {(uint8_t)data[index], (uint8_t)data[index + 1], (uint8_t)data[index + 2], (uint8_t)data[index + 3]};
+            index += 4;
+        }
+
+        // payload data [data+index,data+index+frame.payload_length]
+        if (index >= all_data_len)
+        {
+            // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
+            break;
+        }
+        if (index - 1 + frame.payload_length >= all_data_len)
+        {
+            // LOG_ERROR("index - 1 + frame.payload_length=[%llu] >= all_data_len[%llu]", index - 1 + frame.payload_length, all_data_len);
+            break;
+        }
+        std::string payload_data(data + index, frame.payload_length);
+        if (frame.mask)
+        {
+            for (size_t i = 0; i < payload_data.size(); ++i)
+            {
+                payload_data[i] ^= frame.masking_key[i % 4];
+            }
+        }
+        frame.payload_data = std::move(payload_data);
+
+        on_process_frame(ctx, frame);
+
+        conn_ptr->recv_buffer.move_read_ptr_n(index - start_index + frame.payload_length);
+
+        index += frame.payload_length;
+
+    } // while(true)
+
+    if (conn_ptr->recv_buffer.size() > 1024000)
+    {
+        conn_ptr->is_close = true;
+        ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+        LOG_ERROR("recv_buffer.size() > 1024000");
+        return;
+    }
+}
+
+void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx, websocket_frame &frame)
+{
+    // using tunnel to broadcast
+    ProtoTunnelWebsocketBroadcast websockBroadcast;
+    ProtoPackage package;
+    websockBroadcast.set_data(frame.payload_data);
+    ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {}, avant::proto::pack_package(package, websockBroadcast, ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST));
+}
+
+void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self)
+{
+    int cmd = message.innerprotopackage().cmd();
+    if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST)
+    {
+        uint8_t first_byte = 0x80 | websocket_frame_type_2_n(websocket_frame_type::TEXT_FRAME);
+        ProtoTunnelWebsocketBroadcast websocketBroadcast;
+        if (!avant::proto::parse(websocketBroadcast, message.innerprotopackage()))
+        {
+            LOG_ERROR("ProtoTunnelWebsocketBroadcast parse failed");
+            return;
+        }
+        send_sync_package(ctx, first_byte, websocketBroadcast.data().c_str(), websocketBroadcast.data().size());
+    }
+    else
+    {
+        LOG_ERROR("not exist handler %d", cmd);
+    }
+}
+
+int websocket_app::send_sync_package(avant::connection::websocket_ctx &ctx, uint8_t first_byte, const char *data, size_t data_len)
+{
+    if (ctx.conn_ptr->send_buffer.size() > 1024000)
+    {
+        LOG_ERROR("ctx.conn_ptr->send_buffer.size() > 1024000");
+        ctx.conn_ptr->is_close = true;
+        ctx.worker_ptr->epoller.mod(ctx.conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+        return -1;
+    }
+
+    size_t message_length = data_len;
+    std::string frame;
+    frame.push_back(first_byte);
+
+    if (message_length <= 125)
+    {
+        frame.push_back(static_cast<uint8_t>(message_length));
+    }
+    else if (message_length <= 0xFFFF)
+    {
+        frame.push_back(126);
+        frame.push_back((message_length >> 8) & 0xFF);
+        frame.push_back(message_length & 0xFF);
+    }
+    else
+    {
+        frame.push_back(127);
+        for (int i = 7; i >= 0; --i)
+        {
+            frame.push_back((message_length >> (8 * i)) & 0xFF);
+        }
+    }
+    frame.insert(frame.end(), data, data + data_len);
+    return ctx.send_data(frame);
 }

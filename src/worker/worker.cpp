@@ -309,7 +309,7 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         {
             if (conn_ptr->is_ready && conn_ptr->websocket_ctx_ptr)
             {
-                LOG_ERROR("task type err");
+                avant::app::websocket_app::on_client_forward_message(*conn_ptr->websocket_ctx_ptr, message, conn_ptr->gid == message.sourcegid());
             }
             break;
         }

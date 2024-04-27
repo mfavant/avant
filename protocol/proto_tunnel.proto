@@ -36,3 +36,9 @@ message ProtoTunnelMain2WorkerNewClient
     int32 fd = 1;
     uint64 gid = 2;
 }
+
+// PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST
+message ProtoTunnelWebsocketBroadcast
+{
+    bytes data = 1;
+};

@@ -24,6 +24,7 @@ namespace avant::connection
         void on_event(uint32_t event);
 
         void add_header(const std::string &key, const std::string &value);
+        int send_data(const std::string &data);
 
     public:
         connection *conn_ptr{nullptr};

@@ -52,6 +52,15 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
     // LOG_ERROR("stream_app on_process_connection gid %llu", ctx.conn_ptr->gid);
     auto conn_ptr = ctx.conn_ptr;
     auto socket_ptr = &ctx.conn_ptr->socket_obj;
+
+    if (conn_ptr->recv_buffer.size() > 2048000)
+    {
+        conn_ptr->is_close = true;
+        ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+        LOG_ERROR("recv_buffer.size() > 1024000");
+        return;
+    }
+
     // parse protocol
     while (!conn_ptr->recv_buffer.empty())
     {
@@ -116,6 +125,14 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
 
 int stream_app::send_sync_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package)
 {
+    if (ctx.conn_ptr->send_buffer.size() > 1024000)
+    {
+        LOG_ERROR("ctx.conn_ptr->send_buffer.size() > 1024000");
+        ctx.conn_ptr->is_close = true;
+        ctx.worker_ptr->epoller.mod(ctx.conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+        return -1;
+    }
+
     std::string data;
     return ctx.send_data(avant::proto::pack_package(data, package));
 }
@@ -139,6 +156,6 @@ void stream_app::on_client_forward_message(avant::connection::stream_ctx &ctx, P
     }
     else
     {
-        LOG_ERROR("not exit handler %d", cmd);
+        LOG_ERROR("not exist handler %d", cmd);
     }
 }

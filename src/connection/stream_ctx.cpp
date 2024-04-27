@@ -231,14 +231,14 @@ int stream_ctx::send_data(const std::string &data)
 {
     if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
     {
-        LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data %llu", this->conn_ptr->gid);
+        // LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data %llu", this->conn_ptr->gid);
         return -1;
     }
 
     // need conn ready, forbiden to send_data
     if (!this->conn_ptr->is_ready)
     {
-        LOG_ERROR("!this->conn_ptr->is_ready %llu", this->conn_ptr->gid);
+        // LOG_ERROR("!this->conn_ptr->is_ready %llu", this->conn_ptr->gid);
         return -2;
     }
 

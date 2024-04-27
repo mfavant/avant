@@ -137,6 +137,7 @@ void websocket_ctx::on_event(uint32_t event)
     }
     if (event & event::event_poller::ERR)
     {
+        // LOG_ERROR("event::event_poller::ERR");
         conn_ptr->is_close = true;
     }
     if (conn_ptr->is_close)
@@ -199,6 +200,7 @@ void websocket_ctx::on_event(uint32_t event)
     {
         if (this->http_processed)
         {
+            // LOG_ERROR("this->http_processed !this->is_connected");
             conn_ptr->is_close = true;
             this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
             return;
@@ -243,6 +245,7 @@ void websocket_ctx::on_event(uint32_t event)
                 }
                 else
                 {
+                    // LOG_ERROR("socket->recv return len==0");
                     conn_ptr->is_close = true;
                     this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
                     return;
@@ -259,6 +262,7 @@ void websocket_ctx::on_event(uint32_t event)
         // is not websocket
         if (this->http_processed && !this->is_upgrade)
         {
+            // LOG_ERROR("this->http_processed && !this->is_upgrade");
             conn_ptr->is_close = true;
             this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
             return;
@@ -280,6 +284,7 @@ void websocket_ctx::on_event(uint32_t event)
             }
             if (this->sec_websocket_key.empty() || this->sec_websocket_version != "13")
             {
+                // LOG_ERROR("this->sec_websocket_key.empty() || this->sec_websocket_version != 13");
                 conn_ptr->is_close = true;
                 this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
                 return;
@@ -364,6 +369,7 @@ void websocket_ctx::on_event(uint32_t event)
                 }
                 else
                 {
+                    // LOG_ERROR("socket_ptr->recv len==0");
                     conn_ptr->is_close = true;
                     this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
                     return;
@@ -419,6 +425,7 @@ void websocket_ctx::on_event(uint32_t event)
                 {
                     if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                     {
+                        // LOG_ERROR("socket_ptr->send len %d oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK", len);
                         conn_ptr->is_close = true;
                     }
                     this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
@@ -439,4 +446,24 @@ void websocket_ctx::add_header(const std::string &key, const std::string &value)
         this->headers[key] = m_vec;
     }
     this->headers[key].push_back(value);
+}
+
+int websocket_ctx::send_data(const std::string &data)
+{
+    if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
+    {
+        // LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data %llu", this->conn_ptr->gid);
+        return -1;
+    }
+
+    // need conn ready, forbiden to send_data
+    if (!this->conn_ptr->is_ready)
+    {
+        // LOG_ERROR("!this->conn_ptr->is_ready %llu", this->conn_ptr->gid);
+        return -2;
+    }
+
+    this->conn_ptr->send_buffer.append(data.c_str(), data.size());
+    this->worker_ptr->epoller.mod(this->conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+    return 0;
 }
