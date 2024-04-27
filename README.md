@@ -49,6 +49,13 @@ $ ./avant
 $ ps -ef | grep avant
 ```
 
+### Avant Safe Stop
+
+```bash
+$ ps -ef | grep avant
+$ kill PID
+```
+
 ## Example
 
 ```bash
