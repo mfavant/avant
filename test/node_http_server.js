@@ -4,11 +4,11 @@ const url = require('url');
 const path = require('path');
 
 const staticRoot = async (staticPath, req, res) => {
-	res.writeHead(200,'OK');
-	res.end();
-	return;
+    res.writeHead(200, 'OK');
+    res.end();
+    return;
 
-	try {
+    try {
         const pathObj = url.parse(req.url, true);
         const filePath = path.join(staticPath, pathObj.pathname === '/' ? 'index.html' : pathObj.pathname);
 
@@ -25,7 +25,7 @@ const staticRoot = async (staticPath, req, res) => {
 };
 
 const server = http.createServer(async (req, res) => {
-    await staticRoot('/tubekit_static', req, res); // Use await for asynchronous function call
+    await staticRoot('/avant_static', req, res); // Use await for asynchronous function call
 });
 
 server.listen(20025, '0.0.0.0', () => {
