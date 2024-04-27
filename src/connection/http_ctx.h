@@ -16,7 +16,7 @@ namespace avant::connection
         ~http_ctx();
 
         // context create success
-        void on_create(connection &conn_obj, worker::worker &worker_obj, bool keep_live = false);
+        void on_create(connection &conn_obj, worker::worker &worker_obj);
         // context destory
         void on_close();
 
@@ -48,6 +48,7 @@ namespace avant::connection
         std::function<void(http_ctx &ctx)> write_end_callback{nullptr};
         std::function<void(http_ctx &ctx)> destory_callback{nullptr};
         void *ptr{nullptr};
+        bool keep_alive{false};
 
     private:
         http_parser http_parser_obj;

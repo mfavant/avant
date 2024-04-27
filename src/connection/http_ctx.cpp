@@ -102,7 +102,7 @@ http_ctx::~http_ctx()
 {
 }
 
-void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj, bool keep_live /*= false*/)
+void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj)
 {
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
@@ -120,8 +120,9 @@ void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj
     this->process_end = false;
     this->response_end = false;
     this->everything_end = false;
+    this->keep_alive = false;
 
-    if (keep_live)
+    if (this->keep_alive)
     {
         this->keep_live_counter++;
     }
@@ -130,7 +131,7 @@ void http_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj
         this->keep_live_counter = 0;
     }
 
-    if (!this->worker_ptr->use_ssl || keep_live)
+    if (!this->worker_ptr->use_ssl || this->keep_alive)
     {
         this->conn_ptr->is_ready = true;
         bool err = false;
@@ -388,24 +389,12 @@ void http_ctx::on_event(uint32_t event)
             }
             this->destory_callback = nullptr;
         }
-        bool exist_keep_live = false;
-        if (this->headers.find("Connection") != this->headers.end())
-        {
-            for (const std::string &str : this->headers.find("Connection")->second)
-            {
-                if (str == "keep-alive")
-                {
-                    exist_keep_live = true;
-                    break;
-                }
-            }
-        }
-        if (exist_keep_live)
+        if (this->keep_alive)
         {
             // reuse connection
             this->conn_ptr->on_alloc(this->conn_ptr->fd, this->conn_ptr->gid);
             // reuse context
-            this->on_create(*this->conn_ptr, *this->worker_ptr, true);
+            this->on_create(*this->conn_ptr, *this->worker_ptr);
         }
     }
 

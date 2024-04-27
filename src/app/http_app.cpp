@@ -97,6 +97,22 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
     ctx.process_callback = [](avant::connection::http_ctx &ctx) -> void
     {
+        bool exist_keep_live = false;
+        if (ctx.headers.find("Connection") != ctx.headers.end())
+        {
+            for (const std::string &str : ctx.headers.find("Connection")->second)
+            {
+                if (str == "keep-alive")
+                {
+                    exist_keep_live = true;
+                    break;
+                }
+            }
+        }
+        if (exist_keep_live)
+        {
+            ctx.keep_alive = false; // app not use keep_alive
+        }
         /*{
             const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
             ctx.conn_ptr->send_buffer.append(response, strlen(response));
@@ -143,7 +159,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             {
                 mime_type = "application/octet-stream";
             }
-            std::string response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            std::string response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: close\r\n";
             response += "Content-Type: ";
             response += mime_type + "\r\n\r\n";
 
@@ -193,7 +209,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
             auto dir_type_ptr = (http_app_reponse::DIR_TYPE *)response_ptr->ptr;
 
-            const char *response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n";
+            const char *response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: close\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n";
             ctx.conn_ptr->send_buffer.append(response_head, strlen(response_head));
 
             //  generate dir list
@@ -244,7 +260,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         }
         else
         {
-            const char *response = "HTTP/1.1 404 Not Found\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/text; charset=UTF-8\r\n\r\n";
+            const char *response = "HTTP/1.1 404 Not Found\r\nServer: avant\r\nConnection: close\r\nContent-Type: text/text; charset=UTF-8\r\n\r\n";
             ctx.conn_ptr->send_buffer.append(response, strlen(response));
             ctx.set_response_end(true);
         }
