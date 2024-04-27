@@ -5,31 +5,44 @@
 #include "proto_res/proto_example.pb.h"
 #include "proto/proto_util.h"
 #include "global/tunnel_id.h"
+#include "utility/singleton.h"
+#include "app/lua_plugin.h"
 
 using namespace avant::app;
+namespace utility = avant::utility;
 
 void stream_app::on_main_init(avant::server::server &server_obj)
 {
+    LOG_ERROR("stream_app::on_main_init");
+    utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_lua_dir(), server_obj.get_worker_cnt());
 }
 
 void stream_app::on_worker_init(avant::worker::worker &worker_obj)
 {
+    LOG_ERROR("stream_app::on_worker_init %d", worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
 }
 
 void stream_app::on_main_stop(avant::server::server &server_obj)
 {
+    LOG_ERROR("stream_app::on_main_stop");
+    utility::singleton<lua_plugin>::instance()->on_main_stop();
 }
 
 void stream_app::on_worker_stop(avant::worker::worker &worker_obj)
 {
+    LOG_ERROR("stream_app::on_worker_stop %d", worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
 }
 
 void stream_app::on_main_tick(avant::server::server &server_obj)
 {
+    utility::singleton<lua_plugin>::instance()->on_main_tick();
 }
 
 void stream_app::on_worker_tick(avant::worker::worker &worker_obj)
 {
+    utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.worker_id);
 }
 
 bool stream_app::on_recved_packsize(avant::connection::stream_ctx &ctx, uint64_t size)

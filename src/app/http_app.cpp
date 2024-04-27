@@ -3,6 +3,8 @@
 #include "worker/worker.h"
 #include "utility/url.h"
 #include "utility/mime_type.h"
+#include "utility/singleton.h"
+#include "app/lua_plugin.h"
 #include <string>
 #include <filesystem>
 #include <avant-log/logger.h>
@@ -261,29 +263,35 @@ int http_app::on_body(avant::connection::http_ctx &ctx)
 void http_app::on_main_init(avant::server::server &server_obj)
 {
     LOG_ERROR("http_app::on_main_init");
+    utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_lua_dir(), server_obj.get_worker_cnt());
 }
 
 void http_app::on_worker_init(avant::worker::worker &worker_obj)
 {
     LOG_ERROR("http_app::on_worker_init %d", worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
 }
 
 void http_app::on_main_stop(avant::server::server &server_obj)
 {
     LOG_ERROR("http_app::on_main_stop");
+    utility::singleton<lua_plugin>::instance()->on_main_stop();
 }
 
 void http_app::on_worker_stop(avant::worker::worker &worker_obj)
 {
     LOG_ERROR("http_app::on_worker_stop %d", worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
 }
 
 void http_app::on_main_tick(avant::server::server &server_obj)
 {
+    utility::singleton<lua_plugin>::instance()->on_main_tick();
 }
 
 void http_app::on_worker_tick(avant::worker::worker &worker_obj)
 {
+    utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.worker_id);
 }
 
 void http_app::on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package)

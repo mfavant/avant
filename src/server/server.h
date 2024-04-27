@@ -58,6 +58,10 @@ namespace avant::server
                     bool use_ssl = false);
         avant::task::task_type get_task_type();
         void to_stop();
+        inline int get_worker_cnt() const
+        {
+            return this->m_worker_cnt;
+        }
 
     private:
         bool on_stop();
