@@ -115,6 +115,8 @@ void websocket_ctx::on_create(connection &conn_obj, avant::worker::worker &worke
     this->everything_end = false;
     this->is_upgrade = false;
     this->is_connected = false;
+    this->frame_first_opcode = 0;
+    this->frame_payload_data.clear();
     this->ptr = nullptr;
     http_parser_init(&this->http_parser_obj, HTTP_REQUEST);
     this->http_parser_obj.data = this;

@@ -43,6 +43,10 @@ namespace avant::connection
         bool everything_end{false};
         bool is_upgrade{false};
         bool is_connected{false};
+
+        uint8_t frame_first_opcode{0};
+        std::string frame_payload_data{};
+
         void *ptr{nullptr};
 
     private:

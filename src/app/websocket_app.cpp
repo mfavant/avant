@@ -172,15 +172,23 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
         websocket_frame frame;
         uint8_t opcode = (uint8_t)data[index] & 0x0f;
         websocket_frame_type type = n_2_websocket_frame_type(opcode);
-        if (type != websocket_frame_type::TEXT_FRAME && type != websocket_frame_type::BINARY_FRAME)
+
+        if (type == websocket_frame_type::TEXT_FRAME || type == websocket_frame_type::BINARY_FRAME)
         {
-            LOG_ERROR("it's not text or binary frame type = %d", opcode);
+            ctx.frame_first_opcode = opcode;
+        }
+        else if (type == websocket_frame_type::CONTINUATION_FRAME)
+        {
+        }
+        else
+        {
+            LOG_ERROR("frame not be allowed. opcode = %d", opcode);
             conn_ptr->is_close = true;
             ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
             break;
         }
 
-        frame.fin = (data[index] & 0x80) != 0;
+        frame.fin = data[index] & 0x80;
         frame.opcode = data[index] & 0x0F;
         index++;
         if (index >= all_data_len)
@@ -275,12 +283,14 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
             }
         }
         frame.payload_data = std::move(payload_data);
-
-        on_process_frame(ctx, frame);
-
+        ctx.frame_payload_data += std::move(frame.payload_data);
         conn_ptr->recv_buffer.move_read_ptr_n(index - start_index + frame.payload_length);
-
         index += frame.payload_length;
+
+        if (frame.fin)
+        {
+            on_process_frame(ctx);
+        }
 
     } // while(true)
 
@@ -291,14 +301,23 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
         LOG_ERROR("recv_buffer.size() > 1024000");
         return;
     }
+
+    if (ctx.frame_payload_data.size() > 1024000)
+    {
+        conn_ptr->is_close = true;
+        ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+        LOG_ERROR("ctx.frame_payload_data.size() > 1024000");
+        return;
+    }
 }
 
-void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx, websocket_frame &frame)
+void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx)
 {
     // using tunnel to broadcast
     ProtoTunnelWebsocketBroadcast websockBroadcast;
     ProtoPackage package;
-    websockBroadcast.set_data(frame.payload_data);
+    websockBroadcast.set_data(ctx.frame_payload_data);
+    ctx.frame_payload_data.clear();
     ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {}, avant::proto::pack_package(package, websockBroadcast, ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST));
 }
 
