@@ -19,87 +19,6 @@
 
 using namespace avant::app;
 
-websocket_app::websocket_frame_type websocket_app::n_2_websocket_frame_type(uint8_t n)
-{
-    n = n & 0x0f;
-    if (n == 0x1)
-    {
-        return websocket_frame_type::TEXT_FRAME;
-    }
-    else if (n == 0x2)
-    {
-        return websocket_frame_type::BINARY_FRAME;
-    }
-    else
-    {
-        if (n == 0x0)
-        {
-            return websocket_frame_type::CONTINUATION_FRAME;
-        }
-        else if (n >= 0x3 && n <= 0x7)
-        {
-            return websocket_frame_type::FURTHER_NON_CONTROL;
-        }
-        else if (n >= 0xb && n <= 0xf)
-        {
-            return websocket_frame_type::FURTHER_CONTROL;
-        }
-        else if (n == 0x8)
-        {
-            return websocket_frame_type::CONNECTION_CLOSE_FRAME;
-        }
-        else if (n == 0x9)
-        {
-            return websocket_frame_type::PING;
-        }
-        else if (n == 0xa)
-        {
-            return websocket_frame_type::PONG;
-        }
-    }
-    return websocket_frame_type::ERROR;
-}
-
-uint8_t websocket_app::websocket_frame_type_2_n(websocket_frame_type type, uint8_t idx /*= 0x0*/)
-{
-    if (type == websocket_frame_type::TEXT_FRAME)
-    {
-        return 0x1;
-    }
-    else if (type == websocket_frame_type::BINARY_FRAME)
-    {
-        return 0x2;
-    }
-    else
-    {
-        if (type == websocket_frame_type::CONTINUATION_FRAME)
-        {
-            return 0x0;
-        }
-        else if (type == websocket_frame_type::FURTHER_NON_CONTROL && idx >= 0x0 && idx <= 0x4)
-        {
-            return 0x3 + idx;
-        }
-        else if (type == websocket_frame_type::FURTHER_CONTROL && idx >= 0x0 && idx <= 0x5)
-        {
-            return 0xb + idx;
-        }
-        else if (type == websocket_frame_type::CONNECTION_CLOSE_FRAME)
-        {
-            return 0x8;
-        }
-        else if (type == websocket_frame_type::PING)
-        {
-            return 0x9;
-        }
-        else if (type == websocket_frame_type::PONG)
-        {
-            return 0xa;
-        }
-    }
-    return 0x8;
-}
-
 void websocket_app::on_main_init(avant::server::server &server_obj)
 {
     LOG_ERROR("websocket_app::on_main_init");
@@ -151,15 +70,12 @@ void websocket_app::on_close_connection(avant::connection::websocket_ctx &ctx)
 
 void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
 {
-    connection::connection *conn_ptr = ctx.conn_ptr;
-    socket::socket *socket_ptr = &ctx.conn_ptr->socket_obj;
-
-    uint64_t all_data_len = conn_ptr->recv_buffer.size();
+    uint64_t all_data_len = ctx.get_recv_buffer_size();
     if (all_data_len == 0)
     {
         return;
     }
-    const char *data = conn_ptr->recv_buffer.get_read_ptr();
+    const char *data = ctx.get_recv_buffer_read_ptr();
     size_t index = 0;
 
     while (true)
@@ -183,8 +99,8 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
         else
         {
             LOG_ERROR("frame not be allowed. opcode = %d", opcode);
-            conn_ptr->is_close = true;
-            ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+            ctx.set_conn_is_close(true);
+            ctx.event_mod(nullptr, event::event_poller::RWE, false);
             break;
         }
 
@@ -284,7 +200,9 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
         }
         frame.payload_data = std::move(payload_data);
         ctx.frame_payload_data += std::move(frame.payload_data);
-        conn_ptr->recv_buffer.move_read_ptr_n(index - start_index + frame.payload_length);
+
+        ctx.recv_buffer_move_read_ptr_n(index - start_index + frame.payload_length);
+
         index += frame.payload_length;
 
         if (frame.fin)
@@ -294,18 +212,18 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
 
     } // while(true)
 
-    if (conn_ptr->recv_buffer.size() > 1024000)
+    if (ctx.get_recv_buffer_size() > 1024000)
     {
-        conn_ptr->is_close = true;
-        ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
-        LOG_ERROR("recv_buffer.size() > 1024000");
+        ctx.set_conn_is_close(true);
+        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        LOG_ERROR("ctx.get_recv_buffer_size() > 1024000");
         return;
     }
 
     if (ctx.frame_payload_data.size() > 1024000)
     {
-        conn_ptr->is_close = true;
-        ctx.worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+        ctx.set_conn_is_close(true);
+        ctx.event_mod(nullptr, event::event_poller::RWE, false);
         LOG_ERROR("ctx.frame_payload_data.size() > 1024000");
         return;
     }
@@ -318,7 +236,8 @@ void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx)
     ProtoPackage package;
     websockBroadcast.set_data(ctx.frame_payload_data);
     ctx.frame_payload_data.clear();
-    ctx.worker_ptr->send_client_forward_message(ctx.conn_ptr->gid, {}, avant::proto::pack_package(package, websockBroadcast, ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST));
+
+    ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{}, avant::proto::pack_package(package, websockBroadcast, ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST));
 }
 
 void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self)
@@ -343,11 +262,11 @@ void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &
 
 int websocket_app::send_sync_package(avant::connection::websocket_ctx &ctx, uint8_t first_byte, const char *data, size_t data_len)
 {
-    if (ctx.conn_ptr->send_buffer.size() > 1024000)
+    if (ctx.get_send_buffer_size() > 1024000)
     {
-        LOG_ERROR("ctx.conn_ptr->send_buffer.size() > 1024000");
-        ctx.conn_ptr->is_close = true;
-        ctx.worker_ptr->epoller.mod(ctx.conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+        LOG_ERROR("ctx.get_send_buffer_size() > 1024000");
+        ctx.set_conn_is_close(true);
+        ctx.event_mod(nullptr, event::event_poller::RWE, false);
         return -1;
     }
 
@@ -375,4 +294,85 @@ int websocket_app::send_sync_package(avant::connection::websocket_ctx &ctx, uint
     }
     frame.insert(frame.end(), data, data + data_len);
     return ctx.send_data(frame);
+}
+
+websocket_app::websocket_frame_type websocket_app::n_2_websocket_frame_type(uint8_t n)
+{
+    n = n & 0x0f;
+    if (n == 0x1)
+    {
+        return websocket_frame_type::TEXT_FRAME;
+    }
+    else if (n == 0x2)
+    {
+        return websocket_frame_type::BINARY_FRAME;
+    }
+    else
+    {
+        if (n == 0x0)
+        {
+            return websocket_frame_type::CONTINUATION_FRAME;
+        }
+        else if (n >= 0x3 && n <= 0x7)
+        {
+            return websocket_frame_type::FURTHER_NON_CONTROL;
+        }
+        else if (n >= 0xb && n <= 0xf)
+        {
+            return websocket_frame_type::FURTHER_CONTROL;
+        }
+        else if (n == 0x8)
+        {
+            return websocket_frame_type::CONNECTION_CLOSE_FRAME;
+        }
+        else if (n == 0x9)
+        {
+            return websocket_frame_type::PING;
+        }
+        else if (n == 0xa)
+        {
+            return websocket_frame_type::PONG;
+        }
+    }
+    return websocket_frame_type::ERROR;
+}
+
+uint8_t websocket_app::websocket_frame_type_2_n(websocket_frame_type type, uint8_t idx /*= 0x0*/)
+{
+    if (type == websocket_frame_type::TEXT_FRAME)
+    {
+        return 0x1;
+    }
+    else if (type == websocket_frame_type::BINARY_FRAME)
+    {
+        return 0x2;
+    }
+    else
+    {
+        if (type == websocket_frame_type::CONTINUATION_FRAME)
+        {
+            return 0x0;
+        }
+        else if (type == websocket_frame_type::FURTHER_NON_CONTROL && idx >= 0x0 && idx <= 0x4)
+        {
+            return 0x3 + idx;
+        }
+        else if (type == websocket_frame_type::FURTHER_CONTROL && idx >= 0x0 && idx <= 0x5)
+        {
+            return 0xb + idx;
+        }
+        else if (type == websocket_frame_type::CONNECTION_CLOSE_FRAME)
+        {
+            return 0x8;
+        }
+        else if (type == websocket_frame_type::PING)
+        {
+            return 0x9;
+        }
+        else if (type == websocket_frame_type::PONG)
+        {
+            return 0xa;
+        }
+    }
+    return 0x8;
 }
