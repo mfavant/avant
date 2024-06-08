@@ -1,7 +1,7 @@
 /**
  * @file websocket_app.cpp
  * @author gaowanlu
- * @brief now only support text and binary frame, other be not supported
+ * @brief websocket app
  * @version 0.1
  * @date 2024-04-27
  *
