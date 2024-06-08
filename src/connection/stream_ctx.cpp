@@ -15,7 +15,7 @@ stream_ctx::~stream_ctx()
 {
 }
 
-void stream_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj)
+void stream_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_obj)
 {
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;

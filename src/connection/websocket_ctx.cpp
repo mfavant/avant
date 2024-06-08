@@ -101,7 +101,7 @@ websocket_ctx::~websocket_ctx()
 }
 
 // socket fd be created
-void websocket_ctx::on_create(connection &conn_obj, avant::worker::worker &worker_obj)
+void websocket_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_obj)
 {
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;

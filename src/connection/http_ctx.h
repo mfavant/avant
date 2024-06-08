@@ -1,6 +1,6 @@
 #pragma once
 
-#include "worker/worker.h"
+#include "workers/worker.h"
 #include "connection/connection.h"
 #include <http-parser/http_parser.h>
 #include <memory>
@@ -16,7 +16,7 @@ namespace avant::connection
         ~http_ctx();
 
         // context create success
-        void on_create(connection &conn_obj, worker::worker &worker_obj);
+        void on_create(connection &conn_obj, workers::worker &worker_obj);
         // context destory
         void on_close();
 
@@ -37,7 +37,7 @@ namespace avant::connection
         static std::shared_ptr<http_parser_settings> settings;
         static void init_http_settings();
         connection *conn_ptr{nullptr};
-        worker::worker *worker_ptr{nullptr};
+        workers::worker *worker_ptr{nullptr};
 
     public:
         std::string url{};

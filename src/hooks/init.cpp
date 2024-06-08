@@ -33,7 +33,7 @@ void init::on_main_init(avant::server::server &server_obj)
     }
 }
 
-void init::on_worker_init(avant::worker::worker &worker_obj)
+void init::on_worker_init(avant::workers::worker &worker_obj)
 {
     try
     {

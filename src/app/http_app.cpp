@@ -1,6 +1,6 @@
 #include "app/http_app.h"
 #include "server/server.h"
-#include "worker/worker.h"
+#include "workers/worker.h"
 #include "utility/url.h"
 #include "utility/mime_type.h"
 #include "utility/singleton.h"
@@ -127,7 +127,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             return;
         }
 
-        const string &prefix = worker::worker::http_static_dir;
+        const string &prefix = workers::worker::http_static_dir;
 
         fs::path t_path = prefix + url;
         // if (url.empty() || url[0] != '/')
@@ -282,7 +282,7 @@ void http_app::on_main_init(avant::server::server &server_obj)
     utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_lua_dir(), server_obj.get_worker_cnt());
 }
 
-void http_app::on_worker_init(avant::worker::worker &worker_obj)
+void http_app::on_worker_init(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("http_app::on_worker_init %d", worker_obj.worker_id);
     utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
@@ -294,7 +294,7 @@ void http_app::on_main_stop(avant::server::server &server_obj)
     utility::singleton<lua_plugin>::instance()->on_main_stop();
 }
 
-void http_app::on_worker_stop(avant::worker::worker &worker_obj)
+void http_app::on_worker_stop(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("http_app::on_worker_stop %d", worker_obj.worker_id);
     utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
@@ -305,12 +305,12 @@ void http_app::on_main_tick(avant::server::server &server_obj)
     utility::singleton<lua_plugin>::instance()->on_main_tick();
 }
 
-void http_app::on_worker_tick(avant::worker::worker &worker_obj)
+void http_app::on_worker_tick(avant::workers::worker &worker_obj)
 {
     utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.worker_id);
 }
 
-void http_app::on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package)
+void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package)
 {
     LOG_ERROR("http_app on_worker_tunnel cmd %d", package.cmd());
 }

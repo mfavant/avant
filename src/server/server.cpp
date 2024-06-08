@@ -26,7 +26,7 @@ using namespace avant::server;
 using namespace avant::socket;
 using namespace avant::utility;
 using namespace avant::task;
-using namespace avant::worker;
+using namespace avant::workers;
 using namespace avant::socket;
 using namespace avant::global;
 using namespace avant::proto;
@@ -368,7 +368,7 @@ void server::on_start()
 
     // worker init
     {
-        worker::worker *worker_arr = new worker::worker[m_worker_cnt];
+        workers::worker *worker_arr = new workers::worker[m_worker_cnt];
         m_workers = worker_arr;
         if (!worker_arr)
         {

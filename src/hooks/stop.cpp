@@ -32,7 +32,7 @@ void stop::on_main_stop(avant::server::server &server_obj)
     }
 }
 
-void stop::on_worker_stop(avant::worker::worker &worker_obj)
+void stop::on_worker_stop(avant::workers::worker &worker_obj)
 {
     try
     {

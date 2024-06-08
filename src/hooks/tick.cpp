@@ -32,7 +32,7 @@ void tick::on_main_tick(avant::server::server &server_obj)
     }
 }
 
-void tick::on_worker_tick(avant::worker::worker &worker_obj)
+void tick::on_worker_tick(avant::workers::worker &worker_obj)
 {
     try
     {

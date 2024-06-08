@@ -1,4 +1,4 @@
-#include "worker/worker.h"
+#include "workers/worker.h"
 #include <avant-log/logger.h>
 #include <thread>
 #include <chrono>
@@ -18,7 +18,7 @@
 #include "app/stream_app.h"
 #include "app/websocket_app.h"
 
-using namespace avant::worker;
+using namespace avant::workers;
 using namespace avant::global;
 using namespace avant::proto;
 

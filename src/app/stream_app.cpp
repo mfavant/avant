@@ -1,6 +1,6 @@
 #include "app/stream_app.h"
 #include "server/server.h"
-#include "worker/worker.h"
+#include "workers/worker.h"
 #include <avant-log/logger.h>
 #include "proto_res/proto_example.pb.h"
 #include "proto/proto_util.h"
@@ -17,7 +17,7 @@ void stream_app::on_main_init(avant::server::server &server_obj)
     utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_lua_dir(), server_obj.get_worker_cnt());
 }
 
-void stream_app::on_worker_init(avant::worker::worker &worker_obj)
+void stream_app::on_worker_init(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("stream_app::on_worker_init %d", worker_obj.worker_id);
     utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
@@ -29,7 +29,7 @@ void stream_app::on_main_stop(avant::server::server &server_obj)
     utility::singleton<lua_plugin>::instance()->on_main_stop();
 }
 
-void stream_app::on_worker_stop(avant::worker::worker &worker_obj)
+void stream_app::on_worker_stop(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("stream_app::on_worker_stop %d", worker_obj.worker_id);
     utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
@@ -40,7 +40,7 @@ void stream_app::on_main_tick(avant::server::server &server_obj)
     utility::singleton<lua_plugin>::instance()->on_main_tick();
 }
 
-void stream_app::on_worker_tick(avant::worker::worker &worker_obj)
+void stream_app::on_worker_tick(avant::workers::worker &worker_obj)
 {
     utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.worker_id);
 }
@@ -150,7 +150,7 @@ int stream_app::send_sync_package(avant::connection::stream_ctx &ctx, const Prot
     return ctx.send_data(avant::proto::pack_package(data, package));
 }
 
-void stream_app::on_worker_tunnel(avant::worker::worker &worker_obj, const ProtoPackage &package)
+void stream_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package)
 {
     int cmd = package.cmd();
     LOG_ERROR("not exist handler %d", cmd);

@@ -11,7 +11,7 @@
 #include "proto_res/proto_tunnel.pb.h"
 #include "task/task_type.h"
 
-namespace avant::worker
+namespace avant::workers
 {
     class worker
     {
