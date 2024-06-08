@@ -481,8 +481,3 @@ uint64_t http_ctx::get_conn_gid()
 {
     return this->conn_ptr->gid;
 }
-
-avant::workers::worker &http_ctx::get_worker()
-{
-    return *this->worker_ptr;
-}

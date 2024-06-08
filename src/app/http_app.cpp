@@ -78,7 +78,7 @@ struct http_app_reponse
 
 void http_app::on_new_connection(avant::connection::http_ctx &ctx)
 {
-    //  LOG_ERROR("http_app new socket %d", ctx.conn_ptr->fd);
+    // LOG_ERROR("http_app new socket gid %llu", ctx.get_conn_gid());
 }
 
 void http_app::process_connection(avant::connection::http_ctx &ctx)

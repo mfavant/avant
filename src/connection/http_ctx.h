@@ -36,7 +36,6 @@ namespace avant::connection
         void send_buffer_append(const char *data, size_t len);
         size_t get_recv_buffer_size();
         uint64_t get_conn_gid();
-        workers::worker &get_worker();
 
     public:
         static std::shared_ptr<http_parser_settings> settings;

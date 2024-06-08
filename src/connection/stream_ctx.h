@@ -18,6 +18,30 @@ namespace avant::connection
         int send_data(const std::string &data);
 
         void on_event(uint32_t event);
+
+    public:
+        uint64_t get_conn_gid();
+        size_t get_recv_buffer_size();
+        const char *get_recv_buffer_read_ptr();
+        void recv_buffer_move_read_ptr_n(size_t n);
+
+        size_t get_send_buffer_size();
+
+        void set_conn_is_close(bool val);
+
+        template <typename... Args>
+        void event_mod(Args &&...args)
+        {
+            this->worker_ptr->epoller.mod(this->conn_ptr->socket_obj.get_fd(), std::forward<Args>(args)...);
+        }
+
+        template <typename... Args>
+        int worker_send_client_forward_message(Args &&...args)
+        {
+            return this->worker_ptr->send_client_forward_message(std::forward<Args>(args)...);
+        }
+
+    protected:
         connection *conn_ptr{nullptr};
         workers::worker *worker_ptr{nullptr};
     };

@@ -246,3 +246,33 @@ int stream_ctx::send_data(const std::string &data)
     this->worker_ptr->epoller.mod(this->conn_ptr->fd, nullptr, event::event_poller::RWE, false);
     return 0;
 }
+
+uint64_t stream_ctx::get_conn_gid()
+{
+    return this->conn_ptr->gid;
+}
+
+size_t stream_ctx::get_recv_buffer_size()
+{
+    return this->conn_ptr->recv_buffer.size();
+}
+
+const char *stream_ctx::get_recv_buffer_read_ptr()
+{
+    return this->conn_ptr->recv_buffer.get_read_ptr();
+}
+
+void stream_ctx::recv_buffer_move_read_ptr_n(size_t n)
+{
+    return this->conn_ptr->recv_buffer.move_read_ptr_n(n);
+}
+
+size_t stream_ctx::get_send_buffer_size()
+{
+    return this->conn_ptr->send_buffer.size();
+}
+
+void stream_ctx::set_conn_is_close(bool val)
+{
+    this->conn_ptr->is_close = val;
+}
