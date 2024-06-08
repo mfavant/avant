@@ -163,7 +163,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             response += "Content-Type: ";
             response += mime_type + "\r\n\r\n";
 
-            ctx.conn_ptr->send_buffer.append(response.c_str(), response.size());
+            ctx.send_buffer_append(response.c_str(), response.size());
 
             response_ptr->ptr = ::fopen(t_path.c_str(), "r");
             if (response_ptr->ptr == nullptr)
@@ -181,7 +181,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 len = ::fread(buf, sizeof(char), buffer_size, (http_app_reponse::FD_TYPE *)((http_app_reponse *)ctx.ptr)->ptr);
                 if (len > 0)
                 {
-                    ctx.conn_ptr->send_buffer.append(buf, len);
+                    ctx.send_buffer_append(buf, len);
                 }
                 else
                 {
@@ -210,7 +210,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             auto dir_type_ptr = (http_app_reponse::DIR_TYPE *)response_ptr->ptr;
 
             const char *response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: close\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n";
-            ctx.conn_ptr->send_buffer.append(response_head, strlen(response_head));
+            ctx.send_buffer_append(response_head, strlen(response_head));
 
             //  generate dir list
             vector<string> a_tags;
@@ -247,7 +247,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 {
                     size_t need_send = buffer_size - already_size;
                     need_send = need_send > 1024000 ? 1024000 : need_send;
-                    ctx.conn_ptr->send_buffer.append(buffer_ptr, need_send);
+                    ctx.send_buffer_append(buffer_ptr, need_send);
                     already_size += need_send;
                 }
                 else
@@ -261,7 +261,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         else
         {
             const char *response = "HTTP/1.1 404 Not Found\r\nServer: avant\r\nConnection: close\r\nContent-Type: text/text; charset=UTF-8\r\n\r\n";
-            ctx.conn_ptr->send_buffer.append(response, strlen(response));
+            ctx.send_buffer_append(response, strlen(response));
             ctx.set_response_end(true);
         }
     };
@@ -269,7 +269,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
 int http_app::on_body(avant::connection::http_ctx &ctx)
 {
-    if (ctx.conn_ptr->recv_buffer.size() > 1024)
+    if (ctx.get_recv_buffer_size() > 1024)
     {
         return -1;
     }

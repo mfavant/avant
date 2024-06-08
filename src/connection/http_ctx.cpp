@@ -466,3 +466,23 @@ void http_ctx::add_header(const std::string &key, const std::string &value)
     }
     this->headers[key].push_back(value);
 }
+
+void http_ctx::send_buffer_append(const char *data, size_t len)
+{
+    this->conn_ptr->send_buffer.append(data, len);
+}
+
+size_t http_ctx::get_recv_buffer_size()
+{
+    return this->conn_ptr->recv_buffer.size();
+}
+
+uint64_t http_ctx::get_conn_gid()
+{
+    return this->conn_ptr->gid;
+}
+
+avant::workers::worker &http_ctx::get_worker()
+{
+    return *this->worker_ptr;
+}

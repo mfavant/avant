@@ -33,9 +33,16 @@ namespace avant::connection
 
         void add_header(const std::string &key, const std::string &value);
 
+        void send_buffer_append(const char *data, size_t len);
+        size_t get_recv_buffer_size();
+        uint64_t get_conn_gid();
+        workers::worker &get_worker();
+
     public:
         static std::shared_ptr<http_parser_settings> settings;
         static void init_http_settings();
+
+    protected:
         connection *conn_ptr{nullptr};
         workers::worker *worker_ptr{nullptr};
 
