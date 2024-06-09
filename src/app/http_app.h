@@ -14,6 +14,7 @@ namespace avant
         class http_app
         {
         public:
+            // socket and ssl ready
             static void on_new_connection(avant::connection::http_ctx &ctx);
 
             static void process_connection(avant::connection::http_ctx &ctx);

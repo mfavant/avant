@@ -54,7 +54,9 @@ namespace avant
 
             static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package);
 
+            // socket and ssl and websocket handshake ready
             static void on_new_connection(avant::connection::websocket_ctx &ctx);
+
             static void on_close_connection(avant::connection::websocket_ctx &ctx);
             static void on_process_connection(avant::connection::websocket_ctx &ctx);
 

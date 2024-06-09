@@ -30,7 +30,9 @@ namespace avant
 
             static bool on_recved_packsize(avant::connection::stream_ctx &ctx, uint64_t size);
 
+            // socket and ssl ready
             static void on_new_connection(avant::connection::stream_ctx &ctx);
+
             static void on_close_connection(avant::connection::stream_ctx &ctx);
             static void on_process_connection(avant::connection::stream_ctx &ctx);
             static int send_sync_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package);
