@@ -594,6 +594,7 @@ void server::on_start()
 
 uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
 {
+    // LOG_ERROR("gen_gid %llu %llu", time_seconds, gid_seq);
     return (time_seconds << 32) | gid_seq;
 }
 
