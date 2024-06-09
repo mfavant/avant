@@ -79,7 +79,7 @@ struct http_app_reponse
 // ctx created
 void http_app::on_ctx_create(avant::connection::http_ctx &ctx)
 {
-    LOG_ERROR("http_app::on_ctx_create %llu", ctx.get_conn_gid());
+    // LOG_ERROR("http_app::on_ctx_create %llu", ctx.get_conn_gid());
 }
 
 void http_app::on_new_connection(avant::connection::http_ctx &ctx)

@@ -52,7 +52,7 @@ bool stream_app::on_recved_packsize(avant::connection::stream_ctx &ctx, uint64_t
 
 void stream_app::on_ctx_create(avant::connection::stream_ctx &ctx)
 {
-    LOG_ERROR("stream_app::on_ctx_create %llu", ctx.get_conn_gid());
+    // LOG_ERROR("stream_app::on_ctx_create %llu", ctx.get_conn_gid());
 }
 
 void stream_app::on_new_connection(avant::connection::stream_ctx &ctx)
