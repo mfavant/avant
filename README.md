@@ -89,8 +89,8 @@ wrk testing, avant http
 
 ```bash
 # avant
-$ wrk -c {{connection_num}} -t {{threads}} http://IP:20023/
-$ wrk -c {{connection_num}} -t {{threads}} -d60s --header "Connection: keep-alive" http://127.0.0.1:20023/
+wrk -c {{connection_num}} -t {{threads}} http://IP:20023/
+wrk -c {{connection_num}} -t {{threads}} -d60s --header "Connection: keep-alive" http://127.0.0.1:20023/
 ```
 
 ## Third-Party
