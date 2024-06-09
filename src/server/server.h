@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "workers/worker.h"
+#include "workers/other.h"
 #include "task/task_type.h"
 #include "event/event_poller.h"
 #include "socket/socket_pair.h"
@@ -117,10 +118,12 @@ namespace avant::server
 
         SSL_CTX *m_ssl_context{nullptr};
         avant::workers::worker *m_workers{nullptr};
+        avant::workers::other *m_other{nullptr};
+
         std::shared_ptr<std::atomic<int>> m_curr_connection_num{nullptr};
         avant::socket::socket_pair *m_main_worker_tunnel{nullptr};
         std::unordered_map<int, int> m_main_worker_tunnel_fd2index;
-        avant::socket::socket_pair m_third_party_tunnel;
+        avant::socket::socket_pair m_main_other_tunnel;
 
         avant::event::event_poller m_epoller;
         avant::connection::connection_mgr m_main_connection_mgr;

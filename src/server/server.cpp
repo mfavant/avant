@@ -43,6 +43,7 @@ server::~server()
         SSL_CTX_free(m_ssl_context);
         m_ssl_context = nullptr;
     }
+
     if (m_main_worker_tunnel)
     {
         delete[] m_main_worker_tunnel;
@@ -52,6 +53,11 @@ server::~server()
     {
         delete[] m_workers;
         m_workers = nullptr;
+    }
+    if (m_other)
+    {
+        delete m_other;
+        m_other = nullptr;
     }
 }
 
@@ -338,34 +344,6 @@ void server::on_start()
         }
     }
 
-    // m_third_party_tunnel
-    {
-        iret = m_third_party_tunnel.init();
-        if (iret != 0)
-        {
-            LOG_ERROR("main m_third_party_tunnel failed iret=%d", iret);
-            return;
-        }
-        if (0 != m_epoller.add(m_third_party_tunnel.get_me(), nullptr, event::event_poller::RWE, false))
-        {
-            LOG_ERROR("main_epoller.add m_third_party_tunnel.get_me() failed %d", errno);
-            return;
-        }
-        // main alloc connection for tunnel
-        {
-            iret = m_main_connection_mgr.alloc_connection(m_third_party_tunnel.get_me(), gen_gid(latest_tick_time, ++gid_seq));
-            if (iret != 0)
-            {
-                LOG_ERROR("m_main_connection_mgr.alloc_connection for m_third_party_tunnel return %d", iret);
-                return;
-            }
-            connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_third_party_tunnel.get_me());
-            tunnel_conn->recv_buffer.reserve(10485760); // 10MB
-            tunnel_conn->send_buffer.reserve(10485760); // 10MB
-            tunnel_conn->is_ready = true;
-        }
-    }
-
     // worker init
     {
         workers::worker *worker_arr = new workers::worker[m_worker_cnt];
@@ -424,6 +402,45 @@ void server::on_start()
             tunnel_conn->recv_buffer.reserve(10485760); // 10MB
             tunnel_conn->send_buffer.reserve(10485760); // 10MB
             tunnel_conn->is_ready = true;
+        }
+    }
+
+    // m_main_other_tunnel
+    {
+        iret = m_main_other_tunnel.init();
+        if (iret != 0)
+        {
+            LOG_ERROR("main m_main_other_tunnel failed iret=%d", iret);
+            return;
+        }
+        if (0 != m_epoller.add(m_main_other_tunnel.get_me(), nullptr, event::event_poller::RWE, false))
+        {
+            LOG_ERROR("main_epoller.add m_main_other_tunnel.get_me() failed %d", errno);
+            return;
+        }
+        // main alloc connection for tunnel
+        {
+            iret = m_main_connection_mgr.alloc_connection(m_main_other_tunnel.get_me(), gen_gid(latest_tick_time, ++gid_seq));
+            if (iret != 0)
+            {
+                LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_other_tunnel return %d", iret);
+                return;
+            }
+            connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_other_tunnel.get_me());
+            tunnel_conn->recv_buffer.reserve(10485760); // 10MB
+            tunnel_conn->send_buffer.reserve(10485760); // 10MB
+            tunnel_conn->is_ready = true;
+        }
+    }
+
+    // other init
+    {
+        workers::other *other_ptr = new workers::other;
+        m_other = other_ptr;
+        if (!m_other)
+        {
+            LOG_ERROR("new workers::other failed");
+            return;
         }
     }
 
@@ -554,10 +571,10 @@ void server::on_start()
                 {
                     on_tunnel_event(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[evented_fd]], event_come);
                 }
-                // third-party tunnel
-                else if (m_third_party_tunnel.get_me() == evented_fd)
+                // main_other tunnel
+                else if (m_main_other_tunnel.get_me() == evented_fd)
                 {
-                    on_tunnel_event(m_third_party_tunnel, event_come);
+                    on_tunnel_event(m_main_other_tunnel, event_come);
                 }
                 else
                 {
@@ -878,5 +895,5 @@ avant::connection::connection *server::get_main2worker_tunnel(int worker_tunnel_
 
 avant::connection::connection *server::get_main2other_tunnel()
 {
-    return m_main_connection_mgr.get_conn(m_third_party_tunnel.get_me());
+    return m_main_connection_mgr.get_conn(m_main_other_tunnel.get_me());
 }
