@@ -570,7 +570,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         // triger context be created for connection
         if (conn->http_ctx_ptr)
         {
-            conn->http_ctx_ptr->on_create(*conn, *this);
+            conn->http_ctx_ptr->on_create(*conn, *this, false);
         }
         else if (conn->stream_ctx_ptr)
         {

@@ -16,7 +16,7 @@ namespace avant::connection
         ~http_ctx();
 
         // context create success
-        void on_create(connection &conn_obj, workers::worker &worker_obj);
+        void on_create(connection &conn_obj, workers::worker &worker_obj, bool keep_alive);
         // context destory
         void on_close();
 

@@ -102,7 +102,7 @@ http_ctx::~http_ctx()
 {
 }
 
-void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_obj)
+void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_obj, bool keep_alive)
 {
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
@@ -120,8 +120,7 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
     this->process_end = false;
     this->response_end = false;
     this->everything_end = false;
-    this->keep_alive = false;
-
+    this->keep_alive = keep_alive;
     if (this->keep_alive)
     {
         this->keep_live_counter++;
@@ -131,10 +130,24 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
         this->keep_live_counter = 0;
     }
 
-    if (!this->worker_ptr->use_ssl || this->keep_alive)
+    bool err = false;
+
+    // notify app layer
+    {
+        try
+        {
+            app::http_app::on_ctx_create(*this);
+        }
+        catch (const std::exception &e)
+        {
+            err = true;
+            LOG_ERROR(e.what());
+        }
+    }
+
+    if (!err && (!this->worker_ptr->use_ssl || this->keep_alive))
     {
         this->conn_ptr->is_ready = true;
-        bool err = false;
         try
         {
             app::http_app::on_new_connection(*this);
@@ -144,12 +157,13 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
             err = true;
             LOG_ERROR(e.what());
         }
-        if (err)
-        {
-            conn_ptr->is_close = true;
-            this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
-            return;
-        }
+    }
+
+    if (err)
+    {
+        this->conn_ptr->is_close = true;
+        this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
+        return;
     }
 }
 
@@ -394,7 +408,7 @@ void http_ctx::on_event(uint32_t event)
             // reuse connection
             this->conn_ptr->on_alloc(this->conn_ptr->fd, this->conn_ptr->gid);
             // reuse context
-            this->on_create(*this->conn_ptr, *this->worker_ptr);
+            this->on_create(*this->conn_ptr, *this->worker_ptr, true);
         }
     }
 

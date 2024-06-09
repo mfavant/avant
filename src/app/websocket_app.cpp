@@ -58,6 +58,11 @@ void websocket_app::on_worker_tunnel(avant::workers::worker &worker_obj, const P
     LOG_ERROR("websocket_app on_worker_tunnel cmd %d", package.cmd());
 }
 
+void websocket_app::on_ctx_create(avant::connection::websocket_ctx &ctx)
+{
+    LOG_ERROR("websocket_app::on_ctx_create %llu", ctx.get_conn_gid());
+}
+
 void websocket_app::on_new_connection(avant::connection::websocket_ctx &ctx)
 {
     // LOG_ERROR("websocket_app::on_new_connection");

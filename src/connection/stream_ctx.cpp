@@ -19,10 +19,25 @@ void stream_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_
 {
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
-    if (!this->worker_ptr->use_ssl)
+
+    bool err = false;
+
+    // notify app layer
+    {
+        try
+        {
+            app::stream_app::on_ctx_create(*this);
+        }
+        catch (const std::exception &e)
+        {
+            err = true;
+            LOG_ERROR(e.what());
+        }
+    }
+
+    if (!err && !this->worker_ptr->use_ssl)
     {
         this->conn_ptr->is_ready = true;
-        bool err = false;
         try
         {
             app::stream_app::on_new_connection(*this);
@@ -32,11 +47,13 @@ void stream_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_
             err = true;
             LOG_ERROR(e.what());
         }
-        if (err)
-        {
-            conn_ptr->is_close = true;
-            this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
-        }
+    }
+
+    if (err)
+    {
+        this->conn_ptr->is_close = true;
+        this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
+        return;
     }
 }
 
