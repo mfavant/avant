@@ -15,53 +15,53 @@ If there are already dependencies to be installed on the host, please selectivel
 ### Ubuntu (Docker)
 
 ```bash
-$ docker run -it ubuntu
-$ sudo apt-get update
-$ sudo apt-get install apt-utils -y
-$ sudo apt-get install cmake g++ make git -y
-$ sudo apt-get install protobuf-compiler libprotobuf-dev -y
-$ sudo apt-get install libssl-dev -y
-$ git clone https://github.com/crust-hub/avant.git
-$ cd avant
-$ cd protocol
-$ make
-$ cd ..
-$ cmake .
-$ make -j4
+docker run -it ubuntu
+sudo apt-get update
+sudo apt-get install apt-utils -y
+sudo apt-get install cmake g++ make git -y
+sudo apt-get install protobuf-compiler libprotobuf-dev -y
+sudo apt-get install libssl-dev -y
+git clone https://github.com/crust-hub/avant.git
+cd avant
+cd protocol
+make
+cd ..
+cmake .
+make -j4
 ```
 
 ### CentOS8 (Docker)
 
-[centos8](./Centos8.md)
+[centos8](./centos8.md)
 
 ### Config File
 
 ```bash
-$ sudo mkdir /avant_static
-$ vim bin/config/main.ini
+sudo mkdir /avant_static
+vim bin/config/main.ini
 ```
 
 ### Avant Start
 
 ```bash
-$ cd bin
-$ ./avant
-$ ps -ef | grep avant
+cd bin
+./avant
+ps -ef | grep avant
 ```
 
 ### Avant Safe Stop
 
 ```bash
-$ ps -ef | grep avant
-$ kill PID
+ps -ef | grep avant
+kill PID
 ```
 
 ## Example
 
 ```bash
-$ docker run -it --privileged -p 20023:20023 -v ${LOCAL_HTTP_DIR_PATH}:/avant_static gaowanlu/avant:latest bash
-$ cd ./bin
-$ ./avant
+docker run -it --privileged -p 20023:20023 -v ${LOCAL_HTTP_DIR_PATH}:/avant_static gaowanlu/avant:latest bash
+cd ./bin
+./avant
 ```
 
 ## APP Example
@@ -75,7 +75,7 @@ support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
 
 ## QPS
 
-CPU: Intel(R) Core(TM) i5-9600KF CPU @ 3.70 GHz   
+CPU: Intel(R) Core(TM) i5-9600KF CPU @ 3.70 GHz
 OS : WSL2 Ubuntu Mem 8GB  (Windows 11)
 
 ```ini
