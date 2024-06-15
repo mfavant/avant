@@ -251,7 +251,9 @@ void server::to_stop()
     {
         return;
     }
+    // main thread stop_flag
     stop_flag = true;
+    // worker thread stop_flag
     for (size_t i = 0; i < m_worker_cnt; i++)
     {
         m_workers[i].to_stop = true;
@@ -442,6 +444,50 @@ void server::on_start()
             LOG_ERROR("new workers::other failed");
             return;
         }
+        m_other->max_ipc_conn_num = 1 + 1;
+        m_other->epoll_wait_time = 5;
+        m_other->main_other_tunnel = &m_main_other_tunnel;
+
+        connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
+        if (!new_connection_mgr)
+        {
+            LOG_ERROR("new (std::nothrow) connection::connection_mgr failed");
+            return;
+        }
+
+        std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
+        iret = new_connection_mgr->init(m_other->max_ipc_conn_num);
+        if (iret != 0)
+        {
+            LOG_ERROR("new_connection_mgr->init failed");
+            return;
+        }
+        m_other->ipc_connection_mgr = new_connection_mgr_shared_ptr;
+        iret = m_other->epoller.create(m_other->max_ipc_conn_num);
+        if (iret != 0)
+        {
+            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_other->max_ipc_conn_num), iret);
+            return;
+        }
+
+        // tunnel to other_epoller
+        if (0 != m_other->epoller.add(m_other->main_other_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
+        {
+            LOG_ERROR("m_other->epoller.add(m_other->main_other_tunnel->get_other() failed");
+            return;
+        }
+
+        // other alloc connection for tunnel
+        iret = m_other->ipc_connection_mgr->alloc_connection(m_other->main_other_tunnel->get_other(), 0);
+        if (iret != 0)
+        {
+            LOG_ERROR("ipc_connection_mgr->alloc_connection return %d", iret);
+            return;
+        }
+        connection::connection *tunnel_conn = m_other->ipc_connection_mgr->get_conn(m_other->main_other_tunnel->get_other());
+        tunnel_conn->recv_buffer.reserve(10485760); // 10MB
+        tunnel_conn->send_buffer.reserve(10485760); // 10MB
+        tunnel_conn->is_ready = true;
     }
 
     // listen_socket init
@@ -481,6 +527,11 @@ void server::on_start()
             t.detach();
         }
     }
+    // other thread start
+    {
+        std::thread t(std::ref(*m_other));
+        t.detach();
+    }
 
     // main event_loop
     {
@@ -507,6 +558,15 @@ void server::on_start()
                             {
                                 flag = false;
                             }
+                        }
+                        if (flag)
+                        {
+                            m_other->to_stop = true;
+                        }
+                        // checking other thread stoped
+                        if (!m_other->is_stoped)
+                        {
+                            flag = false;
                         }
                         if (flag)
                         {

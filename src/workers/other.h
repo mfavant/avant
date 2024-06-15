@@ -5,6 +5,9 @@
 #include "socket/socket_pair.h"
 #include "event/event_poller.h"
 #include "connection/connection_mgr.h"
+#include "proto_res/proto_cmd.pb.h"
+#include "proto_res/proto_message_head.pb.h"
+#include "proto_res/proto_tunnel.pb.h"
 
 namespace avant::workers
 {
@@ -28,5 +31,6 @@ namespace avant::workers
 
     private:
         void on_tunnel_event(uint32_t event);
+        void on_tunnel_process(ProtoPackage &message);
     };
 };

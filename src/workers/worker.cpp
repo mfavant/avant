@@ -73,6 +73,7 @@ void worker::operator()()
         }
     }
     LOG_ERROR("worker::operator() end worker[%d]", this->worker_id);
+    this->to_stop = true;
     this->is_stoped = true;
     hooks::stop::on_worker_stop(*this);
 }
@@ -84,7 +85,7 @@ void worker::on_tunnel_event(uint32_t event)
     connection::connection *tunnel_conn = this->worker_connection_mgr->get_conn(tunnel.get_other());
     if (!tunnel_conn)
     {
-        LOG_ERROR("on_tunnel_event tunnel_conn is null");
+        LOG_ERROR("worker::on_tunnel_event tunnel_conn is null");
         return;
     }
     avant::socket::socket &sock = tunnel.get_other_socket();
@@ -109,7 +110,7 @@ void worker::on_tunnel_event(uint32_t event)
             {
                 if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
-                    LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                    LOG_ERROR("worker::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
                     this->to_stop = true;
                 }
                 break;
@@ -180,7 +181,7 @@ void worker::on_tunnel_event(uint32_t event)
             {
                 if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
-                    LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                    LOG_ERROR("worker::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
                     this->to_stop = true;
                 }
                 break;
