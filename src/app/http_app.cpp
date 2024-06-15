@@ -277,6 +277,7 @@ int http_app::on_body(avant::connection::http_ctx &ctx)
 {
     if (ctx.get_recv_buffer_size() > 1024)
     {
+	LOG_ERROR("http_app::on_body get_recv_buffer_size > 1024");
         return -1;
     }
     return 0;
