@@ -22,7 +22,7 @@ namespace avant
 
             static void process_connection(avant::connection::http_ctx &ctx);
 
-            static int on_body(avant::connection::http_ctx &ctx);
+            static int on_body(avant::connection::http_ctx &ctx, size_t length);
 
             static void on_main_init(avant::server::server &server_obj);
 

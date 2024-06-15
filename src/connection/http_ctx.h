@@ -35,7 +35,9 @@ namespace avant::connection
 
         void send_buffer_append(const char *data, size_t len);
         size_t get_recv_buffer_size();
+        void clear_recv_buffer();
         uint64_t get_conn_gid();
+        uint64_t get_recv_body_size();
 
     public:
         static std::shared_ptr<http_parser_settings> settings;
@@ -64,5 +66,6 @@ namespace avant::connection
         bool everything_end{false};
 
         uint64_t keep_live_counter{0};
+        uint64_t recv_body_size{0};
     };
 }

@@ -62,10 +62,11 @@ void http_ctx::init_http_settings()
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->conn_ptr->recv_buffer.append(at, length);
+        t_http_ctx->recv_body_size += length;
         int iret = 0;
         try
         {
-            iret = app::http_app::on_body(*t_http_ctx);
+            iret = app::http_app::on_body(*t_http_ctx, length);
         }
         catch (const std::exception &e)
         {
@@ -121,6 +122,7 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
     this->response_end = false;
     this->everything_end = false;
     this->keep_alive = keep_alive;
+    this->recv_body_size = 0;
     if (this->keep_alive)
     {
         this->keep_live_counter++;
@@ -491,7 +493,17 @@ size_t http_ctx::get_recv_buffer_size()
     return this->conn_ptr->recv_buffer.size();
 }
 
+void http_ctx::clear_recv_buffer()
+{
+    return this->conn_ptr->recv_buffer.clear();
+}
+
 uint64_t http_ctx::get_conn_gid()
 {
     return this->conn_ptr->gid;
+}
+
+uint64_t http_ctx::get_recv_body_size()
+{
+    return this->recv_body_size;
 }
