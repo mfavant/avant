@@ -75,147 +75,150 @@ void websocket_app::on_close_connection(avant::connection::websocket_ctx &ctx)
 
 void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
 {
-    uint64_t all_data_len = ctx.get_recv_buffer_size();
-    if (all_data_len == 0)
+    do
     {
-        return;
-    }
-    const char *data = ctx.get_recv_buffer_read_ptr();
-    size_t index = 0;
-
-    while (true)
-    {
-        if (index >= all_data_len)
+        uint64_t all_data_len = ctx.get_recv_buffer_size();
+        if (all_data_len == 0)
         {
             break;
         }
-        size_t start_index = index;
+        const char *data = ctx.get_recv_buffer_read_ptr();
+        size_t index = 0;
         websocket_frame frame;
-        uint8_t opcode = (uint8_t)data[index] & 0x0f;
-        websocket_frame_type type = n_2_websocket_frame_type(opcode);
 
-        if (type == websocket_frame_type::TEXT_FRAME || type == websocket_frame_type::BINARY_FRAME)
         {
-            ctx.frame_first_opcode = opcode;
-        }
-        else if (type == websocket_frame_type::CONTINUATION_FRAME)
-        {
-        }
-        else
-        {
-            LOG_ERROR("frame not be allowed. opcode = %d", opcode);
-            ctx.set_conn_is_close(true);
-            ctx.event_mod(nullptr, event::event_poller::RWE, false);
-            break;
-        }
-
-        frame.fin = data[index] & 0x80;
-        frame.opcode = data[index] & 0x0F;
-        index++;
-        if (index >= all_data_len)
-        {
-            // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
-            break;
-        }
-        frame.mask = (data[index] & 0x80) != 0;
-        frame.payload_length = data[index] & 0x7F;
-        index++;
-        if (index >= all_data_len)
-        {
-            // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
-            break;
-        }
-
-        if (frame.payload_length == 126)
-        {
-            frame.payload_length = 0;
-            if (index + 2 >= all_data_len)
+            if (index >= all_data_len) // need next 1 byte
             {
-                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index + 2, all_data_len);
                 break;
             }
-            uint16_t tmp = 0;
-            u_char *ph = nullptr;
-            ph = (u_char *)&tmp;
-            *ph++ = data[index];
-            *ph++ = data[index + 1];
-            tmp = ::ntohs(tmp);
-            frame.payload_length = tmp;
-            index += 2;
-        }
-        else if (frame.payload_length == 127)
-        {
-            frame.payload_length = 0;
-            if (index + 8 >= all_data_len)
+            uint8_t opcode = (uint8_t)data[index] & 0x0f;
+            websocket_frame_type type = n_2_websocket_frame_type(opcode);
+
+            if (type == websocket_frame_type::TEXT_FRAME || type == websocket_frame_type::BINARY_FRAME)
             {
-                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index + 8, all_data_len);
+                ctx.frame_first_opcode = opcode;
+            }
+            else if (type == websocket_frame_type::CONTINUATION_FRAME)
+            {
+            }
+            else
+            {
+                LOG_ERROR("frame not be allowed. opcode = %d", opcode);
+                ctx.set_conn_is_close(true);
+                ctx.event_mod(nullptr, event::event_poller::RWE, false);
                 break;
             }
-            uint32_t tmp = 0;
-            u_char *ph = (u_char *)&tmp;
-            *ph++ = data[index++];
-            *ph++ = data[index++];
-            *ph++ = data[index++];
-            *ph++ = data[index++];
-            frame.payload_length = ntohl(tmp);
-            frame.payload_length = frame.payload_length << 32;
-            ph = (u_char *)&tmp;
-            *ph++ = data[index++];
-            *ph++ = data[index++];
-            *ph++ = data[index++];
-            *ph++ = data[index++];
-            tmp = ntohl(tmp);
-            frame.payload_length = frame.payload_length | tmp;
+
+            frame.fin = data[index] & 0x80;
+            frame.opcode = data[index] & 0x0F;
+            index++;
         }
 
-        if (frame.payload_length == 0)
         {
-            break;
-        }
-
-        if (frame.mask)
-        {
-            if (index + 4 >= all_data_len)
+            if (index >= all_data_len) // need next 1 byte
             {
-                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index + 3, all_data_len);
+                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
                 break;
             }
-            frame.masking_key = {(uint8_t)data[index], (uint8_t)data[index + 1], (uint8_t)data[index + 2], (uint8_t)data[index + 3]};
-            index += 4;
+            frame.mask = (data[index] & 0x80) != 0;
+            frame.payload_length = data[index] & 0x7F;
+            index++;
         }
 
-        // payload data [data+index,data+index+frame.payload_length]
-        if (index >= all_data_len)
         {
-            // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
-            break;
-        }
-        if (index - 1 + frame.payload_length >= all_data_len)
-        {
-            // LOG_ERROR("index - 1 + frame.payload_length=[%llu] >= all_data_len[%llu]", index - 1 + frame.payload_length, all_data_len);
-            break;
-        }
-        std::string payload_data(data + index, frame.payload_length);
-        if (frame.mask)
-        {
-            for (size_t i = 0; i < payload_data.size(); ++i)
+            if (frame.payload_length == 126)
             {
-                payload_data[i] ^= frame.masking_key[i % 4];
+                frame.payload_length = 0;
+                if (index + 1 >= all_data_len) // need next 2 bytes
+                {
+                    // LOG_ERROR("index[%llu] + 1 >= all_data_len[%llu]", index, all_data_len);
+                    break;
+                }
+                uint16_t tmp = 0;
+                u_char *ph = nullptr;
+                ph = (u_char *)&tmp;
+                *ph++ = data[index];
+                *ph++ = data[index + 1];
+                tmp = ::ntohs(tmp);
+                frame.payload_length = tmp;
+                index += 2;
+            }
+            else if (frame.payload_length == 127)
+            {
+                frame.payload_length = 0;
+                if (index + 7 >= all_data_len) // need next 8 bytes
+                {
+                    // LOG_ERROR("index[%llu] + 7 >= all_data_len[%llu]", index, all_data_len);
+                    break;
+                }
+                uint32_t tmp = 0;
+                u_char *ph = (u_char *)&tmp;
+                *ph++ = data[index++]; // index+0
+                *ph++ = data[index++]; // index+1
+                *ph++ = data[index++]; // index+2
+                *ph++ = data[index++]; // index+3
+                frame.payload_length = ntohl(tmp);
+                frame.payload_length = frame.payload_length << 32;
+                ph = (u_char *)&tmp;
+                *ph++ = data[index++]; // index+4
+                *ph++ = data[index++]; // index+5
+                *ph++ = data[index++]; // index+6
+                *ph++ = data[index++]; // index+7
+                tmp = ntohl(tmp);
+                frame.payload_length = frame.payload_length | tmp;
             }
         }
-        frame.payload_data = std::move(payload_data);
-        ctx.frame_payload_data += std::move(frame.payload_data);
 
-        ctx.recv_buffer_move_read_ptr_n(index - start_index + frame.payload_length);
-
-        index += frame.payload_length;
-
-        if (frame.fin)
         {
-            on_process_frame(ctx);
+            if (frame.mask)
+            {
+                if (index + 3 >= all_data_len) // need next 4 bytes
+                {
+                    // LOG_ERROR("index[%llu] + 3 >= all_data_len[%llu]", index, all_data_len);
+                    break;
+                }
+                frame.masking_key = {(uint8_t)data[index], (uint8_t)data[index + 1], (uint8_t)data[index + 2], (uint8_t)data[index + 3]};
+                index += 4;
+            }
         }
 
-    } // while(true)
+        {
+            // already parser (value of the index) bytes
+            if (index + frame.payload_length - 1 >= all_data_len) // need next frame.playload_length bytes
+            {
+                // LOG_ERROR("index[%llu] + frame.payload_length[%llu] - 1 >= all_data_len[%llu]", index, frame.payload_length, all_data_len);
+                break;
+            }
+
+            std::string payload_data;
+
+            if (frame.payload_length != 0)
+            {
+                payload_data = std::move(std::string(&data[index], frame.payload_length));
+            }
+
+            if (frame.mask)
+            {
+                for (size_t i = 0; i < payload_data.size(); ++i)
+                {
+                    payload_data[i] ^= frame.masking_key[i % 4];
+                }
+            }
+
+            frame.payload_data = std::move(payload_data);
+            ctx.frame_payload_data += std::move(frame.payload_data);
+
+            index += frame.payload_length;
+        }
+
+        {
+            ctx.recv_buffer_move_read_ptr_n(index);
+            if (frame.fin)
+            {
+                on_process_frame(ctx, frame);
+            }
+        }
+    } while (true);
 
     if (ctx.get_recv_buffer_size() > 1024000)
     {
@@ -234,7 +237,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
     }
 }
 
-void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx)
+void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx, const websocket_frame &frame)
 {
     // using tunnel to broadcast
     ProtoTunnelWebsocketBroadcast websockBroadcast;
