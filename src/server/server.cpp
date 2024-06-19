@@ -907,12 +907,6 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
         return -2;
     }
 
-    if (tunnel_id::get().get_other_tunnel_id() == dest_tunnel_id)
-    {
-        LOG_ERROR("forward to other tunnel is not support now");
-        return -4;
-    }
-
     // find target tunnel
     connection::connection *dest_tunnel_conn_ptr = nullptr;
 

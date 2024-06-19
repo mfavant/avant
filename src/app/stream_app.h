@@ -9,7 +9,6 @@ namespace avant
     namespace server
     {
         class server;
-        class worker;
     }
     namespace app
     {

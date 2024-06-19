@@ -41,6 +41,12 @@ namespace avant::connection
             return this->worker_ptr->send_client_forward_message(std::forward<Args>(args)...);
         }
 
+        template <typename... Args>
+        int tunnel_forward(Args &&...args)
+        {
+            return this->worker_ptr->tunnel_forward(std::forward<Args>(args)...);
+        }
+
     protected:
         connection *conn_ptr{nullptr};
         workers::worker *worker_ptr{nullptr};

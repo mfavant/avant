@@ -39,6 +39,12 @@ namespace avant::connection
         uint64_t get_conn_gid();
         uint64_t get_recv_body_size();
 
+        template <typename... Args>
+        int tunnel_forward(Args &&...args)
+        {
+            return this->worker_ptr->tunnel_forward(std::forward<Args>(args)...);
+        }
+
     public:
         static std::shared_ptr<http_parser_settings> settings;
         static void init_http_settings();

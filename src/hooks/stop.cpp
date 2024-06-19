@@ -2,6 +2,7 @@
 #include "app/http_app.h"
 #include "app/stream_app.h"
 #include "app/websocket_app.h"
+#include "app/other_app.h"
 #include <stdexcept>
 #include <avant-log/logger.h>
 
@@ -50,6 +51,18 @@ void stop::on_worker_stop(avant::workers::worker &worker_obj)
         default:
             break;
         }
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR(e.what());
+    }
+}
+
+void stop::on_other_stop(avant::workers::other &other_obj)
+{
+    try
+    {
+        app::other_app::on_other_stop(other_obj);
     }
     catch (const std::exception &e)
     {

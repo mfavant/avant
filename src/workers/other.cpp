@@ -2,6 +2,10 @@
 #include "workers/other.h"
 #include "avant-log/logger.h"
 #include "proto/proto_util.h"
+#include "hooks/init.h"
+#include "hooks/stop.h"
+#include "hooks/tick.h"
+#include "app/other_app.h"
 
 using namespace avant::workers;
 
@@ -16,7 +20,7 @@ other::~other()
 void other::operator()()
 {
     LOG_ERROR("other::operator() start");
-
+    hooks::init::on_other_init(*this);
     int num = -1;
     while (true)
     {
@@ -25,6 +29,7 @@ void other::operator()()
         {
             break;
         }
+        hooks::tick::on_other_tick(*this);
         if (num < 0)
         {
             if (errno == EINTR)
@@ -58,11 +63,12 @@ void other::operator()()
     LOG_ERROR("other::operator() end");
     this->to_stop = true;
     this->is_stoped = true;
+    hooks::stop::on_other_stop(*this);
 }
 
 void other::on_tunnel_event(uint32_t event)
 {
-    LOG_ERROR("other::on_tunnel_event");
+    // LOG_ERROR("other::on_tunnel_event");
     avant::socket::socket_pair &tunnel = *this->main_other_tunnel;
     // find conn
     connection::connection *tunnel_conn = this->ipc_connection_mgr->get_conn(tunnel.get_other());
@@ -135,7 +141,7 @@ void other::on_tunnel_event(uint32_t event)
                 break;
             }
 
-            LOG_ERROR("other recv datasize %llu", sizeof(data_size) + data_size);
+            // LOG_ERROR("other recv datasize %llu", sizeof(data_size) + data_size);
 
             on_tunnel_process(protoPackage);
             tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
@@ -190,6 +196,12 @@ void other::on_tunnel_process(ProtoPackage &message)
         return;
     }
 
-    int inner_cmd = tunnelPackage.innerprotopackage().cmd();
-    LOG_ERROR("other::on_tunnel_process inner_cmd[%d]", inner_cmd);
+    try
+    {
+        app::other_app::on_other_tunnel(*this, tunnelPackage.innerprotopackage());
+    }
+    catch (const std::exception &e)
+    {
+        LOG_ERROR("app on_other_tunnel throw exception cmd %d", tunnelPackage.innerprotopackage().cmd());
+    }
 }

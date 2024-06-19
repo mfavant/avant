@@ -42,3 +42,9 @@ message ProtoTunnelWebsocketBroadcast
 {
     bytes data = 1;
 };
+
+// PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION
+message ProtoTunnelWorker2OtherEventNewClientConnection
+{
+    uint64 gid = 3;
+};

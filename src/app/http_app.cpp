@@ -8,6 +8,9 @@
 #include <string>
 #include <filesystem>
 #include <avant-log/logger.h>
+#include <vector>
+#include "global/tunnel_id.h"
+#include "proto/proto_util.h"
 
 using namespace avant::app;
 using std::string;
@@ -84,6 +87,14 @@ void http_app::on_ctx_create(avant::connection::http_ctx &ctx)
 
 void http_app::on_new_connection(avant::connection::http_ctx &ctx)
 {
+    // send new_connection protocol to other thread
+    {
+        ProtoPackage package;
+        ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
+        protoNewConn.set_gid(ctx.get_conn_gid());
+        ctx.tunnel_forward(std::vector<int>{avant::global::tunnel_id::get().get_other_tunnel_id()},
+                           avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION));
+    }
     // LOG_ERROR("http_app new socket gid %llu", ctx.get_conn_gid());
 }
 

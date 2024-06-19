@@ -24,3 +24,15 @@ function OnWorkerTick(workerIdx)
     -- local log = "OnWorkerTick" .. workerIdx
     -- avant.Logger(log)
 end
+
+function OnOtherInit()
+    avant.Logger("OnOtherInit")
+end
+
+function OnOtherStop()
+    avant.Logger("OnOtherStop")
+end
+
+function OnOtherTick()
+    -- avant.Logger("OnOtherTick")
+end

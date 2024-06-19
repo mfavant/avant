@@ -2,6 +2,7 @@
 #include "app/http_app.h"
 #include "app/stream_app.h"
 #include "app/websocket_app.h"
+#include "app/other_app.h"
 #include <stdexcept>
 #include <avant-log/logger.h>
 
@@ -51,6 +52,19 @@ void init::on_worker_init(avant::workers::worker &worker_obj)
         default:
             break;
         }
+    }
+    catch (const std::exception &e)
+    {
+        exit(EXIT_FAILURE);
+        LOG_ERROR(e.what());
+    }
+}
+
+void init::on_other_init(avant::workers::other &other_obj)
+{
+    try
+    {
+        app::other_app::on_other_init(other_obj);
     }
     catch (const std::exception &e)
     {
