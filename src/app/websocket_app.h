@@ -51,7 +51,7 @@ namespace avant
 
             static void on_worker_tick(avant::workers::worker &worker_obj);
 
-            static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package);
+            static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package);
 
             // ctx created
             static void on_ctx_create(avant::connection::websocket_ctx &ctx);
@@ -63,7 +63,10 @@ namespace avant
             static void on_process_connection(avant::connection::websocket_ctx &ctx);
 
             static void on_process_frame(avant::connection::websocket_ctx &ctx, const websocket_frame &frame);
-            static void on_client_forward_message(avant::connection::websocket_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self);
+            static void on_client_forward_message(avant::connection::websocket_ctx &ctx,
+                                                  bool self,
+                                                  ProtoTunnelClientForwardMessage &message,
+                                                  const ProtoTunnelPackage &tunnel_package);
             static int send_sync_package(avant::connection::websocket_ctx &ctx, uint8_t first_byte, const char *data, size_t data_len);
         };
     }

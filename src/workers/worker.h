@@ -54,6 +54,6 @@ namespace avant::workers
         void on_client_event_stream(int fd, uint32_t event);
         void on_client_event_websocket(int fd, uint32_t event);
 
-        void handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message);
+        void handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message, const ProtoTunnelPackage &tunnel_package);
     };
 }

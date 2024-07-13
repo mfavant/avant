@@ -279,7 +279,7 @@ int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage 
     return 0;
 }
 
-void worker::handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message)
+void worker::handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message, const ProtoTunnelPackage &tunnel_package)
 {
     if (conn_ptr->closed_flag || conn_ptr->is_close)
     {
@@ -302,7 +302,7 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         {
             if (conn_ptr->is_ready && conn_ptr->stream_ctx_ptr) // is stream task,here is_ready important
             {
-                avant::app::stream_app::on_client_forward_message(*conn_ptr->stream_ctx_ptr, message, conn_ptr->gid == message.sourcegid());
+                avant::app::stream_app::on_client_forward_message(*conn_ptr->stream_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
             }
             break;
         }
@@ -310,13 +310,15 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         {
             if (conn_ptr->is_ready && conn_ptr->websocket_ctx_ptr)
             {
-                avant::app::websocket_app::on_client_forward_message(*conn_ptr->websocket_ctx_ptr, message, conn_ptr->gid == message.sourcegid());
+                avant::app::websocket_app::on_client_forward_message(*conn_ptr->websocket_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
             }
             break;
         }
         default:
+        {
             LOG_ERROR("task type err");
             break;
+        }
         }
     }
     catch (const std::exception &e)
@@ -375,7 +377,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
                 {
                     break;
                 }
-                this->handle_tunnel_client_forward_message(conn_ptr, message);
+                this->handle_tunnel_client_forward_message(conn_ptr, message, tunnelPackage);
             }
         }
         else
@@ -394,7 +396,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
                     LOG_ERROR("process ProtoTunnelClientForwardMessage can not find targetgid %llu conn_ptr", target_gid);
                     continue;
                 }
-                this->handle_tunnel_client_forward_message(conn_ptr, message);
+                this->handle_tunnel_client_forward_message(conn_ptr, message, tunnelPackage);
             }
         }
     }
@@ -405,13 +407,13 @@ void worker::on_tunnel_process(ProtoPackage &message)
             switch (this->type)
             {
             case task::task_type::HTTP_TASK:
-                avant::app::http_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage());
+                avant::app::http_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage(), tunnelPackage);
                 break;
             case task::task_type::STREAM_TASK:
-                avant::app::stream_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage());
+                avant::app::stream_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage(), tunnelPackage);
                 break;
             case task::task_type::WEBSOCKET_TASK:
-                avant::app::websocket_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage());
+                avant::app::websocket_app::on_worker_tunnel(*this, tunnelPackage.innerprotopackage(), tunnelPackage);
                 break;
             default:
                 LOG_ERROR("task type err");

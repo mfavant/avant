@@ -53,7 +53,7 @@ void websocket_app::on_worker_tick(avant::workers::worker &worker_obj)
     utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.worker_id);
 }
 
-void websocket_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package)
+void websocket_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
     LOG_ERROR("websocket_app on_worker_tunnel cmd %d", package.cmd());
 }
@@ -248,7 +248,10 @@ void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx, cons
     ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{}, avant::proto::pack_package(package, websockBroadcast, ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST));
 }
 
-void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self)
+void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &ctx,
+                                              bool self,
+                                              ProtoTunnelClientForwardMessage &message,
+                                              const ProtoTunnelPackage &tunnel_package)
 {
     int cmd = message.innerprotopackage().cmd();
     if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST)

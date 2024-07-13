@@ -153,14 +153,17 @@ int stream_app::send_sync_package(avant::connection::stream_ctx &ctx, const Prot
     return ctx.send_data(avant::proto::pack_package(data, package));
 }
 
-void stream_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package)
+void stream_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
     int cmd = package.cmd();
     LOG_ERROR("not exist handler %d", cmd);
 }
 
 // APP DEMO
-void stream_app::on_client_forward_message(avant::connection::stream_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self)
+void stream_app::on_client_forward_message(avant::connection::stream_ctx &ctx,
+                                           bool self,
+                                           ProtoTunnelClientForwardMessage &message,
+                                           const ProtoTunnelPackage &tunnel_package)
 {
     int cmd = message.innerprotopackage().cmd();
     if (cmd == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)

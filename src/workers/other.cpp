@@ -198,7 +198,7 @@ void other::on_tunnel_process(ProtoPackage &message)
 
     try
     {
-        app::other_app::on_other_tunnel(*this, tunnelPackage.innerprotopackage());
+        app::other_app::on_other_tunnel(*this, tunnelPackage.innerprotopackage(), tunnelPackage);
     }
     catch (const std::exception &e)
     {

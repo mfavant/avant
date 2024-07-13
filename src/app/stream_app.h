@@ -39,8 +39,11 @@ namespace avant
             static void on_process_connection(avant::connection::stream_ctx &ctx);
             static int send_sync_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package);
 
-            static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package);
-            static void on_client_forward_message(avant::connection::stream_ctx &ctx, ProtoTunnelClientForwardMessage &message, bool self);
+            static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package);
+            static void on_client_forward_message(avant::connection::stream_ctx &ctx,
+                                                  bool self,
+                                                  ProtoTunnelClientForwardMessage &message,
+                                                  const ProtoTunnelPackage &tunnel_package);
         };
     }
 }

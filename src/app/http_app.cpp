@@ -340,7 +340,7 @@ void http_app::on_worker_tick(avant::workers::worker &worker_obj)
     utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.worker_id);
 }
 
-void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package)
+void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
     LOG_ERROR("http_app on_worker_tunnel cmd %d", package.cmd());
 }
