@@ -18,6 +18,15 @@ namespace avant::workers
         ~other();
         void operator()();
 
+    public:
+        int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);
+
+    private:
+        void try_send_flush_tunnel();
+        void on_tunnel_event(uint32_t event);
+        void on_tunnel_process(ProtoPackage &message);
+
+    public:
         bool to_stop{false};
         bool is_stoped{false};
 
@@ -28,9 +37,5 @@ namespace avant::workers
 
         avant::event::event_poller epoller;
         std::shared_ptr<avant::connection::connection_mgr> ipc_connection_mgr{nullptr};
-
-    private:
-        void on_tunnel_event(uint32_t event);
-        void on_tunnel_process(ProtoPackage &message);
     };
 };

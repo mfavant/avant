@@ -91,10 +91,11 @@ namespace avant::server
 
         void on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid);
         void on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
+        void try_send_flush_tunnel(avant::socket::socket_pair &tunnel);
 
         // other-main-worker.. forward center
         void on_tunnel_process(ProtoPackage &message);
-        int tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message);
+        int tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message, bool flush = true);
 
         connection::connection *get_main2worker_tunnel(int worker_tunnel_id);
         connection::connection *get_main2other_tunnel();

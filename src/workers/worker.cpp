@@ -163,30 +163,7 @@ void worker::on_tunnel_event(uint32_t event)
     // check if there is any content that needs to be sent
     while (event & event::event_poller::WRITE)
     {
-        if (tunnel_conn->send_buffer.empty())
-        {
-            this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
-            break;
-        }
-
-        while (!tunnel_conn->send_buffer.empty())
-        {
-            int oper_errno = 0;
-            int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
-            if (len > 0)
-            {
-                tunnel_conn->send_buffer.move_read_ptr_n(len);
-            }
-            else
-            {
-                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
-                {
-                    LOG_ERROR("worker::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
-                    this->to_stop = true;
-                }
-                break;
-            }
-        }
+        try_send_flush_tunnel();
         break; // important
     }
 }
@@ -230,7 +207,49 @@ void worker::on_client_event(int fd, uint32_t event)
     }
 }
 
-int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message)
+void worker::try_send_flush_tunnel()
+{
+    avant::socket::socket_pair &tunnel = *this->main_worker_tunnel;
+    // find conn
+    connection::connection *tunnel_conn = this->worker_connection_mgr->get_conn(tunnel.get_other());
+    if (!tunnel_conn)
+    {
+        LOG_ERROR("worker::on_tunnel_event tunnel_conn is null");
+        return;
+    }
+    avant::socket::socket &sock = tunnel.get_other_socket();
+
+    if (tunnel_conn->send_buffer.empty())
+    {
+        this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
+        return;
+    }
+
+    while (!tunnel_conn->send_buffer.empty())
+    {
+        int oper_errno = 0;
+        int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
+        if (len > 0)
+        {
+            tunnel_conn->send_buffer.move_read_ptr_n(len);
+        }
+        else
+        {
+            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            {
+                LOG_ERROR("worker::try_send_flush_tunnel tunnel_conn oper_errno %d", oper_errno);
+                this->to_stop = true;
+            }
+            else
+            {
+                this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+            }
+            break;
+        }
+    }
+}
+
+int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush /*= true*/)
 {
     std::unordered_set<int> dest_tunnel_id_set;
     // filter
@@ -275,7 +294,14 @@ int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage 
     }
 
     tunnel_conn->send_buffer.append(data.c_str(), data.size());
-    this->epoller.mod(this->main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false);
+    if (flush)
+    {
+        try_send_flush_tunnel();
+    }
+    else
+    {
+        this->epoller.mod(this->main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false);
+    }
     return 0;
 }
 

@@ -41,10 +41,12 @@ namespace avant::workers
         void close_client_fd(int fd);
 
     public:
-        int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message);
+        int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);
         int send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package);
 
     private:
+        void try_send_flush_tunnel();
+
         void on_tunnel_event(uint32_t event);
         void on_client_event(int fd, uint32_t event);
         void on_tunnel_process(ProtoPackage &message);

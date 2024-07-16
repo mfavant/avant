@@ -213,38 +213,44 @@ void stream_ctx::on_event(uint32_t event)
     // write to socket
     while (event & event::event_poller::WRITE)
     {
-        if (conn_ptr->send_buffer.empty())
-        {
-            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
-            break;
-        }
-
-        while (!conn_ptr->send_buffer.empty())
-        {
-            int oper_errno = 0;
-            int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
-            if (len > 0)
-            {
-                conn_ptr->send_buffer.move_read_ptr_n(len);
-            }
-            else
-            {
-                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
-                {
-                    // LOG_ERROR("stream ctx client sock send data oper_errno %d", oper_errno);
-                    conn_ptr->is_close = true;
-                }
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
-                break;
-            }
-        }
+        try_send_flush();
         break; // important
     }
 
     return;
 }
 
-int stream_ctx::send_data(const std::string &data)
+void stream_ctx::try_send_flush()
+{
+    avant::socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
+    avant::connection::connection *conn_ptr = this->conn_ptr;
+    if (conn_ptr->send_buffer.empty())
+    {
+        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
+        return;
+    }
+    while (!conn_ptr->send_buffer.empty())
+    {
+        int oper_errno = 0;
+        int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
+        if (len > 0)
+        {
+            conn_ptr->send_buffer.move_read_ptr_n(len);
+        }
+        else
+        {
+            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            {
+                // LOG_ERROR("stream ctx client sock send data oper_errno %d", oper_errno);
+                conn_ptr->is_close = true;
+            }
+            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+            break;
+        }
+    }
+}
+
+int stream_ctx::send_data(const std::string &data, bool flush /*= true*/)
 {
     if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
     {
@@ -260,7 +266,14 @@ int stream_ctx::send_data(const std::string &data)
     }
 
     this->conn_ptr->send_buffer.append(data.c_str(), data.size());
-    this->worker_ptr->epoller.mod(this->conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+    if (flush)
+    {
+        try_send_flush();
+    }
+    else
+    {
+        this->worker_ptr->epoller.mod(this->conn_ptr->socket_obj.get_fd(), nullptr, event::event_poller::RWE, false);
+    }
     return 0;
 }
 

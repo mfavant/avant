@@ -332,7 +332,7 @@ void websocket_ctx::on_event(uint32_t event)
                 this->conn_ptr->send_buffer.append(response.c_str(), response.size());
                 this->is_connected = true;
                 this->conn_ptr->is_ready = true;
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                try_send_flush();
 
                 // notify app
                 bool err = false;
@@ -431,31 +431,7 @@ void websocket_ctx::on_event(uint32_t event)
     {
         while (event & event::event_poller::WRITE)
         {
-            if (conn_ptr->send_buffer.empty())
-            {
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
-                break;
-            }
-
-            while (!conn_ptr->send_buffer.empty())
-            {
-                int oper_errno = 0;
-                int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
-                if (len > 0)
-                {
-                    conn_ptr->send_buffer.move_read_ptr_n(len);
-                }
-                else
-                {
-                    if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
-                    {
-                        // LOG_ERROR("socket_ptr->send len %d oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK", len);
-                        conn_ptr->is_close = true;
-                    }
-                    this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
-                    break;
-                }
-            }
+            try_send_flush();
             break; // important
         }
     }
@@ -472,7 +448,37 @@ void websocket_ctx::add_header(const std::string &key, const std::string &value)
     this->headers[key].push_back(value);
 }
 
-int websocket_ctx::send_data(const std::string &data)
+void websocket_ctx::try_send_flush()
+{
+    socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
+    connection *conn_ptr = this->conn_ptr;
+    if (conn_ptr->send_buffer.empty())
+    {
+        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
+        return;
+    }
+    while (!conn_ptr->send_buffer.empty())
+    {
+        int oper_errno = 0;
+        int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
+        if (len > 0)
+        {
+            conn_ptr->send_buffer.move_read_ptr_n(len);
+        }
+        else
+        {
+            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            {
+                // LOG_ERROR("socket_ptr->send len %d oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK", len);
+                conn_ptr->is_close = true;
+            }
+            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+            break;
+        }
+    }
+}
+
+int websocket_ctx::send_data(const std::string &data, bool flush /*= true*/)
 {
     if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
     {
@@ -488,7 +494,14 @@ int websocket_ctx::send_data(const std::string &data)
     }
 
     this->conn_ptr->send_buffer.append(data.c_str(), data.size());
-    this->worker_ptr->epoller.mod(this->conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+    if (flush)
+    {
+        try_send_flush();
+    }
+    else
+    {
+        this->worker_ptr->epoller.mod(this->conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+    }
     return 0;
 }
 

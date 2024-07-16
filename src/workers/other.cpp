@@ -6,8 +6,10 @@
 #include "hooks/stop.h"
 #include "hooks/tick.h"
 #include "app/other_app.h"
+#include "global/tunnel_id.h"
 
 using namespace avant::workers;
+using namespace avant::global;
 
 other::other()
 {
@@ -64,6 +66,107 @@ void other::operator()()
     this->to_stop = true;
     this->is_stoped = true;
     hooks::stop::on_other_stop(*this);
+}
+
+int other::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush /*= true*/)
+{
+    avant::socket::socket_pair &tunnel = *this->main_other_tunnel;
+    // find conn
+    connection::connection *tunnel_conn = this->ipc_connection_mgr->get_conn(tunnel.get_other());
+    if (!tunnel_conn)
+    {
+        LOG_ERROR("other::tunnel_forward tunnel_conn is null");
+        return -1;
+    }
+    avant::socket::socket &sock = tunnel.get_other_socket();
+
+    std::unordered_set<int> dest_tunnel_id_set;
+    // filter
+    for (const int &dest : dest_tunnel_id)
+    {
+        if (tunnel_id::get().get_main_tunnel_id() == dest)
+        {
+            LOG_ERROR("other::tunnel_forward tunnel_id::get().get_main_tunnel_id() == dest");
+            continue;
+        }
+        if (!tunnel_id::get().is_tunnel_id(dest))
+        {
+            LOG_ERROR("other::tunnel_forward !tunnel_id::get().is_tunnel_id(dest)");
+            continue;
+        }
+        dest_tunnel_id_set.insert(dest);
+    }
+
+    if (dest_tunnel_id_set.empty())
+    {
+        LOG_ERROR("other::tunnel_forward dest_tunnel_id_set.empty()");
+        return -1;
+    }
+
+    ProtoTunnelPackage tunnelPackage;
+    tunnelPackage.set_sourcetunnelsid(tunnel_id::get().get_other_tunnel_id()); // other
+    for (const int &dest : dest_tunnel_id_set)
+    {
+        tunnelPackage.mutable_targettunnelsid()->Add(dest);
+    }
+    tunnelPackage.mutable_innerprotopackage()->CopyFrom(message);
+
+    // send to main
+    std::string data;
+    proto::pack_package(data, tunnelPackage, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE);
+
+    tunnel_conn->send_buffer.append(data.c_str(), data.size());
+    if (flush)
+    {
+        try_send_flush_tunnel();
+    }
+    else
+    {
+        this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+    }
+    return 0;
+}
+
+void other::try_send_flush_tunnel()
+{
+    avant::socket::socket_pair &tunnel = *this->main_other_tunnel;
+    // find conn
+    connection::connection *tunnel_conn = this->ipc_connection_mgr->get_conn(tunnel.get_other());
+    if (!tunnel_conn)
+    {
+        LOG_ERROR("other::on_tunnel_event tunnel_conn is null");
+        return;
+    }
+    avant::socket::socket &sock = tunnel.get_other_socket();
+
+    if (tunnel_conn->send_buffer.empty())
+    {
+        this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
+        return;
+    }
+
+    while (!tunnel_conn->send_buffer.empty())
+    {
+        int oper_errno = 0;
+        int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
+        if (len > 0)
+        {
+            tunnel_conn->send_buffer.move_read_ptr_n(len);
+        }
+        else
+        {
+            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            {
+                LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                this->to_stop = true;
+            }
+            else
+            {
+                this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+            }
+            break;
+        }
+    }
 }
 
 void other::on_tunnel_event(uint32_t event)
@@ -151,30 +254,7 @@ void other::on_tunnel_event(uint32_t event)
     // check if there is any content that needs to be sent
     while (event & event::event_poller::WRITE)
     {
-        if (tunnel_conn->send_buffer.empty())
-        {
-            this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
-            break;
-        }
-
-        while (!tunnel_conn->send_buffer.empty())
-        {
-            int oper_errno = 0;
-            int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
-            if (len > 0)
-            {
-                tunnel_conn->send_buffer.move_read_ptr_n(len);
-            }
-            else
-            {
-                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
-                {
-                    LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
-                    this->to_stop = true;
-                }
-                break;
-            }
-        }
+        try_send_flush_tunnel();
         break; // important
     }
 }

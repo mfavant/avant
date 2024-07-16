@@ -769,30 +769,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     // check if there is any content that needs to be sent
     while (event & event::event_poller::WRITE)
     {
-        if (tunnel_conn->send_buffer.empty())
-        {
-            m_epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
-            break;
-        }
-
-        while (!tunnel_conn->send_buffer.empty())
-        {
-            int oper_errno = 0;
-            int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
-            if (len > 0)
-            {
-                tunnel_conn->send_buffer.move_read_ptr_n(len);
-            }
-            else
-            {
-                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
-                {
-                    LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
-                    to_stop();
-                }
-                break;
-            }
-        }
+        try_send_flush_tunnel(tunnel);
         break; // important
     }
 }
@@ -894,7 +871,51 @@ void server::on_tunnel_process(ProtoPackage &message)
     }
 }
 
-int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message)
+void server::try_send_flush_tunnel(avant::socket::socket_pair &tunnel)
+{
+    // LOG_ERROR("try_send_flush_tunnel %d", tunnel.get_me());
+    // find conn
+    connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(tunnel.get_me());
+    if (!tunnel_conn)
+    {
+        LOG_ERROR("try_send_flush_tunnel tunnel_conn is null, fd[%d]", tunnel.get_me());
+        return;
+    }
+
+    avant::socket::socket &sock = tunnel.get_me_socket();
+
+    if (tunnel_conn->send_buffer.empty())
+    {
+        m_epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
+        return;
+    }
+
+    while (!tunnel_conn->send_buffer.empty())
+    {
+        int oper_errno = 0;
+        int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
+        if (len > 0)
+        {
+            // LOG_ERROR("flush bytes %d", len);
+            tunnel_conn->send_buffer.move_read_ptr_n(len);
+        }
+        else
+        {
+            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            {
+                LOG_ERROR("try_send_flush_tunnel tunnel_conn oper_errno %d", oper_errno);
+                to_stop();
+            }
+            else
+            {
+                m_epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+            }
+            break;
+        }
+    }
+}
+
+int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message, bool flush /*= true*/)
 {
     if (!tunnel_id::get().is_tunnel_id(source_tunnelid))
     {
@@ -935,7 +956,30 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
     // LOG_ERROR("forward datasize %llu cmd %d", data.size(), package.innerprotopackage().cmd());
 
     dest_tunnel_conn_ptr->send_buffer.append(data.c_str(), data.size());
-    m_epoller.mod(dest_tunnel_conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+    if (flush)
+    {
+        // worker_tunnel_fd
+        if (m_main_worker_tunnel_fd2index.find(dest_tunnel_conn_ptr->fd) != m_main_worker_tunnel_fd2index.end())
+        {
+            // LOG_ERROR("main to worker");
+            try_send_flush_tunnel(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[dest_tunnel_conn_ptr->fd]]);
+        }
+        // main_other tunnel
+        else if (m_main_other_tunnel.get_me() == dest_tunnel_conn_ptr->fd)
+        {
+            // LOG_ERROR("main to other");
+            try_send_flush_tunnel(m_main_other_tunnel);
+        }
+        else
+        {
+            LOG_ERROR("flush error know fd %d, it's not worker and other tunnel fd", dest_tunnel_conn_ptr->fd);
+            return -4;
+        }
+    }
+    else
+    {
+        m_epoller.mod(dest_tunnel_conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+    }
     return 0;
 }
 

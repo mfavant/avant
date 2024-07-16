@@ -15,9 +15,12 @@ namespace avant::connection
         void on_create(connection &conn_obj, workers::worker &worker_obj);
         // context destory
         void on_close();
-        int send_data(const std::string &data);
+        int send_data(const std::string &data, bool flush = true);
 
         void on_event(uint32_t event);
+
+    private:
+        void try_send_flush();
 
     public:
         uint64_t get_conn_gid();

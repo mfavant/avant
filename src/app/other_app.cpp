@@ -27,19 +27,21 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
 
 void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
-    // int sourcetunnelsid = tunnel_package.sourcetunnelsid();
-    // std::string targettunnelsid;
+#if 0
+    int sourcetunnelsid = tunnel_package.sourcetunnelsid();
+    std::string targettunnelsid;
 
-    // for (int i = 0; i < tunnel_package.targettunnelsid().size(); i++)
-    // {
-    //     targettunnelsid += std::to_string(tunnel_package.targettunnelsid().at(i)) + "_";
-    // }
+    for (int i = 0; i < tunnel_package.targettunnelsid().size(); i++)
+    {
+        targettunnelsid += std::to_string(tunnel_package.targettunnelsid().at(i)) + "_";
+    }
 
-    // int targetallworker = tunnel_package.targetallworker();
+    int targetallworker = tunnel_package.targetallworker();
 
-    // LOG_ERROR("other_app::on_other_tunnel() CMD %d sourcetunnelsid %d targettunnelsid %s targetallworker %d",
-    //           package.cmd(),
-    //           sourcetunnelsid,
-    //           targettunnelsid.c_str(),
-    //           targetallworker);
+    LOG_ERROR("other_app::on_other_tunnel() CMD %d sourcetunnelsid %d targettunnelsid %s targetallworker %d",
+              package.cmd(),
+              sourcetunnelsid,
+              targettunnelsid.c_str(),
+              targetallworker);
+#endif
 }

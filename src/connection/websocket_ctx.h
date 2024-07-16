@@ -24,7 +24,10 @@ namespace avant::connection
         void on_event(uint32_t event);
 
         void add_header(const std::string &key, const std::string &value);
-        int send_data(const std::string &data);
+        int send_data(const std::string &data, bool flush = true);
+
+    private:
+        void try_send_flush();
 
     public:
         static std::shared_ptr<http_parser_settings> settings;
