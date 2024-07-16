@@ -126,16 +126,25 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 }
             }
         }
+
+#if 0
+        if (exist_keep_live)
+        {
+            ctx.keep_alive = true;
+        }
+        {
+            const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
+            ctx.send_buffer_append(response, strlen(response));
+            ctx.set_process_end(true);
+            return;
+        }
+#else
         if (exist_keep_live)
         {
             ctx.keep_alive = false; // app not use keep_alive
         }
-        /*{
-            const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
-            ctx.conn_ptr->send_buffer.append(response, strlen(response));
-            ctx.set_process_end(true);
-            return;
-        }*/
+#endif
+
         string url = utility::url::decode(ctx.url);
         auto find_res = url.find("..");
         if (std::string::npos != find_res)
