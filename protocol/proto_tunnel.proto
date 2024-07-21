@@ -48,3 +48,9 @@ message ProtoTunnelWorker2OtherEventNewClientConnection
 {
     uint64 gid = 3;
 };
+
+// PROTO_CMD_TUNNEL_OTHER2WORKER_TEST
+message ProtoTunnelOther2WorkerTest
+{
+    uint64 time = 1;
+};

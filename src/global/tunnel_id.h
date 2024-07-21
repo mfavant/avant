@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <cstdint>
+#include <vector>
 #include "proto_res/proto_tunnel.pb.h"
 
 namespace avant::global
@@ -19,6 +20,17 @@ namespace avant::global
         inline int get_worker_tunnel_id(int worker_idx) const
         {
             return ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + worker_idx;
+        }
+
+        inline int get_worker_all_tunnel_id(std::vector<int> &vec_worker_id) const
+        {
+            int size = 0;
+            for (int i = get_worker_tunnel_id_min(); i <= get_worker_tunnel_id_max(); ++i)
+            {
+                vec_worker_id.push_back(i);
+                ++size;
+            }
+            return size;
         }
 
         inline int get_worker_tunnel_id_min() const

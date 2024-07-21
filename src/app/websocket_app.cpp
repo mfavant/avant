@@ -55,7 +55,21 @@ void websocket_app::on_worker_tick(avant::workers::worker &worker_obj)
 
 void websocket_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
-    LOG_ERROR("websocket_app on_worker_tunnel cmd %d", package.cmd());
+    int cmd = package.cmd();
+    if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_OTHER2WORKER_TEST)
+    {
+        ProtoTunnelOther2WorkerTest other2worker_test;
+        if (!proto::parse(other2worker_test, package))
+        {
+            LOG_ERROR("proto::parse(other2worker_test, package) failed");
+            return;
+        }
+        // LOG_ERROR("worker_id %d PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time %llu", worker_obj.worker_id, other2worker_test.time());
+    }
+    else
+    {
+        LOG_ERROR("not exist handler %d", cmd);
+    }
 }
 
 void websocket_app::on_ctx_create(avant::connection::websocket_ctx &ctx)
