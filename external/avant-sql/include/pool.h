@@ -19,7 +19,8 @@ namespace avant
                       const std::string &ip,
                       const std::string &user,
                       const std::string &password,
-                      const std::string &db);
+                      const std::string &db,
+                      const unsigned int port = 3306);
             std::shared_ptr<connection> get();
             void back(std::shared_ptr<connection> ptr);
             int get_size();

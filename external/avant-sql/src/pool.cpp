@@ -15,13 +15,14 @@ void pool::init(int size,
                 const std::string &ip,
                 const std::string &user,
                 const std::string &password,
-                const std::string &db)
+                const std::string &db,
+                const unsigned int port /*= 3306*/)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (int i = 0; i < size; i++)
     {
         std::shared_ptr<connection> conn = std::make_shared<connection>();
-        bool result = conn->connect(ip, user, password, db);
+        bool result = conn->connect(ip, user, password, db, port);
         if (result)
         {
             m_list.push_back(conn);
