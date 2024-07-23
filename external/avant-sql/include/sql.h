@@ -15,6 +15,7 @@ namespace avant
             TINY,
             SHORT,
             LONG,
+            LONG_UNSIGNED,
             FLOAT,
             DOUBLE,
             NULL_TYPE,
@@ -110,6 +111,11 @@ namespace avant
                 break;
             case value_type::LONG:
                 bind[index].buffer_type = MYSQL_TYPE_LONG;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::LONG_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_LONG;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::FLOAT:
                 bind[index].buffer_type = MYSQL_TYPE_FLOAT;
@@ -341,6 +347,11 @@ namespace avant
                 break;
             case value_type::LONG:
                 bind[index].buffer_type = MYSQL_TYPE_LONG;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::LONG_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_LONG;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::FLOAT:
                 bind[index].buffer_type = MYSQL_TYPE_FLOAT;
