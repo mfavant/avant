@@ -13,7 +13,9 @@ namespace avant
         {
             DECIMAL = 0,
             TINY,
+            TINY_UNSIGNED,
             SHORT,
+            SHORT_UNSIGNED,
             LONG,
             LONG_UNSIGNED,
             FLOAT,
@@ -21,7 +23,9 @@ namespace avant
             NULL_TYPE,
             TIMESTAMP,
             LONGLONG,
+            LONGLONG_UNSIGNED,
             INT24,
+            INT24_UNSIGNED,
             DATE,
             TIME,
             DATETIME,
@@ -105,9 +109,19 @@ namespace avant
                 break;
             case value_type::TINY:
                 bind[index].buffer_type = MYSQL_TYPE_TINY;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::TINY_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_TINY;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::SHORT:
                 bind[index].buffer_type = MYSQL_TYPE_SHORT;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::SHORT_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_SHORT;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::LONG:
                 bind[index].buffer_type = MYSQL_TYPE_LONG;
@@ -131,9 +145,19 @@ namespace avant
                 break;
             case value_type::LONGLONG:
                 bind[index].buffer_type = MYSQL_TYPE_LONGLONG;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::LONGLONG_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_LONGLONG;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::INT24:
                 bind[index].buffer_type = MYSQL_TYPE_INT24;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::INT24_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_INT24;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::DATE:
                 bind[index].buffer_type = MYSQL_TYPE_DATE;
@@ -341,9 +365,19 @@ namespace avant
                 break;
             case value_type::TINY:
                 bind[index].buffer_type = MYSQL_TYPE_TINY;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::TINY_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_TINY;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::SHORT:
                 bind[index].buffer_type = MYSQL_TYPE_SHORT;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::SHORT_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_SHORT;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::LONG:
                 bind[index].buffer_type = MYSQL_TYPE_LONG;
@@ -367,9 +401,19 @@ namespace avant
                 break;
             case value_type::LONGLONG:
                 bind[index].buffer_type = MYSQL_TYPE_LONGLONG;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::LONGLONG_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_LONGLONG;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::INT24:
                 bind[index].buffer_type = MYSQL_TYPE_INT24;
+                bind[index].is_unsigned = 0;
+                break;
+            case value_type::INT24_UNSIGNED:
+                bind[index].buffer_type = MYSQL_TYPE_INT24;
+                bind[index].is_unsigned = 1;
                 break;
             case value_type::DATE:
                 bind[index].buffer_type = MYSQL_TYPE_DATE;
