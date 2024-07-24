@@ -59,9 +59,7 @@ kill PID
 ## Example
 
 ```bash
-docker run -it --privileged -p 20023:20023 -v ${LOCAL_HTTP_DIR_PATH}:/avant_static gaowanlu/avant:latest bash
-cd ./bin
-./avant
+docker run --privileged -p 20023:20023 -v ${LOCAL_HTTP_DIR_PATH}:/avant_static gaowanlu/avant:latest
 ```
 
 ## APP Example
