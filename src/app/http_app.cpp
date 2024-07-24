@@ -127,7 +127,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
         }
 
-#if 0
+#if 1
         if (exist_keep_live)
         {
             ctx.keep_alive = true;
