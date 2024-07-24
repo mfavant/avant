@@ -1,5 +1,6 @@
 #include "transaction.h"
 #include <stdexcept>
+#include <iostream>
 
 using avant::sql::connection;
 using avant::sql::transaction;
@@ -10,7 +11,7 @@ transaction::transaction(std::shared_ptr<connection> conn) : conn(conn),
 {
     if (mysql_query(this->conn->get(), "START TRANSACTION"))
     {
-        throw std::runtime_error("failed to start transaction: " + std::string(mysql_error(this->conn->get())));
+        throw std::runtime_error(std::string("failed to start transaction: ") + std::string(mysql_error(this->conn->get())));
     }
 }
 
@@ -18,7 +19,10 @@ transaction::~transaction()
 {
     if (!commited)
     {
-        rollback();
+        if (mysql_query(this->conn->get(), "ROLLBACK"))
+        {
+            std::cout << std::string("failed to rollback transaction: ") << std::string(mysql_error(this->conn->get())) << std::endl;
+        }
     }
 }
 
@@ -26,7 +30,7 @@ int transaction::commit()
 {
     if (mysql_query(this->conn->get(), "COMMIT"))
     {
-        throw std::runtime_error("failed to commit transaction: " + std::string(mysql_error(this->conn->get())));
+        throw std::runtime_error(std::string("failed to commit transaction: ") + std::string(mysql_error(this->conn->get())));
     }
     this->commited = true;
     return 0;
@@ -36,7 +40,7 @@ int transaction::rollback()
 {
     if (mysql_query(this->conn->get(), "ROLLBACK"))
     {
-        throw std::runtime_error("failed to rollback transaction: " + std::string(mysql_error(this->conn->get())));
+        throw std::runtime_error(std::string("failed to rollback transaction: ") + std::string(mysql_error(this->conn->get())));
     }
     this->commited = true;
     return 0;
@@ -53,7 +57,7 @@ int transaction::save_point()
     sql += new_save_point;
     if (mysql_query(this->conn->get(), sql.c_str()))
     {
-        throw std::runtime_error("failed to save_point: " + std::string(mysql_error(this->conn->get())));
+        throw std::runtime_error(std::string("failed to save_point: ") + std::string(mysql_error(this->conn->get())));
     }
     this->save_points.push_back(new_save_point);
     return 0;
@@ -74,7 +78,7 @@ int transaction::rollback_once()
     sql += save_point;
     if (mysql_query(this->conn->get(), sql.c_str()))
     {
-        throw std::runtime_error("failed to rollback_once: " + std::string(mysql_error(this->conn->get())));
+        throw std::runtime_error(std::string("failed to rollback_once: ") + std::string(mysql_error(this->conn->get())));
     }
     this->save_points.pop_back();
     return 0;

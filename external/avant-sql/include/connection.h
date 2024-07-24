@@ -19,6 +19,7 @@ namespace avant
                          const unsigned int port = 3306);
             void close();
             MYSQL *get();
+            bool ping();
 
         private:
             MYSQL *conn;

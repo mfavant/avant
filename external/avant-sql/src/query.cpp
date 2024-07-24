@@ -18,7 +18,7 @@ void query::execute(const std::string &sql)
     MYSQL_RES *res = nullptr;
     if (mysql_query(conn->get(), sql.c_str()))
     {
-        std::cerr << mysql_error(conn->get()) << std::endl;
+        std::cout << __FILE__ << __LINE__ << mysql_error(conn->get()) << std::endl;
     }
     else
     {
@@ -34,7 +34,7 @@ uint64_t query::insert(const std::string &sql)
 {
     if (mysql_query(conn->get(), sql.c_str()))
     {
-        std::cerr << mysql_error(conn->get()) << std::endl;
+        std::cout << __FILE__ << __LINE__ << mysql_error(conn->get()) << std::endl;
         return 0;
     }
     else
@@ -47,7 +47,7 @@ uint64_t query::del(const std::string &sql)
 {
     if (mysql_query(conn->get(), sql.c_str()))
     {
-        std::cerr << mysql_error(conn->get()) << std::endl;
+        std::cout << __FILE__ << __LINE__ << mysql_error(conn->get()) << std::endl;
         return 0;
     }
     else
@@ -62,7 +62,7 @@ void query::select(const std::string &sql)
     MYSQL_ROW row;
     if (mysql_query(conn->get(), sql.c_str()))
     {
-        std::cerr << mysql_error(conn->get()) << std::endl;
+        std::cout << __FILE__ << __LINE__ << mysql_error(conn->get()) << std::endl;
     }
     else
     {
@@ -103,7 +103,7 @@ uint64_t query::update(const std::string &sql)
 {
     if (mysql_query(conn->get(), sql.c_str()))
     {
-        std::cerr << mysql_error(conn->get()) << std::endl;
+        std::cout << __FILE__ << __LINE__ << mysql_error(conn->get()) << std::endl;
         return 0;
     }
     else
