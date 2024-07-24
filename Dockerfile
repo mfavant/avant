@@ -14,4 +14,7 @@ RUN rm -rf CMakeCache.txt \
     && cmake . \
     && make -j3 \
     && cd bin \
-    && ls \
+    && ls
+WORKDIR /avant/bin
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["./avant"]
