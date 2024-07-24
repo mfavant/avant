@@ -17,4 +17,4 @@ RUN rm -rf CMakeCache.txt \
     && ls
 WORKDIR /avant/bin
 ENTRYPOINT ["/bin/bash", "-c"]
-CMD ["./avant"]
+CMD ["./avant && tail -f /dev/null"]
