@@ -63,7 +63,7 @@ std::shared_ptr<connection> pool::get()
         return ptr;
     }
 
-    std::cout << __FILE__ << __LINE__ << "pool::get() ping failed" << std::endl;
+    std::cout << __FILE__ << ":" << __LINE__ << ": " << "pool::get() ping failed" << std::endl;
 
     {
         std::lock_guard<std::mutex> lock(this->mutex);
@@ -72,11 +72,11 @@ std::shared_ptr<connection> pool::get()
         bool result = conn->connect(this->ip, this->user, this->password, this->db, this->port);
         if (result)
         {
-            std::cout << __FILE__ << __LINE__ << "poll::get() reconnect succ" << std::endl;
+            std::cout << __FILE__ << ":" << __LINE__ << ": " << "poll::get() reconnect succ" << std::endl;
             ptr->close();
             return conn;
         }
-        std::cout << __FILE__ << __LINE__ << "poll::get() reconnect failed" << std::endl;
+        std::cout << __FILE__ << ":" << __LINE__ << ": " << "poll::get() reconnect failed" << std::endl;
     }
 
     return ptr;

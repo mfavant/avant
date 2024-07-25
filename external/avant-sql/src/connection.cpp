@@ -25,7 +25,7 @@ bool connection::connect(const std::string &ip,
 {
     if (!mysql_real_connect(this->conn, ip.c_str(), user.c_str(), password.c_str(), db.c_str(), port, nullptr, 0))
     {
-        std::cout << __FILE__ << __LINE__ << mysql_error(this->conn) << std::endl;
+        std::cout << __FILE__ << ":" << __LINE__ << ": " << mysql_error(this->conn) << std::endl;
         return false;
     }
     return true;

@@ -273,11 +273,11 @@ namespace avant
             auto m_conn_ptr = m_conn.lock();
             if ((stmt = mysql_stmt_init(m_conn_ptr->get())) == nullptr)
             {
-                std::cout << __FILE__ << __LINE__ << "stmt == nullptr" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "stmt == nullptr" << std::endl;
             }
             if (0 != mysql_stmt_prepare(stmt, sql.c_str(), sql.size()))
             {
-                std::cout << __FILE__ << __LINE__ << mysql_stmt_error(stmt) << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << mysql_stmt_error(stmt) << std::endl;
             }
         }
 
@@ -293,34 +293,34 @@ namespace avant
         {
             if (m_conn.expired())
             {
-                std::cout << __FILE__ << __LINE__ << "sql m_conn. is expired" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "sql m_conn. is expired" << std::endl;
                 return false;
             }
             else
             {
-                std::cout << __FILE__ << __LINE__ << " m_conn.lock()" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << " m_conn.lock()" << std::endl;
                 auto m_conn_ptr = m_conn.lock();
-                std::cout << __FILE__ << __LINE__ << "mysql_stmt_bind_param(stmt, bind)" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "mysql_stmt_bind_param(stmt, bind)" << std::endl;
                 if (bind_size >= 1)
                 {
                     if (0 != mysql_stmt_bind_param(stmt, bind))
                     {
-                        std::cout << __FILE__ << __LINE__ << mysql_stmt_error(stmt) << std::endl;
+                        std::cout << __FILE__ << ":" << __LINE__ << ": " << mysql_stmt_error(stmt) << std::endl;
                         return false;
                     }
                 }
-                std::cout << __FILE__ << __LINE__ << "mysql_stmt_execute(stmt)" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "mysql_stmt_execute(stmt)" << std::endl;
                 if (0 != mysql_stmt_execute(stmt))
                 {
-                    std::cout << __FILE__ << __LINE__ << mysql_stmt_error(stmt) << std::endl;
+                    std::cout << __FILE__ << ":" << __LINE__ << ": " << mysql_stmt_error(stmt) << std::endl;
                     return false;
                 }
-                std::cout << __FILE__ << __LINE__ << "mysql_stmt_bind_result" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "mysql_stmt_bind_result" << std::endl;
                 if (result_size >= 1)
                 {
                     if (0 != mysql_stmt_bind_result(stmt, m_result.get_bind()))
                     {
-                        std::cout << __FILE__ << __LINE__ << mysql_stmt_error(stmt) << std::endl;
+                        std::cout << __FILE__ << ":" << __LINE__ << ": " << mysql_stmt_error(stmt) << std::endl;
                         return false;
                     }
                 }
@@ -339,17 +339,17 @@ namespace avant
             }
             else if (res == 1)
             {
-                std::cout << __FILE__ << __LINE__ << "fetch end" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "fetch end" << std::endl;
                 return false;
             }
             else if (res == MYSQL_NO_DATA)
             {
-                std::cout << __FILE__ << __LINE__ << "fetch result is no data" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "fetch result is no data" << std::endl;
                 return false;
             }
             else if (res == MYSQL_DATA_TRUNCATED)
             {
-                std::cout << __FILE__ << __LINE__ << "fetch result is MYSQL_DATA_TRUNCATED" << std::endl;
+                std::cout << __FILE__ << ":" << __LINE__ << ": " << "fetch result is MYSQL_DATA_TRUNCATED" << std::endl;
                 return false;
             }
             return false;
