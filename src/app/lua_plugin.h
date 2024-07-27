@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "proto/proto_util.h"
 
 extern "C"
 {
@@ -29,6 +30,8 @@ namespace avant::app
         void exe_OnWorkerStop(int worker_idx);
         void exe_OnWorkerTick(int worker_idx);
 
+        static void exe_OnWorkerRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package);
+
         void on_other_init();
         void on_other_stop();
         void on_other_tick();
@@ -40,6 +43,11 @@ namespace avant::app
 
     public:
         static int Logger(lua_State *lua_state);
+        static int Lua2Protobuf(lua_State *lua_state);
+
+    public:
+        static void protobuf2lua(lua_State *L, const google::protobuf::Message &package);
+        static void lua2protobuf(lua_State *L, google::protobuf::Message &package);
 
     private:
         lua_State *lua_state{nullptr};
