@@ -9,44 +9,100 @@
 using namespace avant::app;
 using namespace avant::utility;
 
-lua_plugin::lua_plugin() : lua_state(nullptr)
+lua_plugin::lua_plugin()
 {
 }
 
 lua_plugin::~lua_plugin()
 {
-    if (lua_state)
+    free_main_lua();
+    free_worker_lua();
+    free_other_lua();
+}
+
+void lua_plugin::free_main_lua()
+{
+    if (this->lua_state)
     {
-        lua_close(lua_state);
-        lua_state = nullptr;
+        lua_close(this->lua_state);
+        this->lua_state = nullptr;
     }
-    if (worker_lua_state)
+}
+
+void lua_plugin::free_worker_lua()
+{
+    if (this->worker_lua_state)
     {
-        for (int i = 0; i < worker_lua_cnt; i++)
+        for (int i = 0; i < this->worker_lua_cnt; i++)
         {
-            if (worker_lua_state[i])
-            {
-                lua_close(worker_lua_state[i]);
-                worker_lua_state[i] = nullptr;
-            }
+            free_worker_lua(i);
         }
-        delete[] worker_lua_state;
+        delete[] this->worker_lua_state;
     }
-    if (other_lua_state)
+    if (this->worker_lua_state_be_reload)
     {
-        lua_close(other_lua_state);
-        other_lua_state = nullptr;
+        delete[] this->worker_lua_state_be_reload;
     }
+}
+
+void lua_plugin::free_worker_lua(int worker_idx)
+{
+    if (this->worker_lua_state)
+    {
+        if (this->worker_lua_state[worker_idx])
+        {
+            lua_close(this->worker_lua_state[worker_idx]);
+            this->worker_lua_state[worker_idx] = nullptr;
+        }
+    }
+}
+
+void lua_plugin::free_other_lua()
+{
+    if (this->other_lua_state)
+    {
+        lua_close(this->other_lua_state);
+        this->other_lua_state = nullptr;
+    }
+}
+
+void lua_plugin::reload()
+{
+    this->lua_state_be_reload = true;
+    for (int i = 0; i < this->worker_lua_cnt; i++)
+    {
+        this->worker_lua_state_be_reload[i] = true;
+    }
+    this->other_lua_state_be_reload = true;
 }
 
 void lua_plugin::on_main_init(const std::string &lua_dir, const int worker_cnt)
 {
+    this->lua_dir = lua_dir;
+
+    // init worker lua vm
+    {
+        this->worker_lua_cnt = worker_cnt;
+        this->worker_lua_state = new lua_State *[this->worker_lua_cnt];
+        this->worker_lua_state_be_reload = new bool[this->worker_lua_cnt];
+        for (int i = 0; i < this->worker_lua_cnt; i++)
+        {
+            this->worker_lua_state[i] = nullptr;
+            this->worker_lua_state_be_reload[i] = false;
+        }
+    }
+
+    real_on_main_init(false);
+}
+
+void lua_plugin::real_on_main_init(bool is_hot)
+{
     // init main lua vm
     {
-        lua_state = luaL_newstate();
-        luaL_openlibs(lua_state);
-        std::string filename = lua_dir + "/init.lua";
-        int isok = luaL_dofile(lua_state, filename.data());
+        this->lua_state = luaL_newstate();
+        luaL_openlibs(this->lua_state);
+        std::string filename = this->lua_dir + "/init.lua";
+        int isok = luaL_dofile(this->lua_state, filename.data());
 
         if (isok == LUA_OK)
         {
@@ -54,129 +110,139 @@ void lua_plugin::on_main_init(const std::string &lua_dir, const int worker_cnt)
         }
         else
         {
-            LOG_ERROR("main init.lua load failed, %s", lua_tostring(lua_state, -1));
+            LOG_ERROR("main init.lua load failed, %s", lua_tostring(this->lua_state, -1));
             exit(-1);
         }
     }
-
-    // init worker lua vm
-    {
-        worker_lua_cnt = worker_cnt;
-        worker_lua_state = new lua_State *[worker_cnt];
-        for (int i = 0; i < worker_cnt; i++)
-        {
-            worker_lua_state[i] = luaL_newstate();
-            luaL_openlibs(worker_lua_state[i]);
-            std::string filename = lua_dir + "/init.lua";
-            int isok = luaL_dofile(worker_lua_state[i], filename.data());
-            if (isok == LUA_OK)
-            {
-                LOG_ERROR("worker vm[%d] init.lua load succ", i);
-            }
-            else
-            {
-                LOG_ERROR("main worker vm[%d] init.lua load failed, %s", i, lua_tostring(worker_lua_state[i], -1));
-                exit(-1);
-            }
-        }
-    }
-
-    // init other vm
-    {
-        other_lua_state = luaL_newstate();
-        luaL_openlibs(other_lua_state);
-        std::string filename = lua_dir + "/init.lua";
-        int isok = luaL_dofile(other_lua_state, filename.data());
-
-        if (isok == LUA_OK)
-        {
-            LOG_ERROR("other init.lua load succ");
-        }
-        else
-        {
-            LOG_ERROR("other init.lua load failed, %s", lua_tostring(other_lua_state, -1));
-            exit(-1);
-        }
-    }
-
-    mount();
-    exe_OnMainInit();
+    main_mount();
+    exe_OnMainInit(is_hot);
 }
 
-void lua_plugin::on_main_stop()
+void lua_plugin::on_main_stop(bool is_hot)
 {
-    exe_OnMainStop();
+    exe_OnMainStop(is_hot);
 }
 
 void lua_plugin::on_main_tick()
 {
+    if (this->lua_state_be_reload)
+    {
+        LOG_ERROR("this->lua_state_be_reload is true");
+        this->lua_state_be_reload = false;
+
+        on_main_stop(true);
+        free_main_lua();
+        if (this->lua_state != nullptr)
+        {
+            LOG_ERROR("free_main_lua after this->lua_state != nullptr");
+            exit(-1);
+        }
+        real_on_main_init(true);
+        return;
+    }
     exe_OnMainTick();
 }
 
-void lua_plugin::on_worker_init(int worker_idx)
+void lua_plugin::on_worker_init(int worker_idx, bool is_hot)
 {
-    exe_OnWorkerInit(worker_idx);
+    {
+        this->worker_lua_state[worker_idx] = luaL_newstate();
+        luaL_openlibs(this->worker_lua_state[worker_idx]);
+        std::string filename = this->lua_dir + "/init.lua";
+        int isok = luaL_dofile(this->worker_lua_state[worker_idx], filename.data());
+        if (isok == LUA_OK)
+        {
+            LOG_ERROR("worker vm[%d] init.lua load succ", worker_idx);
+        }
+        else
+        {
+            LOG_ERROR("main worker vm[%d] init.lua load failed, %s", worker_idx, lua_tostring(this->worker_lua_state[worker_idx], -1));
+            exit(-1);
+        }
+    }
+    worker_mount(worker_idx);
+    exe_OnWorkerInit(worker_idx, is_hot);
 }
 
-void lua_plugin::on_worker_stop(int worker_idx)
+void lua_plugin::on_worker_stop(int worker_idx, bool is_hot)
 {
-    exe_OnWorkerStop(worker_idx);
+    exe_OnWorkerStop(worker_idx, is_hot);
 }
 
 void lua_plugin::on_worker_tick(int worker_idx)
 {
+    if (this->worker_lua_state_be_reload[worker_idx])
+    {
+        LOG_ERROR("this->worker_lua_state_be_reload[%d] is true", worker_idx);
+        this->worker_lua_state_be_reload[worker_idx] = false;
+
+        on_worker_stop(worker_idx, true);
+        free_worker_lua(worker_idx);
+
+        if (this->worker_lua_state[worker_idx] != nullptr)
+        {
+            LOG_ERROR("this->worker_lua_state[%d] != nullptr", worker_idx);
+            exit(-1);
+        }
+        on_worker_init(worker_idx, true);
+        return;
+    }
     exe_OnWorkerTick(worker_idx);
 }
 
-void lua_plugin::exe_OnMainInit()
+void lua_plugin::exe_OnMainInit(bool is_hot)
 {
-    lua_getglobal(lua_state, "OnInit");
-    int isok = lua_pcall(lua_state, 0, 0, 0);
+    lua_getglobal(this->lua_state, "OnMainInit");
+    lua_pushboolean(this->lua_state, is_hot);
+    int isok = lua_pcall(this->lua_state, 1, 0, 0);
     if (LUA_OK != isok)
     {
-        LOG_ERROR("exe_OnMainInit failed %s", lua_tostring(lua_state, -1));
+        LOG_ERROR("exe_OnMainInit failed %s", lua_tostring(this->lua_state, -1));
     }
 }
 
-void lua_plugin::exe_OnMainStop()
+void lua_plugin::exe_OnMainStop(bool is_hot)
 {
-    lua_getglobal(lua_state, "OnMainStop");
-    int isok = lua_pcall(lua_state, 0, 0, 0);
+    lua_getglobal(this->lua_state, "OnMainStop");
+    lua_pushboolean(this->lua_state, is_hot);
+    int isok = lua_pcall(this->lua_state, 1, 0, 0);
     if (LUA_OK != isok)
     {
-        LOG_ERROR("exe_OnMainStop failed %s", lua_tostring(lua_state, -1));
+        LOG_ERROR("exe_OnMainStop failed %s", lua_tostring(this->lua_state, -1));
     }
 }
 
 void lua_plugin::exe_OnMainTick()
 {
-    lua_getglobal(lua_state, "OnMainTick");
+    lua_getglobal(this->lua_state, "OnMainTick");
     static int isok = 0;
-    isok = lua_pcall(lua_state, 0, 0, 0);
+    isok = lua_pcall(this->lua_state, 0, 0, 0);
     if (LUA_OK != isok)
     {
-        LOG_ERROR("exe_OnMainTick failed %s", lua_tostring(lua_state, -1));
+        LOG_ERROR("exe_OnMainTick failed %s", lua_tostring(this->lua_state, -1));
     }
 }
 
-void lua_plugin::exe_OnWorkerInit(int worker_idx)
+void lua_plugin::exe_OnWorkerInit(int worker_idx, bool is_hot)
 {
-    lua_State *lua_ptr = worker_lua_state[worker_idx];
+    lua_State *lua_ptr = this->worker_lua_state[worker_idx];
     lua_getglobal(lua_ptr, "OnWorkerInit");
     lua_pushinteger(lua_ptr, worker_idx);
-    int isok = lua_pcall(lua_ptr, 1, 0, 0);
+    lua_pushboolean(lua_ptr, is_hot);
+    int isok = lua_pcall(lua_ptr, 2, 0, 0);
     if (LUA_OK != isok)
     {
         LOG_ERROR("exe_OnWorkerInit failed %s", lua_tostring(lua_ptr, -1));
     }
 }
 
-void lua_plugin::exe_OnWorkerStop(int worker_idx)
+void lua_plugin::exe_OnWorkerStop(int worker_idx, bool is_hot)
 {
-    lua_State *lua_ptr = worker_lua_state[worker_idx];
+    lua_State *lua_ptr = this->worker_lua_state[worker_idx];
     lua_getglobal(lua_ptr, "OnWorkerStop");
     lua_pushinteger(lua_ptr, worker_idx);
-    int isok = lua_pcall(lua_ptr, 1, 0, 0);
+    lua_pushboolean(lua_ptr, is_hot);
+    int isok = lua_pcall(lua_ptr, 2, 0, 0);
     if (LUA_OK != isok)
     {
         LOG_ERROR("exe_OnWorkerStop failed %s", lua_tostring(lua_ptr, -1));
@@ -185,7 +251,7 @@ void lua_plugin::exe_OnWorkerStop(int worker_idx)
 
 void lua_plugin::exe_OnWorkerTick(int worker_idx)
 {
-    lua_State *lua_ptr = worker_lua_state[worker_idx];
+    lua_State *lua_ptr = this->worker_lua_state[worker_idx];
     lua_getglobal(lua_ptr, "OnWorkerTick");
     lua_pushinteger(lua_ptr, worker_idx);
     int isok = lua_pcall(lua_ptr, 1, 0, 0);
@@ -227,55 +293,92 @@ void lua_plugin::exe_OnWorkerRecvMessage(lua_State *lua_state, int cmd, const go
     }
 }
 
-void lua_plugin::on_other_init()
+void lua_plugin::on_other_init(bool is_hot)
 {
-    exe_OnOtherInit();
+    {
+        this->other_lua_state = luaL_newstate();
+        luaL_openlibs(this->other_lua_state);
+        std::string filename = this->lua_dir + "/init.lua";
+        int isok = luaL_dofile(this->other_lua_state, filename.data());
+
+        if (isok == LUA_OK)
+        {
+            LOG_ERROR("other init.lua load succ");
+        }
+        else
+        {
+            LOG_ERROR("other init.lua load failed, %s", lua_tostring(this->other_lua_state, -1));
+            exit(-1);
+        }
+    }
+    other_mount();
+    exe_OnOtherInit(is_hot);
 }
 
-void lua_plugin::on_other_stop()
+void lua_plugin::on_other_stop(bool is_hot)
 {
-    exe_OnOtherStop();
+    exe_OnOtherStop(is_hot);
 }
 
 void lua_plugin::on_other_tick()
 {
+    if (this->other_lua_state_be_reload)
+    {
+        LOG_ERROR("this->other_lua_state_be_reload is true");
+        this->other_lua_state_be_reload = false;
+
+        on_other_stop(true);
+        free_other_lua();
+
+        if (this->other_lua_state != nullptr)
+        {
+            LOG_ERROR("this->other_lua_state != nullptr");
+            exit(-1);
+        }
+
+        on_other_init(true);
+
+        return;
+    }
     exe_OnOtherTick();
 }
 
-void lua_plugin::exe_OnOtherInit()
+void lua_plugin::exe_OnOtherInit(bool is_hot)
 {
-    lua_getglobal(other_lua_state, "OnOtherInit");
+    lua_getglobal(this->other_lua_state, "OnOtherInit");
     static int isok = 0;
-    isok = lua_pcall(other_lua_state, 0, 0, 0);
+    lua_pushboolean(this->other_lua_state, is_hot);
+    isok = lua_pcall(this->other_lua_state, 1, 0, 0);
     if (LUA_OK != isok)
     {
-        LOG_ERROR("exe_OnOtherInit failed %s", lua_tostring(other_lua_state, -1));
+        LOG_ERROR("exe_OnOtherInit failed %s", lua_tostring(this->other_lua_state, -1));
     }
 }
 
-void lua_plugin::exe_OnOtherStop()
+void lua_plugin::exe_OnOtherStop(bool is_hot)
 {
-    lua_getglobal(other_lua_state, "OnOtherStop");
+    lua_getglobal(this->other_lua_state, "OnOtherStop");
     static int isok = 0;
-    isok = lua_pcall(other_lua_state, 0, 0, 0);
+    lua_pushboolean(this->other_lua_state, is_hot);
+    isok = lua_pcall(this->other_lua_state, 1, 0, 0);
     if (LUA_OK != isok)
     {
-        LOG_ERROR("exe_OnOtherStop failed %s", lua_tostring(other_lua_state, -1));
+        LOG_ERROR("exe_OnOtherStop failed %s", lua_tostring(this->other_lua_state, -1));
     }
 }
 
 void lua_plugin::exe_OnOtherTick()
 {
-    lua_getglobal(other_lua_state, "OnOtherTick");
+    lua_getglobal(this->other_lua_state, "OnOtherTick");
     static int isok = 0;
-    isok = lua_pcall(other_lua_state, 0, 0, 0);
+    isok = lua_pcall(this->other_lua_state, 0, 0, 0);
     if (LUA_OK != isok)
     {
-        LOG_ERROR("exe_OnOtherTick failed %s", lua_tostring(other_lua_state, -1));
+        LOG_ERROR("exe_OnOtherTick failed %s", lua_tostring(this->other_lua_state, -1));
     }
 }
 
-void lua_plugin::mount()
+void lua_plugin::main_mount()
 {
     static luaL_Reg main_lulibs[] = {
         {"Logger", Logger},
@@ -283,29 +386,30 @@ void lua_plugin::mount()
         {NULL, NULL}};
     {
         // mount main lua vm
-        luaL_newlib(lua_state, main_lulibs);
-        lua_setglobal(lua_state, "avant");
+        luaL_newlib(this->lua_state, main_lulibs);
+        lua_setglobal(this->lua_state, "avant");
     }
+}
 
+void lua_plugin::worker_mount(int worker_idx)
+{
     static luaL_Reg worker_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
         {NULL, NULL}};
-    {
-        for (int i = 0; i < worker_lua_cnt; i++)
-        {
-            luaL_newlib(worker_lua_state[i], worker_lulibs);
-            lua_setglobal(worker_lua_state[i], "avant");
-        }
-    }
+    luaL_newlib(this->worker_lua_state[worker_idx], worker_lulibs);
+    lua_setglobal(this->worker_lua_state[worker_idx], "avant");
+}
 
+void lua_plugin::other_mount()
+{
     static luaL_Reg other_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
         {NULL, NULL}};
     {
-        luaL_newlib(other_lua_state, other_lulibs);
-        lua_setglobal(other_lua_state, "avant");
+        luaL_newlib(this->other_lua_state, other_lulibs);
+        lua_setglobal(this->other_lua_state, "avant");
     }
 }
 

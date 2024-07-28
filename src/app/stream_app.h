@@ -44,6 +44,8 @@ namespace avant
                                                   bool self,
                                                   ProtoTunnelClientForwardMessage &message,
                                                   const ProtoTunnelPackage &tunnel_package);
+
+            static void on_cmd_reload(avant::server::server &server_obj);
         };
     }
 }

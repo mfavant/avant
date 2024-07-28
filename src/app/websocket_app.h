@@ -68,6 +68,8 @@ namespace avant
                                                   ProtoTunnelClientForwardMessage &message,
                                                   const ProtoTunnelPackage &tunnel_package);
             static int send_sync_package(avant::connection::websocket_ctx &ctx, uint8_t first_byte, const char *data, size_t data_len);
+
+            static void on_cmd_reload(avant::server::server &server_obj);
         };
     }
 }

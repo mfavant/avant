@@ -8,6 +8,12 @@ protocol: `http` `tcp stream(protobuf)` `websocket`
 tls/ssl: `openssl`  
 script: `lua`  
 
+## Docker Run
+
+```bash
+docker run --privileged -p 20023:20023 -v ${LOCAL_HTTP_DIR_PATH}:/avant_static gaowanlu/avant:latest
+```
+
 ## Get Start
 
 If there are already dependencies to be installed on the host, please selectively ignore them.
@@ -41,7 +47,7 @@ sudo mkdir /avant_static
 vim bin/config/main.ini
 ```
 
-### Avant Start
+### Start
 
 ```bash
 cd bin
@@ -49,20 +55,27 @@ cd bin
 ps -ef | grep avant
 ```
 
-### Avant Safe Stop
+### Safe Stop
 
 ```bash
 ps -ef | grep avant
 kill PID
 ```
 
-## Example
+## Lua
+
+The main thread, other thread, and each worker thread have their own independent Lua virtual machine. `config/init.lua`
+
+### Lua Hot Update
+
+Using signal SIGUSR1(10), Avant provides Lua hot updates without restarting the process.
 
 ```bash
-docker run --privileged -p 20023:20023 -v ${LOCAL_HTTP_DIR_PATH}:/avant_static gaowanlu/avant:latest
+ps -ef | grep avant
+kill -10 PID
 ```
 
-## APP Example
+## APP Layer
 
 support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
 

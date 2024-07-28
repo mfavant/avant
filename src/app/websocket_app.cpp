@@ -28,19 +28,19 @@ void websocket_app::on_main_init(avant::server::server &server_obj)
 void websocket_app::on_worker_init(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("websocket_app::on_worker_init %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id, false);
 }
 
 void websocket_app::on_main_stop(avant::server::server &server_obj)
 {
     LOG_ERROR("websocket_app::on_main_stop");
-    utility::singleton<lua_plugin>::instance()->on_main_stop();
+    utility::singleton<lua_plugin>::instance()->on_main_stop(false);
 }
 
 void websocket_app::on_worker_stop(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("websocket_app::on_worker_stop %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id, false);
 }
 
 void websocket_app::on_main_tick(avant::server::server &server_obj)
@@ -400,4 +400,10 @@ uint8_t websocket_app::websocket_frame_type_2_n(websocket_frame_type type, uint8
         }
     }
     return 0x8;
+}
+
+void websocket_app::on_cmd_reload(avant::server::server &server_obj)
+{
+    LOG_ERROR("websocket_app on_cmd_reload execute lua_plugin reload");
+    utility::singleton<lua_plugin>::instance()->reload();
 }

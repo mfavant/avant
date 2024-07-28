@@ -14,13 +14,13 @@ namespace global = avant::global;
 void other_app::on_other_init(avant::workers::other &other_obj)
 {
     LOG_ERROR("other_app::on_other_init()");
-    utility::singleton<lua_plugin>::instance()->on_other_init();
+    utility::singleton<lua_plugin>::instance()->on_other_init(false);
 }
 
 void other_app::on_other_stop(avant::workers::other &other_obj)
 {
     LOG_ERROR("other_app::on_other_stop()");
-    utility::singleton<lua_plugin>::instance()->on_other_stop();
+    utility::singleton<lua_plugin>::instance()->on_other_stop(false);
 }
 
 void other_app::on_other_tick(avant::workers::other &other_obj)

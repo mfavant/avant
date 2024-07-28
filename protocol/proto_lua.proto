@@ -1,8 +1,14 @@
 syntax = "proto3";
 
 // PROTO_CMD_LUA_TEST
+message ProtoLuaTestData
+{
+    string str = 1;
+}
+
 message ProtoLuaTest
 {
     int32 num = 1;
     repeated int32 int32array = 2;
+    ProtoLuaTestData data = 3;
 }

@@ -36,6 +36,8 @@ namespace avant
             static void on_worker_tick(avant::workers::worker &worker_obj);
 
             static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package);
+
+            static void on_cmd_reload(avant::server::server &server_obj);
         };
     }
 }

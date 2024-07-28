@@ -324,19 +324,19 @@ void http_app::on_main_init(avant::server::server &server_obj)
 void http_app::on_worker_init(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("http_app::on_worker_init %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id, false);
 }
 
 void http_app::on_main_stop(avant::server::server &server_obj)
 {
     LOG_ERROR("http_app::on_main_stop");
-    utility::singleton<lua_plugin>::instance()->on_main_stop();
+    utility::singleton<lua_plugin>::instance()->on_main_stop(false);
 }
 
 void http_app::on_worker_stop(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("http_app::on_worker_stop %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id, false);
 }
 
 void http_app::on_main_tick(avant::server::server &server_obj)
@@ -366,4 +366,10 @@ void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoP
     {
         LOG_ERROR("not exist handler %d", cmd);
     }
+}
+
+void http_app::on_cmd_reload(avant::server::server &server_obj)
+{
+    LOG_ERROR("http_app on_cmd_reload execute lua_plugin reload");
+    utility::singleton<lua_plugin>::instance()->reload();
 }

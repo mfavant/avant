@@ -144,6 +144,7 @@ void system::signal_conf()
     signal(SIGTERM, &system::signal_term); // to call server::to_stop
     signal(SIGSTOP, &system::signal_term);
     signal(SIGKILL, &system::signal_term);
+    signal(SIGUSR1, &system::signal_usr1);
 }
 
 void system::create_daemon()
@@ -178,4 +179,9 @@ void system::create_daemon()
 void system::signal_term(int sig)
 {
     singleton<server::server>::instance()->to_stop();
+}
+
+void system::signal_usr1(int sig)
+{
+    singleton<server::server>::instance()->cmd_reload();
 }

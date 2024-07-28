@@ -15,6 +15,7 @@
 #include "hooks/tick.h"
 #include "hooks/init.h"
 #include "hooks/stop.h"
+#include "hooks/reload.h"
 #include "connection/http_ctx.h"
 #include <unordered_set>
 #include "global/tunnel_id.h"
@@ -995,4 +996,9 @@ avant::connection::connection *server::get_main2worker_tunnel(int worker_tunnel_
 avant::connection::connection *server::get_main2other_tunnel()
 {
     return m_main_connection_mgr.get_conn(m_main_other_tunnel.get_me());
+}
+
+void server::cmd_reload()
+{
+    hooks::reload::on_cmd_reload(*this);
 }

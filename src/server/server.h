@@ -64,6 +64,8 @@ namespace avant::server
             return this->m_worker_cnt;
         }
 
+        void cmd_reload();
+
     private:
         bool on_stop();
         bool is_stop();
