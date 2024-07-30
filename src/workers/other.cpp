@@ -8,6 +8,7 @@
 #include "app/other_app.h"
 #include "global/tunnel_id.h"
 #include <pthread.h>
+#include <signal.h>
 
 using namespace avant::workers;
 using namespace avant::global;

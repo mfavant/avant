@@ -18,6 +18,7 @@
 #include "app/stream_app.h"
 #include "app/websocket_app.h"
 #include <pthread.h>
+#include <signal.h>
 
 using namespace avant::workers;
 using namespace avant::global;
