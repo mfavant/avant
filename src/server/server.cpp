@@ -539,9 +539,24 @@ void server::on_start()
         while (true)
         {
             int num = m_epoller.wait(m_epoll_wait_time);
+
+            if (num < 0)
+            {
+                if (errno == EINTR)
+                {
+                    continue;
+                }
+                else
+                {
+                    LOG_ERROR("main epoller.wait return %d errno %d %s", num, errno, strerror(errno));
+                    to_stop();
+                    continue;
+                }
+            }
+
             // time update
             {
-                hooks::tick::on_main_tick(*this);
+                hooks::tick::on_main_tick(*this); // maybe change errno
                 server_time.update();
                 uint64_t now_tick_time = server_time.get_seconds();
                 if (latest_tick_time != now_tick_time)
@@ -576,20 +591,6 @@ void server::on_start()
                     }
                     gid_seq = 0;
                     latest_tick_time = now_tick_time;
-                }
-            }
-
-            if (num < 0)
-            {
-                if (errno == EINTR)
-                {
-                    continue;
-                }
-                else
-                {
-                    LOG_ERROR("main epoller.wait return %d errno %d %s", num, errno, strerror(errno));
-                    to_stop();
-                    continue;
                 }
             }
 

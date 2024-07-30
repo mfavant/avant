@@ -53,11 +53,6 @@ void worker::operator()()
     while (true)
     {
         num = this->epoller.wait(this->epoll_wait_time);
-        if (this->to_stop)
-        {
-            break;
-        }
-        hooks::tick::on_worker_tick(*this);
         if (num < 0)
         {
             if (errno == EINTR)
@@ -70,6 +65,13 @@ void worker::operator()()
                 break;
             }
         }
+
+        if (this->to_stop)
+        {
+            break;
+        }
+        hooks::tick::on_worker_tick(*this); // maybe change errno
+
         for (int i = 0; i < num; i++)
         {
             int evented_fd = this->epoller.m_events[i].data.fd;
