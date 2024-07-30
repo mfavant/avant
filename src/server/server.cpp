@@ -587,8 +587,9 @@ void server::on_start()
                 }
                 else
                 {
-                    LOG_ERROR("main epoller.wait return %d errno %d", num, errno);
-                    break;
+                    LOG_ERROR("main epoller.wait return %d errno %d %s", num, errno, strerror(errno));
+                    to_stop();
+                    continue;
                 }
             }
 

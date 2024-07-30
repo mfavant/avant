@@ -17,6 +17,7 @@
 #include "app/http_app.h"
 #include "app/stream_app.h"
 #include "app/websocket_app.h"
+#include "pthread.h"
 
 using namespace avant::workers;
 using namespace avant::global;
@@ -35,6 +36,17 @@ worker::~worker()
 void worker::operator()()
 {
     LOG_ERROR("worker::operator() start worker[%d]", this->worker_id);
+
+    {
+        sigset_t set;
+        sigfillset(&set);
+        if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0)
+        {
+            LOG_ERROR("worker[%d] pthread_sigmask failed", this->worker_id);
+            exit(-1);
+        }
+    }
+
     hooks::init::on_worker_init(*this);
     int num = -1;
     while (true)

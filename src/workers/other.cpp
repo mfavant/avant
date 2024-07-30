@@ -7,6 +7,7 @@
 #include "hooks/tick.h"
 #include "app/other_app.h"
 #include "global/tunnel_id.h"
+#include "pthread.h"
 
 using namespace avant::workers;
 using namespace avant::global;
@@ -22,6 +23,17 @@ other::~other()
 void other::operator()()
 {
     LOG_ERROR("other::operator() start");
+
+    {
+        sigset_t set;
+        sigfillset(&set);
+        if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0)
+        {
+            LOG_ERROR("other pthread_sigmask failed");
+            exit(-1);
+        }
+    }
+
     hooks::init::on_other_init(*this);
     int num = -1;
     while (true)
