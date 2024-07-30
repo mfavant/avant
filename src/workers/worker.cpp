@@ -17,7 +17,7 @@
 #include "app/http_app.h"
 #include "app/stream_app.h"
 #include "app/websocket_app.h"
-#include "pthread.h"
+#include <pthread.h>
 
 using namespace avant::workers;
 using namespace avant::global;
