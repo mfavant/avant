@@ -194,7 +194,7 @@ json parser::parse()
             {
                 throw std::logic_error("expected '\"' in object");
             }
-            std::string key = parse_string();
+            std::string key = static_cast<std::string>(parse_string());
             ch = get_next_token();
             if (ch != ':')
             {

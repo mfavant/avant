@@ -2,7 +2,7 @@
 
 Network Message Framework For Linux C++.
 
-cpp-min: `C++17`  
+cpp-version: `C++20`  
 os: `linux`  
 protocol: `http` `tcp stream(protobuf)` `websocket`  
 tls/ssl: `openssl`  

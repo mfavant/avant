@@ -102,11 +102,11 @@ namespace avant::json
         json &operator[](const std::string &key);
         const json &operator[](const std::string &key) const;
 
-        operator bool();
-        operator long long();
-        operator double();
-        operator std::string();
-        operator std::string() const;
+        explicit operator bool();
+        explicit operator long long();
+        explicit operator double();
+        explicit operator std::string();
+        explicit operator std::string() const;
 
         static json const &null();
 
