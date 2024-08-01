@@ -64,7 +64,7 @@ kill PID
 
 ## Lua
 
-The main thread, other thread, and each worker thread have their own independent Lua virtual machine. `config/init.lua`
+The main thread, other thread, and each worker thread have their own independent Lua virtual machine. `config/Init.lua`
 
 ### Lua Hot Update
 
