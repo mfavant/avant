@@ -101,20 +101,20 @@ void lua_plugin::real_on_main_init(bool is_hot)
     {
         this->lua_state = luaL_newstate();
         luaL_openlibs(this->lua_state);
-        std::string filename = this->lua_dir + "/init.lua";
+        main_mount();
+        std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->lua_state, filename.data());
 
         if (isok == LUA_OK)
         {
-            LOG_ERROR("main init.lua load succ");
+            LOG_ERROR("main Init.lua load succ");
         }
         else
         {
-            LOG_ERROR("main init.lua load failed, %s", lua_tostring(this->lua_state, -1));
+            LOG_ERROR("main Init.lua load failed, %s", lua_tostring(this->lua_state, -1));
             exit(-1);
         }
     }
-    main_mount();
     exe_OnMainInit(is_hot);
 }
 
@@ -148,19 +148,19 @@ void lua_plugin::on_worker_init(int worker_idx, bool is_hot)
     {
         this->worker_lua_state[worker_idx] = luaL_newstate();
         luaL_openlibs(this->worker_lua_state[worker_idx]);
-        std::string filename = this->lua_dir + "/init.lua";
+        worker_mount(worker_idx);
+        std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->worker_lua_state[worker_idx], filename.data());
         if (isok == LUA_OK)
         {
-            LOG_ERROR("worker vm[%d] init.lua load succ", worker_idx);
+            LOG_ERROR("worker vm[%d] Init.lua load succ", worker_idx);
         }
         else
         {
-            LOG_ERROR("main worker vm[%d] init.lua load failed, %s", worker_idx, lua_tostring(this->worker_lua_state[worker_idx], -1));
+            LOG_ERROR("main worker vm[%d] Init.lua load failed, %s", worker_idx, lua_tostring(this->worker_lua_state[worker_idx], -1));
             exit(-1);
         }
     }
-    worker_mount(worker_idx);
     exe_OnWorkerInit(worker_idx, is_hot);
 }
 
@@ -298,20 +298,20 @@ void lua_plugin::on_other_init(bool is_hot)
     {
         this->other_lua_state = luaL_newstate();
         luaL_openlibs(this->other_lua_state);
-        std::string filename = this->lua_dir + "/init.lua";
+        other_mount();
+        std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->other_lua_state, filename.data());
 
         if (isok == LUA_OK)
         {
-            LOG_ERROR("other init.lua load succ");
+            LOG_ERROR("other Init.lua load succ");
         }
         else
         {
-            LOG_ERROR("other init.lua load failed, %s", lua_tostring(this->other_lua_state, -1));
+            LOG_ERROR("other Init.lua load failed, %s", lua_tostring(this->other_lua_state, -1));
             exit(-1);
         }
     }
-    other_mount();
     exe_OnOtherInit(is_hot);
 }
 

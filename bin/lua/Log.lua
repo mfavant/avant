@@ -1,4 +1,6 @@
-function Log(...)
+local Log = {}
+
+function Log:Error(...)
     local args = {...};
     local formatString = table.remove(args, 1);
 
@@ -10,3 +12,5 @@ function Log(...)
 
     avant.Logger(string.format("[%s:%d] %s", source, line, message));
 end
+
+return Log
