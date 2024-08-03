@@ -6,9 +6,7 @@
 
 namespace avant::connection
 {
-    class http_ctx;
-    class stream_ctx;
-    class websocket_ctx;
+    class base_ctx;
 
     class connection
     {
@@ -22,9 +20,8 @@ namespace avant::connection
         avant::socket::socket socket_obj;
         void on_alloc(int fd, uint64_t gid);
         void on_release();
-        std::shared_ptr<http_ctx> http_ctx_ptr{nullptr};
-        std::shared_ptr<stream_ctx> stream_ctx_ptr{nullptr};
-        std::shared_ptr<websocket_ctx> websocket_ctx_ptr{nullptr};
+        uint64_t get_gid();
+        std::shared_ptr<base_ctx> ctx_ptr{nullptr};
         bool closed_flag{false};
         bool is_close{false};
         bool is_ready{false}; // will be setting true on notify app new_connection

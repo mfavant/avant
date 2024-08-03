@@ -53,7 +53,3 @@ time_t timer::get_expired_time() const
     return m_expired_time;
 }
 
-bool timer_comparator::operator()(std::shared_ptr<timer> a, std::shared_ptr<timer> b) const
-{
-    return a->get_expired_time() > b->get_expired_time();
-}

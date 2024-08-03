@@ -13,11 +13,13 @@ namespace avant
         class http_app
         {
         public:
-            // ctx created
-            static void on_ctx_create(avant::connection::http_ctx &ctx);
-
-            // socket and ssl ready
-            static void on_new_connection(avant::connection::http_ctx &ctx);
+            /**
+             * @brief TCP socket and SSL ready
+             *
+             * @param ctx
+             * @param is_keep_alive Is it triggered due to the reuse of the keep_alive connection
+             */
+            static void on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_alive);
 
             static void process_connection(avant::connection::http_ctx &ctx);
 

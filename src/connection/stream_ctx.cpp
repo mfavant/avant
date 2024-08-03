@@ -17,29 +17,19 @@ stream_ctx::~stream_ctx()
 
 void stream_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_obj)
 {
+    this->clear_app_layer_notified();
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
 
     bool err = false;
-
-    // notify app layer
-    {
-        try
-        {
-            app::stream_app::on_ctx_create(*this);
-        }
-        catch (const std::exception &e)
-        {
-            err = true;
-            LOG_ERROR(e.what());
-        }
-    }
 
     if (!err && !this->worker_ptr->use_ssl)
     {
         this->conn_ptr->is_ready = true;
         try
         {
+            this->set_app_layer_notified();
+            this->worker_ptr->mark_delete_timeout_timer(this->conn_ptr->get_gid());
             app::stream_app::on_new_connection(*this);
         }
         catch (const std::exception &e)
@@ -109,6 +99,8 @@ void stream_ctx::on_event(uint32_t event)
             bool err = false;
             try
             {
+                this->set_app_layer_notified();
+                this->worker_ptr->mark_delete_timeout_timer(this->conn_ptr->get_gid());
                 app::stream_app::on_new_connection(*this);
             }
             catch (const std::exception &e)

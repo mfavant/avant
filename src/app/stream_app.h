@@ -29,9 +29,6 @@ namespace avant
 
             static bool on_recved_packsize(avant::connection::stream_ctx &ctx, uint64_t size);
 
-            // ctx created
-            static void on_ctx_create(avant::connection::stream_ctx &ctx);
-
             // socket and ssl ready
             static void on_new_connection(avant::connection::stream_ctx &ctx);
 

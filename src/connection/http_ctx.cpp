@@ -105,6 +105,7 @@ http_ctx::~http_ctx()
 
 void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_obj, bool keep_alive)
 {
+    this->clear_app_layer_notified();
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
     this->url.clear();
@@ -134,25 +135,14 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
 
     bool err = false;
 
-    // notify app layer
-    {
-        try
-        {
-            app::http_app::on_ctx_create(*this);
-        }
-        catch (const std::exception &e)
-        {
-            err = true;
-            LOG_ERROR(e.what());
-        }
-    }
-
     if (!err && (!this->worker_ptr->use_ssl || this->keep_alive))
     {
         this->conn_ptr->is_ready = true;
         try
         {
-            app::http_app::on_new_connection(*this);
+            this->set_app_layer_notified();
+            this->worker_ptr->mark_delete_timeout_timer(this->get_conn_gid());
+            app::http_app::on_new_connection(*this, keep_alive);
         }
         catch (const std::exception &e)
         {
@@ -218,7 +208,9 @@ void http_ctx::on_event(uint32_t event)
             bool err = false;
             try
             {
-                app::http_app::on_new_connection(*this);
+                this->set_app_layer_notified();
+                this->worker_ptr->mark_delete_timeout_timer(this->conn_ptr->get_gid());
+                app::http_app::on_new_connection(*this, false);
             }
             catch (const std::exception &e)
             {

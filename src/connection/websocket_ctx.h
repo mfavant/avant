@@ -7,10 +7,11 @@
 #include <memory>
 #include <string>
 #include <map>
+#include "connection/base_ctx.h"
 
 namespace avant::connection
 {
-    class websocket_ctx
+    class websocket_ctx : public base_ctx
     {
     public:
         websocket_ctx();
@@ -19,9 +20,9 @@ namespace avant::connection
         // context create success
         void on_create(connection &conn_obj, workers::worker &worker_obj);
         // context destory
-        void on_close();
+        virtual void on_close() override;
 
-        void on_event(uint32_t event);
+        void on_event(uint32_t event) override;
 
         void add_header(const std::string &key, const std::string &value);
         int send_data(const std::string &data, bool flush = true);

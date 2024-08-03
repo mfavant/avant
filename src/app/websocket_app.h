@@ -53,9 +53,6 @@ namespace avant
 
             static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package);
 
-            // ctx created
-            static void on_ctx_create(avant::connection::websocket_ctx &ctx);
-
             // socket and ssl and websocket handshake ready
             static void on_new_connection(avant::connection::websocket_ctx &ctx);
 

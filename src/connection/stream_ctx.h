@@ -2,10 +2,11 @@
 
 #include "workers/worker.h"
 #include "connection/connection.h"
+#include "connection/base_ctx.h"
 
 namespace avant::connection
 {
-    class stream_ctx
+    class stream_ctx : public base_ctx
     {
     public:
         stream_ctx();
@@ -14,10 +15,10 @@ namespace avant::connection
         // context create success
         void on_create(connection &conn_obj, workers::worker &worker_obj);
         // context destory
-        void on_close();
+        virtual void on_close() override;
         int send_data(const std::string &data, bool flush = true);
 
-        void on_event(uint32_t event);
+        void on_event(uint32_t event) override;
 
     private:
         void try_send_flush();

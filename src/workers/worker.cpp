@@ -23,6 +23,7 @@
 using namespace avant::workers;
 using namespace avant::global;
 using namespace avant::proto;
+using namespace avant::utility;
 
 std::string worker::http_static_dir;
 
@@ -49,6 +50,10 @@ void worker::operator()()
     }
 
     hooks::init::on_worker_init(*this);
+
+    this->worker_time.update();
+    this->latest_tick_time = this->worker_time.get_seconds();
+
     int num = -1;
     while (true)
     {
@@ -70,11 +75,42 @@ void worker::operator()()
         {
             break;
         }
+
+        this->worker_time.update();
+        uint64_t now_time_stamp = this->worker_time.get_seconds();
+        std::unordered_set<uint64_t> timeout_fd_copy;
+
+        // conn timeout timer manager
+        {
+            if (this->latest_tick_time > now_time_stamp || now_time_stamp - this->latest_tick_time >= 1)
+            {
+                this->latest_tick_time = now_time_stamp;
+                this->conn_timeout_timer_manager.check_and_handle(now_time_stamp);
+                if (!this->timeout_fd.empty())
+                {
+                    for (auto fd : timeout_fd)
+                    {
+                        timeout_fd_copy.insert(fd);
+                        close_client_fd(fd);
+                    }
+                }
+                this->timeout_fd.clear();
+                this->conn_timeout_timer_manager.clean_up();
+            }
+        }
+
         hooks::tick::on_worker_tick(*this); // maybe change errno
 
         for (int i = 0; i < num; i++)
         {
             int evented_fd = this->epoller.m_events[i].data.fd;
+
+            if (timeout_fd_copy.find(evented_fd) != timeout_fd_copy.end())
+            {
+                LOG_DEBUG("fd %d already timeout, alreay closed", evented_fd);
+                continue;
+            }
+
             // main worker tunnel fd
             if (evented_fd == this->main_worker_tunnel->get_other())
             {
@@ -183,10 +219,21 @@ void worker::on_tunnel_event(uint32_t event)
     }
 }
 
+void worker::mark_delete_timeout_timer(uint64_t timer_id)
+{
+    this->conn_timeout_timer_manager.mark_delete(timer_id);
+}
+
 void worker::close_client_fd(int fd)
 {
-    if (this->worker_connection_mgr->get_conn(fd))
+    auto conn_ptr = this->worker_connection_mgr->get_conn(fd);
+    if (conn_ptr)
     {
+        // delete conn timeout timer
+        {
+            this->conn_timeout_timer_manager.mark_delete(conn_ptr->get_gid());
+        }
+
         this->epoller.del(fd, nullptr, 0);
         int iret = this->worker_connection_mgr->release_connection(fd);
         if (iret != 0)
@@ -203,23 +250,15 @@ void worker::close_client_fd(int fd)
 
 void worker::on_client_event(int fd, uint32_t event)
 {
-    if (this->type == task::task_type::HTTP_TASK)
+    auto conn = this->worker_connection_mgr->get_conn(fd);
+    if (!conn)
     {
-        on_client_event_http(fd, event);
-    }
-    else if (this->type == task::task_type::STREAM_TASK)
-    {
-        on_client_event_stream(fd, event);
-    }
-    else if (this->type == task::task_type::WEBSOCKET_TASK)
-    {
-        on_client_event_websocket(fd, event);
-    }
-    else
-    {
-        LOG_ERROR("worker undefine type");
+        LOG_ERROR("worker_connection_mgr->get_conn failed type %d", this->type);
         close_client_fd(fd);
+        return;
     }
+
+    conn->ctx_ptr->on_event(event);
 }
 
 void worker::try_send_flush_tunnel()
@@ -333,7 +372,7 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         {
         case task::task_type::HTTP_TASK:
         {
-            if (conn_ptr->is_ready && conn_ptr->http_ctx_ptr)
+            if (conn_ptr->is_ready && conn_ptr->ctx_ptr)
             {
                 LOG_ERROR("task type err");
             }
@@ -341,17 +380,19 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         }
         case task::task_type::STREAM_TASK:
         {
-            if (conn_ptr->is_ready && conn_ptr->stream_ctx_ptr) // is stream task,here is_ready important
+            if (conn_ptr->is_ready && conn_ptr->ctx_ptr) // is stream task,here is_ready important
             {
-                avant::app::stream_app::on_client_forward_message(*conn_ptr->stream_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
+                avant::connection::stream_ctx *stream_ctx_ptr = dynamic_cast<avant::connection::stream_ctx *>(conn_ptr->ctx_ptr.get());
+                avant::app::stream_app::on_client_forward_message(*stream_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
             }
             break;
         }
         case task::task_type::WEBSOCKET_TASK:
         {
-            if (conn_ptr->is_ready && conn_ptr->websocket_ctx_ptr)
+            if (conn_ptr->is_ready && conn_ptr->ctx_ptr)
             {
-                avant::app::websocket_app::on_client_forward_message(*conn_ptr->websocket_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
+                avant::connection::websocket_ctx *websocket_ctx_ptr = dynamic_cast<avant::connection::websocket_ctx *>(conn_ptr->ctx_ptr.get());
+                avant::app::websocket_app::on_client_forward_message(*websocket_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
             }
             break;
         }
@@ -493,49 +534,46 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
     bool create_conn_succ = false;
     if (this->type == task::task_type::HTTP_TASK)
     {
-        if (!conn->http_ctx_ptr)
+        if (!conn->ctx_ptr)
         {
-            std::shared_ptr<connection::http_ctx> new_ctx;
-            new_ctx.reset(new (std::nothrow) connection::http_ctx);
-            if (!new_ctx.get())
+            connection::http_ctx *new_ctx = new (std::nothrow) connection::http_ctx;
+            if (!new_ctx)
             {
                 LOG_ERROR("new connection::http_ctx failed");
                 close_client_fd(fd);
                 return;
             }
-            conn->http_ctx_ptr = new_ctx;
+            conn->ctx_ptr.reset(new_ctx);
         }
         create_conn_succ = true;
     }
     else if (this->type == task::task_type::STREAM_TASK)
     {
-        if (!conn->stream_ctx_ptr)
+        if (!conn->ctx_ptr)
         {
-            std::shared_ptr<connection::stream_ctx> new_ctx;
-            new_ctx.reset(new (std::nothrow) connection::stream_ctx);
+            connection::stream_ctx *new_ctx = new (std::nothrow) connection::stream_ctx;
             if (!new_ctx)
             {
                 LOG_ERROR("new connection::stream_ctx failed");
                 close_client_fd(fd);
                 return;
             }
-            conn->stream_ctx_ptr = new_ctx;
+            conn->ctx_ptr.reset(new_ctx);
         }
         create_conn_succ = true;
     }
     else if (this->type == task::task_type::WEBSOCKET_TASK)
     {
-        if (!conn->websocket_ctx_ptr)
+        if (!conn->ctx_ptr)
         {
-            std::shared_ptr<connection::websocket_ctx> new_ctx;
-            new_ctx.reset(new (std::nothrow) connection::websocket_ctx);
+            connection::websocket_ctx *new_ctx = new (std::nothrow) connection::websocket_ctx;
             if (!new_ctx)
             {
                 LOG_ERROR("new connection::websocket_ctx failed");
                 close_client_fd(fd);
                 return;
             }
-            conn->websocket_ctx_ptr = new_ctx;
+            conn->ctx_ptr.reset(new_ctx);
         }
         create_conn_succ = true;
     }
@@ -587,17 +625,19 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                 return;
             }
             bool ssl_err = false;
-            SSL *ssl_instance = SSL_new(this->ssl_context); // socket close auto free SSL Object
+            SSL *ssl_instance = SSL_new(this->ssl_context); // socket close auto free SSL Object, free in close_client_fd or socket_obj->close()
             if (!ssl_instance)
             {
                 ssl_err = true;
                 LOG_ERROR("SSL_new return NULL");
             }
+
             if (!ssl_err && 1 != SSL_set_fd(ssl_instance, fd))
             {
                 ssl_err = true;
                 LOG_ERROR("SSL_set_fd error %s", ERR_error_string(ERR_get_error(), nullptr));
             }
+
             if (!ssl_err && ssl_instance)
             {
                 conn->socket_obj.set_ssl_instance(ssl_instance);
@@ -611,56 +651,56 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
             }
         }
 
+        // creating a timeout timer for the connection
+        {
+            std::shared_ptr<avant::timer::timer> new_timeout_timer = std::make_shared<avant::timer::timer>(conn->get_gid(),
+                                                                                                           this->latest_tick_time,
+                                                                                                           1,
+                                                                                                           5, // timeout 5 s
+                                                                                                           [this, fd](avant::timer::timer &timer_instance) -> void
+                                                                                                           {
+                                                                                                               auto conn = this->worker_connection_mgr->get_conn_by_gid(timer_instance.get_id());
+                                                                                                               if (!conn)
+                                                                                                               {
+                                                                                                                   LOG_DEBUG("timer exe can not found conn fd %d gid %llu", fd, timer_instance.get_id());
+                                                                                                                   return;
+                                                                                                               }
+                                                                                                               if (conn->ctx_ptr->get_app_layer_notified())
+                                                                                                               {
+                                                                                                                   LOG_DEBUG("timer get_app_layer_notified true, fd %d timer gid %llu", fd, timer_instance.get_id());
+                                                                                                                   return;
+                                                                                                               }
+                                                                                                               this->timeout_fd.insert(fd);
+                                                                                                               LOG_ERROR("timeout fd %d timer gid %llu", fd, timer_instance.get_id());
+                                                                                                           });
+            if (new_timeout_timer == nullptr)
+            {
+                LOG_ERROR("create new_timeout_timer failed conn gid %llu", conn->get_gid());
+                close_client_fd(fd);
+                return;
+            }
+            if (nullptr == conn_timeout_timer_manager.add(new_timeout_timer))
+            {
+                LOG_ERROR("conn_timeout_timer_manager.add(new_timeout_timer) failed conn gid %llu", conn->get_gid());
+                close_client_fd(fd);
+                return;
+            }
+        }
+
         // triger context be created for connection
-        if (conn->http_ctx_ptr)
+        if (this->type == task::task_type::HTTP_TASK)
         {
-            conn->http_ctx_ptr->on_create(*conn, *this, false);
+            dynamic_cast<connection::http_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this, false);
         }
-        else if (conn->stream_ctx_ptr)
+        else if (this->type == task::task_type::STREAM_TASK)
         {
-            conn->stream_ctx_ptr->on_create(*conn, *this);
+            dynamic_cast<connection::stream_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this);
         }
-        else if (conn->websocket_ctx_ptr)
+        else if (this->type == task::task_type::WEBSOCKET_TASK)
         {
-            conn->websocket_ctx_ptr->on_create(*conn, *this);
+            dynamic_cast<connection::websocket_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this);
         }
     }
-}
-
-void worker::on_client_event_http(int fd, uint32_t event)
-{
-    auto conn = this->worker_connection_mgr->get_conn(fd);
-    if (!conn)
-    {
-        LOG_ERROR("worker_connection_mgr->get_conn failed");
-        close_client_fd(fd);
-        return;
-    }
-    conn->http_ctx_ptr->on_event(event);
-}
-
-void worker::on_client_event_stream(int fd, uint32_t event)
-{
-    auto conn = this->worker_connection_mgr->get_conn(fd);
-    if (!conn)
-    {
-        LOG_ERROR("worker_connection_mgr->get_conn failed");
-        close_client_fd(fd);
-        return;
-    }
-    conn->stream_ctx_ptr->on_event(event);
-}
-
-void worker::on_client_event_websocket(int fd, uint32_t event)
-{
-    auto conn = this->worker_connection_mgr->get_conn(fd);
-    if (!conn)
-    {
-        LOG_ERROR("worker_connection_mgr->get_conn failed");
-        close_client_fd(fd);
-        return;
-    }
-    conn->websocket_ctx_ptr->on_event(event);
 }
 
 int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package)

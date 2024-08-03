@@ -6,10 +6,11 @@
 #include <memory>
 #include <string>
 #include <map>
+#include "connection/base_ctx.h"
 
 namespace avant::connection
 {
-    class http_ctx
+    class http_ctx : public base_ctx
     {
     public:
         http_ctx();
@@ -18,9 +19,9 @@ namespace avant::connection
         // context create success
         void on_create(connection &conn_obj, workers::worker &worker_obj, bool keep_alive);
         // context destory
-        void on_close();
+        virtual void on_close() override;
 
-        void on_event(uint32_t event);
+        void on_event(uint32_t event) override;
 
         void set_recv_end(bool recv_end);
         bool get_recv_end();

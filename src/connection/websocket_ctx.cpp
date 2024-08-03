@@ -103,6 +103,7 @@ websocket_ctx::~websocket_ctx()
 // socket fd be created
 void websocket_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_obj)
 {
+    this->clear_app_layer_notified();
     this->conn_ptr = &conn_obj;
     this->worker_ptr = &worker_obj;
     this->url.clear();
@@ -120,28 +121,6 @@ void websocket_ctx::on_create(connection &conn_obj, avant::workers::worker &work
     this->ptr = nullptr;
     http_parser_init(&this->http_parser_obj, HTTP_REQUEST);
     this->http_parser_obj.data = this;
-
-    bool err = false;
-
-    // notify app layer
-    {
-        try
-        {
-            app::websocket_app::on_ctx_create(*this);
-        }
-        catch (const std::exception &e)
-        {
-            err = true;
-            LOG_ERROR(e.what());
-        }
-    }
-
-    if (err)
-    {
-        this->conn_ptr->is_close = true;
-        this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
-        return;
-    }
 }
 
 // socketobj connobj release
@@ -338,6 +317,8 @@ void websocket_ctx::on_event(uint32_t event)
                 bool err = false;
                 try
                 {
+                    this->set_app_layer_notified();
+                    this->worker_ptr->mark_delete_timeout_timer(this->conn_ptr->get_gid());
                     avant::app::websocket_app::on_new_connection(*this);
                 }
                 catch (const std::exception &e)

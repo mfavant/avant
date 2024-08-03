@@ -79,15 +79,10 @@ struct http_app_reponse
     }
 };
 
-// ctx created
-void http_app::on_ctx_create(avant::connection::http_ctx &ctx)
-{
-    // LOG_ERROR("http_app::on_ctx_create %llu", ctx.get_conn_gid());
-}
-
-void http_app::on_new_connection(avant::connection::http_ctx &ctx)
+void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_alive)
 {
     // send new_connection protocol to other thread
+#if 0
     {
         ProtoPackage package;
         ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
@@ -95,6 +90,7 @@ void http_app::on_new_connection(avant::connection::http_ctx &ctx)
         ctx.tunnel_forward(std::vector<int>{avant::global::tunnel_id::get().get_other_tunnel_id()},
                            avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION));
     }
+#endif
     // LOG_ERROR("http_app new socket gid %llu", ctx.get_conn_gid());
 }
 

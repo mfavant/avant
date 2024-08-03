@@ -28,22 +28,20 @@ void connection::on_alloc(int fd, uint64_t gid)
 
 void connection::on_release()
 {
-    if (this->http_ctx_ptr)
+    if (this->ctx_ptr.get())
     {
-        this->http_ctx_ptr->on_close();
+        this->ctx_ptr->on_close();
     }
-    if (this->stream_ctx_ptr)
-    {
-        this->stream_ctx_ptr->on_close();
-    }
-    if (this->websocket_ctx_ptr)
-    {
-        this->websocket_ctx_ptr->on_close();
-    }
+
     this->recv_buffer.clear();
     this->send_buffer.clear();
     this->socket_obj.close();
     this->closed_flag = true;
     this->fd = -1;
     this->is_ready = false;
+}
+
+uint64_t connection::get_gid()
+{
+    return this->gid;
 }

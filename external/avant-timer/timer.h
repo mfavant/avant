@@ -34,11 +34,5 @@ namespace avant
             timer_callback m_callback{nullptr}; // 回调函数
             uint64_t m_interval{0};             // 时间间隔
         };
-
-        class timer_comparator
-        {
-        public:
-            bool operator()(std::shared_ptr<timer> a, std::shared_ptr<timer> b) const;
-        };
     }
 }

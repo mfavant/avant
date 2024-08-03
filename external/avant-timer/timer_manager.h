@@ -1,9 +1,8 @@
 #pragma once
-#include <queue>
-#include <vector>
-#include <list>
 #include <memory>
 #include "timer.h"
+#include <unordered_set>
+#include <map>
 
 namespace avant
 {
@@ -23,8 +22,12 @@ namespace avant
              */
             void check_and_handle(uint64_t now_time_stamp);
 
+            void mark_delete(uint64_t timer_id);
+            void clean_up();
+
         private:
-            std::priority_queue<std::shared_ptr<timer>, std::vector<std::shared_ptr<timer>>, timer_comparator> m_queue;
+            std::multimap<uint64_t, std::shared_ptr<timer>> m_queue;
+            std::unordered_set<uint64_t> m_marked_delete;
         };
     }
 }
