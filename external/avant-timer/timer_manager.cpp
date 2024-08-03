@@ -4,55 +4,35 @@
 
 using namespace avant::timer;
 
-bool timer_manager::TimerComparator::operator()(const timer *a, const timer *b) const
-{
-    return a->get_expired_time() > b->get_expired_time();
-}
-
 timer_manager::timer_manager()
 {
 }
 
 timer_manager::~timer_manager()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    while (!m_queue.empty())
-    {
-        timer *timer_ptr = m_queue.top();
-        delete timer_ptr;
-        m_queue.pop();
-    }
 }
 
-int64_t timer_manager::add(int32_t repeated_times, int64_t interval, const timer_callback callback)
+std::shared_ptr<timer> timer_manager::add(std::shared_ptr<timer> new_timer)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    timer *timer_ptr = new timer(repeated_times, interval, callback);
-    if (timer_ptr == nullptr)
+    if (new_timer == nullptr)
     {
-        return -1;
+        return nullptr;
     }
-    m_queue.push(timer_ptr);
-    return timer_ptr->get_id();
+    m_queue.push(new_timer);
+    return new_timer;
 }
 
-void timer_manager::check_and_handle()
+void timer_manager::check_and_handle(uint64_t now_time_stamp)
 {
-    time_t now = ::time(nullptr);
-    std::lock_guard<std::mutex> lock(m_mutex);
-    std::list<timer *> m_list;
+    std::list<std::shared_ptr<timer>> m_list;
     while (!m_queue.empty())
     {
         auto ptr = m_queue.top();
-        if (ptr->is_expired(now))
+        if (ptr->is_expired(now_time_stamp))
         {
             ptr->run();
             int32_t times = ptr->get_repeated_times();
-            if (times == 0)
-            {
-                delete ptr;
-            }
-            else
+            if (times != 0)
             {
                 m_list.push_back(ptr);
             }

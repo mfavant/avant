@@ -2,6 +2,7 @@
 #include <thread>
 #include <memory>
 #include <unistd.h>
+#include <ctime>
 
 #include "../external/avant-timer/timer.h"
 #include "../external/avant-timer/timer_manager.h"
@@ -11,45 +12,50 @@ using namespace avant::timer;
 
 int main(int argc, char **argv)
 {
-    auto m_manager = make_shared<timer_manager>();
-    m_manager->add(-1, 1,
-                   []() -> void
-                   {
-                       cout << "-1 1" << endl;
-                   });
-    m_manager->add(3, 3,
-                   []() -> void
-                   {
-                       cout << "3 3" << endl;
-                   });
-    int loop_timer_id = m_manager->add(1, 5,
-                                       []() -> void
-                                       {
-                                           cout << "1 5" << endl;
-                                       });
+    std::shared_ptr<timer_manager> manager_instance = std::make_shared<timer_manager>();
+
+    uint64_t timer_id_gen = 0;
+    uint64_t now_time_stamp = ::time(nullptr);
+
+    {
+        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, -1, 1, []() -> void
+                                                                   { std::cout << "-1 1" << std::endl; });
+        manager_instance->add(new_timer);
+    }
+
+    {
+        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 3, 3, []() -> void
+                                                                   { std::cout << "3 3" << std::endl; });
+        manager_instance->add(new_timer);
+    }
+
+    {
+        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 1, 5, []() -> void
+                                                                   { std::cout << "1 5" << std::endl; });
+        manager_instance->add(new_timer);
+    }
+
     thread m_thread(
         [&]() -> void
         {
+            for (int i = 0; i < 10; i++)
+            {
+                std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 1, i, [i]() -> void
+                                                                           { std::cout << "1 " << i << std::endl; });
+                manager_instance->add(new_timer);
+            }
             while (1)
             {
                 sleep(1); // can use select epoll nanosleep etc...
-                m_manager->check_and_handle();
+                uint64_t now_time_stamp = ::time(nullptr);
+                manager_instance->check_and_handle(now_time_stamp);
             }
         });
 
     m_thread.detach();
 
-    for (int i = 0; i < 10; i++)
-    {
-        m_manager->add(1, i,
-                       [i]() -> void
-                       {
-                           cout << "1 " << i << endl;
-                       });
-    }
-
     sleep(100);
     return 0;
 }
 
-//  g++ timer.test.cpp ../external/avant-timer/timer.cpp ../external/avant-timer/timer_manager.cpp - o timer.test.exe - I "../src/" - lpthread
+//  g++ timer.test.cpp ../external/avant-timer/timer.cpp ../external/avant-timer/timer_manager.cpp -o timer.test.exe -I"../src/" -lpthread
