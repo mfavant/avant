@@ -34,7 +34,7 @@ void timer::run()
 {
     if (m_repeated_times == -1 || m_repeated_times >= 1)
     {
-        m_callback();
+        m_callback(*this);
     }
     if (m_repeated_times >= 1)
     {

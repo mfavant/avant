@@ -23,20 +23,20 @@ int main(int argc, char **argv)
     uint64_t now_time_stamp = ::time(nullptr);
 
     {
-        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, -1, 1, []() -> void
-                                                                   { std::cout << "-1 1" << std::endl; });
+        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, -1, 1, [](timer &self) -> void
+                                                                   { std::cout << self.get_id() << ">>" << "-1 1" << std::endl; });
         manager_instance->add(new_timer);
     }
 
     {
-        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 3, 3, []() -> void
-                                                                   { std::cout << "3 3" << std::endl; });
+        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 3, 3, [](timer &self) -> void
+                                                                   { std::cout << self.get_id() << ">>" << "3 3" << std::endl; });
         manager_instance->add(new_timer);
     }
 
     {
-        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 1, 5, []() -> void
-                                                                   { std::cout << "1 5" << std::endl; });
+        std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 1, 5, [](timer &self) -> void
+                                                                   { std::cout << self.get_id() << ">>" << "1 5" << std::endl; });
         manager_instance->add(new_timer);
     }
 
@@ -45,8 +45,8 @@ int main(int argc, char **argv)
         {
             for (int i = 0; i < 10; i++)
             {
-                std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 1, i, [i]() -> void
-                                                                           { std::cout << "1 " << i << std::endl; });
+                std::shared_ptr<timer> new_timer = std::make_shared<timer>(timer_id_gen++, now_time_stamp, 1, i, [i](timer &self) -> void
+                                                                           { std::cout << self.get_id() << ">>" << "1 " << i << std::endl; });
                 manager_instance->add(new_timer);
             }
             while (1)

@@ -7,7 +7,9 @@ namespace avant
 {
     namespace timer
     {
-        using timer_callback = std::function<void()>;
+        class timer;
+        using timer_callback = std::function<void(timer &)>;
+
         class timer
         {
         public:
