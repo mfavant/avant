@@ -1,3 +1,10 @@
+// homer::Url v0.3.0
+// MIT License
+// https://github.com/homer6/url
+
+// This class takes inspiration and some source code from
+// https://github.com/chriskohlhoff/urdl/blob/master/include/urdl/url.hpp
+
 #pragma once
 #include <string>
 #include <string_view>

@@ -106,6 +106,6 @@ wrk -c {{connection_num}} -t {{threads}} -d60s --header "Connection: keep-alive"
 
 ## Third-Party
 
-1、[@http-parser](https://github.com/nodejs/http-parser)  2、[@lua](https://github.com/lua/lua)  
-3、[@protobuffer](https://github.com/protocolbuffers/protobuf)  4、[@openssl](https://github.com/openssl/openssl)  
-5、[@zlib](https://github.com/madler/zlib)  
+1、[@nodejs/http-parser](https://github.com/nodejs/http-parser)  2、[@lua/lua](https://github.com/lua/lua)  
+3、[@protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf)  4、[@openssl/openssl](https://github.com/openssl/openssl)  
+5、[@madler/zlib](https://github.com/madler/zlib)  6、[@homer6/url](https://github.com/homer6/url)
