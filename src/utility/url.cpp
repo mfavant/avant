@@ -1,6 +1,9 @@
 #include "utility/url.h"
-#include <iomanip>
-#include <sstream>
+#include <cstring>
+#include <cctype>
+#include <cstdlib>
+#include <algorithm>
+#include <stdexcept>
 
 using avant::utility::url;
 
