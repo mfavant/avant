@@ -123,7 +123,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
         }
 
-#if 1
+#if 0
         if (exist_keep_live)
         {
             ctx.keep_alive = true;
@@ -141,7 +141,14 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         }
 #endif
 
-        string url = utility::url::decode(ctx.url);
+        std::string url;
+        if (!utility::url::unescape_path(ctx.url, url))
+        {
+            LOG_ERROR("url::unescape_path false %s", ctx.url.c_str());
+            ctx.set_response_end(true);
+            return;
+        }
+        // LOG_ERROR("%s", url.c_str());
         auto find_res = url.find("..");
         if (std::string::npos != find_res)
         {
@@ -241,7 +248,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 for (const auto &dir_entry : fs::directory_iterator(t_path))
                 {
                     std::string sub_path = dir_entry.path().string().substr(prefix.size());
-                    a_tags.push_back(html_loader::a_tag(utility::url::encode(sub_path), sub_path));
+                    a_tags.push_back(html_loader::a_tag(sub_path, sub_path));
                 }
             }
             catch (const std::filesystem::filesystem_error &ex)

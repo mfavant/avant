@@ -37,8 +37,9 @@ namespace avant::utility
         std::string to_string() const;
         explicit operator std::string() const;
 
-    protected:
         static bool unescape_path(const std::string &in, std::string &out);
+
+    protected:
         std::string_view capture_up_to(const std::string_view right_delimiter, const std::string &error_message = "");
         bool move_before(const std::string_view right_delimiter);
         bool exists_forward(const std::string_view right_delimiter);
@@ -47,6 +48,7 @@ namespace avant::utility
         std::string scheme;
         std::string authority;
         std::string user_info;
+        std::string username;
         std::string password;
         std::string host;
         std::string port;
@@ -63,9 +65,5 @@ namespace avant::utility
         size_t left_position{0};
         size_t right_position{0};
         std::string_view parse_target;
-
-    public:
-        static std::string decode(const std::string &str);
-        static std::string encode(const std::string &str);
     };
 }
