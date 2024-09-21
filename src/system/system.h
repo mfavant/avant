@@ -13,6 +13,7 @@ namespace avant::system
         std::string get_root_path(); // get executable file location path
         static void signal_term(int sig);
         static void signal_usr1(int sig);
+        static void signal_int(int sig);
 
     private:
         int set_sys_limits();

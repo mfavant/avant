@@ -8,6 +8,7 @@
 #include <atomic>
 #include <unordered_map>
 #include <vector>
+#include <avant-json/json.h>
 
 #include "workers/worker.h"
 #include "workers/other.h"
@@ -54,6 +55,8 @@ namespace avant::server
                     std::string task_type,
                     std::string http_static_dir,
                     std::string lua_dir,
+                    size_t max_ipc_conn_num,
+                    std::string ipc_json_path,
                     std::string crt_pem = "",
                     std::string key_pem = "",
                     bool use_ssl = false);
@@ -63,6 +66,10 @@ namespace avant::server
         {
             return this->m_worker_cnt;
         }
+        inline const avant::json::json &get_ipc_json()
+        {
+            return this->m_ipc_json;
+        }
 
         void cmd_reload();
 
@@ -70,6 +77,8 @@ namespace avant::server
         bool on_stop();
         bool is_stop();
         void on_start();
+
+        void on_start_load_ipc_json_file();
 
         void set_use_ssl(bool use_ssl);
         void set_crt_pem(std::string set_crt_pem);
@@ -88,6 +97,9 @@ namespace avant::server
         {
             m_app_id = app_id;
         }
+        void set_max_ipc_conn_num(size_t max_ipc_conn_num);
+        void set_ipc_json_path(std::string ipc_json_path);
+
         void set_listen_info(const std::string &ip, int port);
         uint64_t gen_gid(uint64_t time_seconds, uint64_t gid_seq);
 
@@ -117,6 +129,10 @@ namespace avant::server
         bool m_use_ssl{false};
         std::string m_crt_pem{};
         std::string m_key_pem{};
+        size_t m_max_ipc_conn_num{0};
+        std::string m_ipc_json_path{};
+        avant::json::json m_ipc_json;
+
         volatile bool stop_flag{false};
 
         SSL_CTX *m_ssl_context{nullptr};

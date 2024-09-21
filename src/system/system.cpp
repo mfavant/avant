@@ -19,7 +19,7 @@ using namespace avant::server;
 using namespace avant::system;
 using namespace avant::inifile;
 using namespace avant::log;
-using namespace std;
+using std::string;
 
 int system::init()
 {
@@ -43,6 +43,9 @@ int system::init()
     const int use_ssl = (*ini)["server"]["use_ssl"];
 
     const int daemon = (*ini)["server"]["daemon"];
+
+    const int max_ipc_conn_num = (*ini)["ipc"]["max_ipc_conn_num"];
+    const string ipc_json_path = (*ini)["ipc"]["ipc_json_path"];
 
     // daemon
     if (daemon)
@@ -81,6 +84,8 @@ int system::init()
                      task_type,
                      http_static_dir,
                      lua_dir,
+                     max_ipc_conn_num,
+                     ipc_json_path,
                      crt_pem,
                      key_pem,
                      use_ssl);
@@ -140,7 +145,7 @@ void system::signal_conf()
 {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, SIG_IGN);
-    // signal(SIGINT, );
+    signal(SIGINT, &system::signal_int);
     signal(SIGTERM, &system::signal_term); // to call server::to_stop
     signal(SIGSTOP, &system::signal_term);
     signal(SIGKILL, &system::signal_term);
@@ -184,4 +189,15 @@ void system::signal_term(int sig)
 void system::signal_usr1(int sig)
 {
     singleton<server::server>::instance()->cmd_reload();
+}
+
+void system::signal_int(int sig)
+{
+    inifile::inifile *ini = singleton<inifile::inifile>::instance();
+    const int daemon = (*ini)["server"]["daemon"];
+
+    if (!daemon)
+    {
+        singleton<server::server>::instance()->to_stop();
+    }
 }

@@ -21,6 +21,10 @@
 #include "global/tunnel_id.h"
 #include "proto/proto_util.h"
 #include "connection/websocket_ctx.h"
+#include <filesystem>
+#include <sstream>
+#include <fstream>
+#include <stdexcept>
 
 using namespace std;
 using namespace avant::server;
@@ -154,6 +158,16 @@ void server::set_http_static_dir(std::string http_static_dir)
     m_http_static_dir = http_static_dir;
 }
 
+void server::set_max_ipc_conn_num(size_t max_ipc_conn_num)
+{
+    this->m_max_ipc_conn_num = max_ipc_conn_num;
+}
+
+void server::set_ipc_json_path(std::string ipc_json_path)
+{
+    this->m_ipc_json_path = ipc_json_path;
+}
+
 const std::string &server::get_http_static_dir()
 {
     return m_http_static_dir;
@@ -214,6 +228,8 @@ void server::config(const std::string &app_id,
                     std::string task_type,
                     std::string http_static_dir,
                     std::string lua_dir,
+                    size_t max_ipc_conn_num,
+                    std::string ipc_json_path,
                     std::string crt_pem /*= ""*/,
                     std::string key_pem /*= ""*/,
                     bool use_ssl /*= false*/)
@@ -230,6 +246,8 @@ void server::config(const std::string &app_id,
     set_crt_pem(crt_pem);
     set_key_pem(key_pem);
     set_use_ssl(use_ssl);
+    set_max_ipc_conn_num(max_ipc_conn_num);
+    set_ipc_json_path(ipc_json_path);
 }
 
 bool server::is_stop()
@@ -266,8 +284,38 @@ SSL_CTX *server::get_ssl_ctx()
     return m_ssl_context;
 }
 
+void server::on_start_load_ipc_json_file()
+{
+    // load ipc json
+    {
+        const std::filesystem::path file_path(this->m_ipc_json_path);
+        std::ifstream file_stream(file_path);
+        if (!file_stream)
+        {
+            LOG_ERROR("could not open file %d", this->m_ipc_json_path.c_str());
+            throw std::runtime_error(std::string("could not open file ") + this->m_ipc_json_path);
+        }
+        std::stringstream buffer;
+        buffer << file_stream.rdbuf();
+        this->m_ipc_json.parse(buffer.str());
+    }
+    auto json_iter = this->m_ipc_json.begin();
+    int counter = 0;
+    for (; json_iter != this->m_ipc_json.end(); json_iter++)
+    {
+        auto &json_item = *json_iter;
+        std::string app_id = json_item["app_id"].as_string();
+        std::string ip = json_item["ip"].as_string();
+        int port = json_item["port"].as_integer();
+        LOG_ERROR("IPC JSON %d app_id[%s] ip[%s] port[%d]", counter++, app_id.c_str(), ip.c_str(), port);
+    }
+}
+
 void server::on_start()
 {
+    // load ipc json
+    on_start_load_ipc_json_file();
+
     // time
     utility::time server_time;
     server_time.update();
