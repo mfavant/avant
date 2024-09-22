@@ -16,6 +16,7 @@
 #include "event/event_poller.h"
 #include "socket/socket_pair.h"
 #include "connection/connection_mgr.h"
+#include "socket/server_socket.h"
 
 #include "proto_res/proto_cmd.pb.h"
 #include "proto_res/proto_message_head.pb.h"
@@ -136,6 +137,7 @@ namespace avant::server
         volatile bool stop_flag{false};
 
         SSL_CTX *m_ssl_context{nullptr};
+        std::shared_ptr<avant::socket::server_socket> m_server_listen_socket;
         avant::workers::worker *m_workers{nullptr};
         avant::workers::other *m_other{nullptr};
 

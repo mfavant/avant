@@ -21,6 +21,57 @@ other::~other()
 {
 }
 
+int other::init_call_by_server()
+{
+    // Find the self configuration of this process from IPC JSON
+    bool found = false;
+    for (auto &item : this->ipc_json)
+    {
+        if (item["app_id"] == this->app_id)
+        {
+            found = true;
+            this->ipc_self_json = item;
+            break;
+        }
+    }
+
+    if (false == found)
+    {
+        LOG_ERROR("this process json app_id %s not be found", this->app_id.c_str());
+        return -1;
+    }
+
+    std::string app_id = this->ipc_self_json["app_id"].as_string();
+    std::string ip = this->ipc_self_json["ip"].as_string();
+    int port = this->ipc_self_json["port"].as_integer();
+
+    LOG_ERROR("ipc self json app_id[%s] ip[%s] port[%d]", app_id.c_str(), ip.c_str(), port);
+
+    // Create IPC listen socket
+    avant::socket::server_socket *ipc_listen_socket = new (std::nothrow) avant::socket::server_socket(ip, port, this->max_ipc_conn_num);
+    if (!ipc_listen_socket)
+    {
+        LOG_ERROR("new ipc_listen_socket failed");
+        return -2;
+    }
+
+    this->ipc_listen_socket.reset(ipc_listen_socket);
+
+    if (0 > this->ipc_listen_socket->get_fd())
+    {
+        LOG_ERROR("ipc_listen_socket fd less 0");
+        return -3;
+    }
+
+    if (0 != this->epoller.add(this->ipc_listen_socket->get_fd(), nullptr, event::event_poller::RE, false))
+    {
+        LOG_ERROR("ipc_listen_socket epoller add failed");
+        return -4;
+    }
+
+    return 0;
+}
+
 void other::operator()()
 {
     LOG_ERROR("other::operator() start");
@@ -65,6 +116,10 @@ void other::operator()()
             if (evented_fd == this->main_other_tunnel->get_other())
             {
                 on_tunnel_event(this->epoller.m_events[i].events);
+            }
+            else if (evented_fd == this->ipc_listen_socket->get_fd())
+            {
+                on_ipc_listen_event(this->epoller.m_events[i].events);
             }
             // default unknow fd
             else
@@ -270,6 +325,21 @@ void other::on_tunnel_event(uint32_t event)
     {
         try_send_flush_tunnel();
         break; // important
+    }
+}
+
+void other::on_ipc_listen_event(uint32_t event)
+{
+    LOG_DEBUG("on_ipc_listen_event");
+    for (size_t i = 0; i < this->accept_per_tick; i++)
+    {
+        int new_passive_ipc_client_fd = this->ipc_listen_socket->accept();
+        if (new_passive_ipc_client_fd < 0)
+        {
+            break;
+        }
+        LOG_ERROR("new_passive_ipc_client_fd %d", new_passive_ipc_client_fd);
+        ::close(new_passive_ipc_client_fd);
     }
 }
 

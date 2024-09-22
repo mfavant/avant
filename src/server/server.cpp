@@ -493,9 +493,12 @@ void server::on_start()
             LOG_ERROR("new workers::other failed");
             return;
         }
-        m_other->max_ipc_conn_num = 1 + 1;
-        m_other->epoll_wait_time = 5;
+        m_other->max_ipc_conn_num = this->m_max_ipc_conn_num;
+        m_other->epoll_wait_time = this->m_epoll_wait_time;
         m_other->main_other_tunnel = &m_main_other_tunnel;
+        m_other->ipc_json = this->m_ipc_json;
+        m_other->app_id = this->m_app_id;
+        m_other->accept_per_tick = this->m_accept_per_tick;
 
         connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
         if (!new_connection_mgr)
@@ -537,18 +540,32 @@ void server::on_start()
         tunnel_conn->recv_buffer.reserve(10485760); // 10MB
         tunnel_conn->send_buffer.reserve(10485760); // 10MB
         tunnel_conn->is_ready = true;
+
+        iret = m_other->init_call_by_server();
+        if (iret != 0)
+        {
+            LOG_ERROR("m_other->init_call_by_server() return %d", iret);
+            return;
+        }
     }
 
     // listen_socket init
-    server_socket listen_socket(m_ip, m_port, m_max_client_cnt);
     {
+        server_socket *listen_socket = new (std::nothrow) server_socket(m_ip, m_port, m_max_client_cnt);
+        if (!listen_socket)
+        {
+            LOG_ERROR("new listen socket object failed");
+            return;
+        }
+        this->m_server_listen_socket.reset(listen_socket);
+
         LOG_ERROR("IP %s PORT %d", m_ip.c_str(), m_port);
-        if (0 > listen_socket.get_fd())
+        if (0 > this->m_server_listen_socket->get_fd())
         {
             LOG_ERROR("listen_socket failed get_fd() < 0");
             return;
         }
-        if (0 != m_epoller.add(listen_socket.get_fd(), nullptr, event::event_poller::RWE, false))
+        if (0 != m_epoller.add(this->m_server_listen_socket->get_fd(), nullptr, event::event_poller::RWE, false))
         {
             LOG_ERROR("listen_socket m_epoller add failed");
             return;
@@ -647,13 +664,13 @@ void server::on_start()
                 int evented_fd = m_epoller.m_events[i].data.fd;
                 uint32_t event_come = m_epoller.m_events[i].events;
                 // listen_fd
-                if (evented_fd == listen_socket.get_fd())
+                if (evented_fd == this->m_server_listen_socket->get_fd())
                 {
                     std::vector<int> clients_fd;
                     std::vector<uint64_t> gids;
                     for (size_t loop = 0; loop < m_accept_per_tick; loop++)
                     {
-                        int new_client_fd = listen_socket.accept();
+                        int new_client_fd = this->m_server_listen_socket->accept();
                         if (new_client_fd < 0)
                         {
                             break;
