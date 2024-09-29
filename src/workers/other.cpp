@@ -7,11 +7,13 @@
 #include "hooks/tick.h"
 #include "app/other_app.h"
 #include "global/tunnel_id.h"
+#include "connection/ipc_stream_ctx.h"
 #include <pthread.h>
 #include <signal.h>
 
 using namespace avant::workers;
 using namespace avant::global;
+using namespace avant::connection;
 
 other::other()
 {
@@ -135,6 +137,10 @@ void other::operator()()
             else if (evented_fd == this->ipc_listen_socket->get_fd())
             {
                 on_ipc_listen_event(this->epoller.m_events[i].events);
+            }
+            else if (this->ipc_connection_mgr->get_conn(evented_fd))
+            {
+                on_ipc_client_event(evented_fd, this->epoller.m_events[i].events);
             }
             // default unknow fd
             else
@@ -377,15 +383,108 @@ uint64_t other::other_gen_gid()
 
 void other::on_ipc_listen_event(uint32_t event)
 {
-    LOG_DEBUG("on_ipc_listen_event");
     for (size_t i = 0; i < this->accept_per_tick; i++)
     {
-        int new_passive_ipc_client_fd = this->ipc_listen_socket->accept();
-        if (new_passive_ipc_client_fd < 0)
+        int new_ipc_client_fd = this->ipc_listen_socket->accept();
+        if (new_ipc_client_fd < 0)
         {
             break;
         }
-        LOG_ERROR("new_passive_ipc_client_fd %d other_gid %llu", new_passive_ipc_client_fd, other_gen_gid());
-        ::close(new_passive_ipc_client_fd);
+        on_new_ipc_client_fd(new_ipc_client_fd, other_gen_gid());
     }
+}
+
+void other::close_ipc_client_fd(int fd)
+{
+    auto conn_ptr = this->ipc_connection_mgr->get_conn(fd);
+    if (conn_ptr)
+    {
+        this->epoller.del(fd, nullptr, 0);
+        int iret = this->ipc_connection_mgr->release_connection(fd);
+        if (iret != 0)
+        {
+            LOG_ERROR("ipc_connection_mgr->release_connection(%d) failed", fd);
+        }
+    }
+    else
+    {
+        LOG_ERROR("worker close_client_fd conn_ptr is null, ::close %d", fd);
+        ::close(fd);
+    }
+}
+
+void other::on_new_ipc_client_fd(int fd, uint64_t gid)
+{
+    if (fd < 0)
+    {
+        LOG_ERROR("other::on_new_ipc_client_fd fd %d < 0", fd);
+        return;
+    }
+
+    int iret = this->ipc_connection_mgr->alloc_connection(fd, gid);
+    if (iret != 0)
+    {
+        LOG_ERROR("ipc_connection_mgr alloc_connection(%d,%llu) failed, iret %d", fd, gid, iret);
+        close_ipc_client_fd(fd);
+        return;
+    }
+
+    avant::connection::connection *ipc_conn = this->ipc_connection_mgr->get_conn(fd);
+    if (!ipc_conn)
+    {
+        LOG_ERROR("ipc_connection_mgr->get_conn(%d) failed", fd);
+        close_ipc_client_fd(fd);
+        return;
+    }
+
+    if (!ipc_conn->ctx_ptr)
+    {
+        connection::ipc_stream_ctx *new_ctx = new (std::nothrow) connection::ipc_stream_ctx;
+        if (!new_ctx)
+        {
+            LOG_ERROR("new connection::ipc_stream_ctx failed");
+            close_ipc_client_fd(fd);
+            return;
+        }
+        ipc_conn->ctx_ptr.reset(new_ctx);
+    }
+
+    if (!dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get()))
+    {
+        LOG_ERROR("!dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get())");
+        close_ipc_client_fd(fd);
+        return;
+    }
+
+    {
+        ipc_conn->socket_obj.set_fd(fd);
+        ipc_conn->socket_obj.close_callback = nullptr;
+        ipc_conn->socket_obj.set_non_blocking();
+        ipc_conn->socket_obj.set_linger(false, 0);
+        ipc_conn->socket_obj.set_send_buffer(65536);
+        ipc_conn->socket_obj.set_recv_buffer(65536);
+
+        iret = this->epoller.add(fd, nullptr, event::event_poller::RWE, false);
+        if (iret != 0)
+        {
+            LOG_ERROR("this->epoller.add ipc client fd failed");
+            close_ipc_client_fd(fd);
+            return;
+        }
+    }
+
+    dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get())->on_create(*ipc_conn, *this);
+}
+
+void other::on_ipc_client_event(int fd, uint32_t event)
+{
+    auto conn = this->ipc_connection_mgr->get_conn(fd);
+    if (!conn)
+    {
+        LOG_ERROR("ipc_connection_mgr->get_conn failed fd %d", fd);
+        close_ipc_client_fd(fd);
+        return;
+    }
+
+    conn->ctx_ptr->on_event(event);
 }

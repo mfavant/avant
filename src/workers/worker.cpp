@@ -243,6 +243,7 @@ void worker::close_client_fd(int fd)
     }
     else
     {
+        LOG_ERROR("worker close_client_fd conn_ptr is null, ::close %d", fd);
         ::close(fd);
     }
     this->curr_connection_num->fetch_sub(1);
@@ -511,6 +512,12 @@ void worker::on_tunnel_process(ProtoPackage &message)
 
 void worker::on_new_client_fd(int fd, uint64_t gid)
 {
+    if (fd < 0)
+    {
+        LOG_ERROR("worker::on_new_client_fd fd %d < 0", fd);
+        return;
+    }
+
     // create new conn
     int iret = this->worker_connection_mgr->alloc_connection(fd, gid);
     if (iret != 0)

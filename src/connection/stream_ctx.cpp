@@ -42,7 +42,7 @@ void stream_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_
     if (err)
     {
         this->conn_ptr->is_close = true;
-        this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
+        event_mod(nullptr, event::event_poller::RWE, false);
         return;
     }
 }
@@ -111,14 +111,14 @@ void stream_ctx::on_event(uint32_t event)
             if (err)
             {
                 conn_ptr->is_close = true;
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                event_mod(nullptr, event::event_poller::RWE, false);
                 return;
             }
         }
         else if (0 == ssl_status)
         {
             // need more data or space
-            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+            event_mod(nullptr, event::event_poller::RWE, false);
             return;
         }
         else
@@ -127,19 +127,19 @@ void stream_ctx::on_event(uint32_t event)
             if (ssl_error == SSL_ERROR_WANT_READ)
             {
                 // need more data or space
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
+                event_mod(nullptr, event::event_poller::RE, false);
                 return;
             }
             else if (ssl_error == SSL_ERROR_WANT_WRITE)
             {
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                event_mod(nullptr, event::event_poller::RWE, false);
                 return;
             }
             else
             {
                 LOG_ERROR("SSL_accept ssl_status[%d] error: %s", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
                 conn_ptr->is_close = true;
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                event_mod(nullptr, event::event_poller::RWE, false);
                 return;
             }
         }
@@ -174,7 +174,7 @@ void stream_ctx::on_event(uint32_t event)
             else
             {
                 conn_ptr->is_close = true;
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                event_mod(nullptr, event::event_poller::RWE, false);
                 return;
             }
         }
@@ -198,7 +198,7 @@ void stream_ctx::on_event(uint32_t event)
     if (err)
     {
         conn_ptr->is_close = true;
-        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+        event_mod(nullptr, event::event_poller::RWE, false);
         return;
     }
 
@@ -218,7 +218,7 @@ void stream_ctx::try_send_flush()
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (conn_ptr->send_buffer.empty())
     {
-        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
+        event_mod(nullptr, event::event_poller::RE, false);
         return;
     }
     while (!conn_ptr->send_buffer.empty())
@@ -236,7 +236,7 @@ void stream_ctx::try_send_flush()
                 // LOG_ERROR("stream ctx client sock send data oper_errno %d", oper_errno);
                 conn_ptr->is_close = true;
             }
-            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+            event_mod(nullptr, event::event_poller::RWE, false);
             break;
         }
     }
@@ -264,14 +264,14 @@ int stream_ctx::send_data(const std::string &data, bool flush /*= true*/)
     }
     else
     {
-        this->worker_ptr->epoller.mod(this->conn_ptr->socket_obj.get_fd(), nullptr, event::event_poller::RWE, false);
+        event_mod(nullptr, event::event_poller::RWE, false);
     }
     return 0;
 }
 
 uint64_t stream_ctx::get_conn_gid()
 {
-    return this->conn_ptr->gid;
+    return this->conn_ptr->get_gid();
 }
 
 size_t stream_ctx::get_recv_buffer_size()

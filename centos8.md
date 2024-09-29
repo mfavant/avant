@@ -15,6 +15,8 @@ cd avant
 cd protocol
 make
 cd ..
-cmake .
+mkdir build
+cd build
+cmake ..
 make -j4
 ```

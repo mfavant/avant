@@ -24,6 +24,7 @@ namespace avant::workers
 
     public:
         int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);
+        void close_ipc_client_fd(int fd);
 
     private:
         void try_send_flush_tunnel();
@@ -32,6 +33,9 @@ namespace avant::workers
         void on_tunnel_process(ProtoPackage &message);
 
         uint64_t other_gen_gid();
+        void on_new_ipc_client_fd(int fd, uint64_t gid);
+
+        void on_ipc_client_event(int fd, uint32_t event);
 
     public:
         bool to_stop{false};

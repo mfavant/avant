@@ -11,8 +11,11 @@ RUN rm -rf CMakeCache.txt \
     && cd protocol \
     && make \
     && cd .. \
-    && cmake . \
+    && mkdir build \
+    && cd build \
+    && cmake .. \
     && make -j3 \
+    && cd .. \
     && cd bin \
     && ls
 WORKDIR /avant/bin

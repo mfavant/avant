@@ -492,7 +492,7 @@ void http_ctx::clear_recv_buffer()
 
 uint64_t http_ctx::get_conn_gid()
 {
-    return this->conn_ptr->gid;
+    return this->conn_ptr->get_gid();
 }
 
 uint64_t http_ctx::get_recv_body_size()
