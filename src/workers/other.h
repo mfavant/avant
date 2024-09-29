@@ -10,6 +10,7 @@
 #include "proto_res/proto_tunnel.pb.h"
 #include <avant-json/json.h>
 #include "socket/server_socket.h"
+#include "utility/time.h"
 
 namespace avant::workers
 {
@@ -30,6 +31,8 @@ namespace avant::workers
         void on_ipc_listen_event(uint32_t event);
         void on_tunnel_process(ProtoPackage &message);
 
+        uint64_t other_gen_gid();
+
     public:
         bool to_stop{false};
         bool is_stoped{false};
@@ -46,5 +49,10 @@ namespace avant::workers
 
         avant::event::event_poller epoller;
         std::shared_ptr<avant::connection::connection_mgr> ipc_connection_mgr{nullptr};
+
+    private:
+        avant::utility::time m_other_loop_time;
+        uint64_t m_latest_tick_time{0};
+        uint64_t m_gid_seq{0};
     };
 };

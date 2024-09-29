@@ -11,7 +11,6 @@
 #include "utility/singleton.h"
 #include "task/task_type.h"
 #include "socket/server_socket.h"
-#include "utility/time.h"
 #include "hooks/tick.h"
 #include "hooks/init.h"
 #include "hooks/stop.h"
@@ -317,10 +316,9 @@ void server::on_start()
     on_start_load_ipc_json_file();
 
     // time
-    utility::time server_time;
-    server_time.update();
-    uint64_t latest_tick_time = server_time.get_seconds();
-    uint64_t gid_seq = 0;
+    this->m_server_loop_time.update();
+    this->m_latest_tick_time = this->m_server_loop_time.get_seconds();
+    this->m_gid_seq = 0;
 
     // main m_epoller
     int iret = 0;
@@ -380,7 +378,7 @@ void server::on_start()
             }
             // main alloc connection for tunnel
             {
-                iret = m_main_connection_mgr.alloc_connection(m_main_worker_tunnel[i].get_me(), gen_gid(latest_tick_time, ++gid_seq));
+                iret = m_main_connection_mgr.alloc_connection(m_main_worker_tunnel[i].get_me(), server_gen_gid());
                 if (iret != 0)
                 {
                     LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_worker_tunnel return %d", iret);
@@ -443,7 +441,7 @@ void server::on_start()
                 return;
             }
             // worker alloc connection for tunnel
-            iret = m_workers[i].worker_connection_mgr->alloc_connection(m_workers[i].main_worker_tunnel->get_other(), gen_gid(latest_tick_time, ++gid_seq));
+            iret = m_workers[i].worker_connection_mgr->alloc_connection(m_workers[i].main_worker_tunnel->get_other(), server_gen_gid());
             if (iret != 0)
             {
                 LOG_ERROR("worker_connection_mgr.alloc_connection return %d", iret);
@@ -471,7 +469,7 @@ void server::on_start()
         }
         // main alloc connection for tunnel
         {
-            iret = m_main_connection_mgr.alloc_connection(m_main_other_tunnel.get_me(), gen_gid(latest_tick_time, ++gid_seq));
+            iret = m_main_connection_mgr.alloc_connection(m_main_other_tunnel.get_me(), server_gen_gid());
             if (iret != 0)
             {
                 LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_other_tunnel return %d", iret);
@@ -622,9 +620,9 @@ void server::on_start()
             // time update
             {
                 hooks::tick::on_main_tick(*this); // maybe change errno
-                server_time.update();
-                uint64_t now_tick_time = server_time.get_seconds();
-                if (latest_tick_time != now_tick_time)
+                this->m_server_loop_time.update();
+                uint64_t now_tick_time = this->m_server_loop_time.get_seconds();
+                if (this->m_latest_tick_time != now_tick_time)
                 {
                     // int curr_connection_num = m_curr_connection_num->load();
                     // LOG_ERROR("curr_connection_num %d", curr_connection_num);
@@ -654,8 +652,8 @@ void server::on_start()
                             break;
                         }
                     }
-                    gid_seq = 0;
-                    latest_tick_time = now_tick_time;
+                    this->m_gid_seq = 0;
+                    this->m_latest_tick_time = now_tick_time;
                 }
             }
 
@@ -685,7 +683,7 @@ void server::on_start()
                             }
                             *m_curr_connection_num += 1;
                             clients_fd.push_back(new_client_fd);
-                            gids.push_back(gen_gid(latest_tick_time, ++gid_seq));
+                            gids.push_back(server_gen_gid());
                         }
                     }
                     // new_client_fd come here
@@ -720,10 +718,9 @@ void server::on_start()
     }
 }
 
-uint64_t server::gen_gid(uint64_t time_seconds, uint64_t gid_seq)
+uint64_t server::server_gen_gid()
 {
-    // LOG_ERROR("gen_gid %llu %llu", time_seconds, gid_seq);
-    return (time_seconds << 32) | gid_seq;
+    return (this->m_latest_tick_time << 32) | this->m_gid_seq++;
 }
 
 void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid)

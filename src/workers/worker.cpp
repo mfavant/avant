@@ -51,8 +51,8 @@ void worker::operator()()
 
     hooks::init::on_worker_init(*this);
 
-    this->worker_time.update();
-    this->latest_tick_time = this->worker_time.get_seconds();
+    this->m_worker_loop_time.update();
+    this->m_latest_tick_time = this->m_worker_loop_time.get_seconds();
 
     int num = -1;
     while (true)
@@ -76,26 +76,26 @@ void worker::operator()()
             break;
         }
 
-        this->worker_time.update();
-        uint64_t now_time_stamp = this->worker_time.get_seconds();
+        this->m_worker_loop_time.update();
+        uint64_t now_time_stamp = this->m_worker_loop_time.get_seconds();
         std::unordered_set<uint64_t> timeout_fd_copy;
 
         // conn timeout timer manager
         {
-            if (this->latest_tick_time > now_time_stamp || now_time_stamp - this->latest_tick_time >= 1)
+            if (this->m_latest_tick_time > now_time_stamp || now_time_stamp - this->m_latest_tick_time >= 1)
             {
-                this->latest_tick_time = now_time_stamp;
-                this->conn_timeout_timer_manager.check_and_handle(now_time_stamp);
-                if (!this->timeout_fd.empty())
+                this->m_latest_tick_time = now_time_stamp;
+                this->m_conn_timeout_timer_manager.check_and_handle(now_time_stamp);
+                if (!this->m_timeout_fd.empty())
                 {
-                    for (auto fd : timeout_fd)
+                    for (auto fd : this->m_timeout_fd)
                     {
                         timeout_fd_copy.insert(fd);
                         close_client_fd(fd);
                     }
                 }
-                this->timeout_fd.clear();
-                this->conn_timeout_timer_manager.clean_up();
+                this->m_timeout_fd.clear();
+                this->m_conn_timeout_timer_manager.clean_up();
             }
         }
 
@@ -221,7 +221,7 @@ void worker::on_tunnel_event(uint32_t event)
 
 void worker::mark_delete_timeout_timer(uint64_t timer_id)
 {
-    this->conn_timeout_timer_manager.mark_delete(timer_id);
+    this->m_conn_timeout_timer_manager.mark_delete(timer_id);
 }
 
 void worker::close_client_fd(int fd)
@@ -231,7 +231,7 @@ void worker::close_client_fd(int fd)
     {
         // delete conn timeout timer
         {
-            this->conn_timeout_timer_manager.mark_delete(conn_ptr->get_gid());
+            this->m_conn_timeout_timer_manager.mark_delete(conn_ptr->get_gid());
         }
 
         this->epoller.del(fd, nullptr, 0);
@@ -654,7 +654,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         // creating a timeout timer for the connection
         {
             std::shared_ptr<avant::timer::timer> new_timeout_timer = std::make_shared<avant::timer::timer>(conn->get_gid(),
-                                                                                                           this->latest_tick_time,
+                                                                                                           this->m_latest_tick_time,
                                                                                                            1,
                                                                                                            5, // timeout 5 s
                                                                                                            [this, fd](avant::timer::timer &timer_instance) -> void
@@ -670,7 +670,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                                                                                                                    LOG_DEBUG("timer get_app_layer_notified true, fd %d timer gid %llu", fd, timer_instance.get_id());
                                                                                                                    return;
                                                                                                                }
-                                                                                                               this->timeout_fd.insert(fd);
+                                                                                                               this->m_timeout_fd.insert(fd);
                                                                                                                LOG_ERROR("timeout fd %d timer gid %llu", fd, timer_instance.get_id());
                                                                                                            });
             if (new_timeout_timer == nullptr)
@@ -679,7 +679,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                 close_client_fd(fd);
                 return;
             }
-            if (nullptr == conn_timeout_timer_manager.add(new_timeout_timer))
+            if (nullptr == this->m_conn_timeout_timer_manager.add(new_timeout_timer))
             {
                 LOG_ERROR("conn_timeout_timer_manager.add(new_timeout_timer) failed conn gid %llu", conn->get_gid());
                 close_client_fd(fd);

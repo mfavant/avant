@@ -86,6 +86,10 @@ void other::operator()()
         }
     }
 
+    this->m_gid_seq = 0;
+    this->m_other_loop_time.update();
+    this->m_latest_tick_time = this->m_other_loop_time.get_seconds();
+
     hooks::init::on_other_init(*this);
     int num = -1;
     while (true)
@@ -108,6 +112,17 @@ void other::operator()()
         {
             break;
         }
+
+        {
+            this->m_other_loop_time.update();
+            uint64_t now_time = this->m_other_loop_time.get_seconds();
+            if (this->m_latest_tick_time != now_time)
+            {
+                this->m_gid_seq = 0;
+                this->m_latest_tick_time = now_time;
+            }
+        }
+
         hooks::tick::on_other_tick(*this); // maybe change errno
         for (int i = 0; i < num; i++)
         {
@@ -328,21 +343,6 @@ void other::on_tunnel_event(uint32_t event)
     }
 }
 
-void other::on_ipc_listen_event(uint32_t event)
-{
-    LOG_DEBUG("on_ipc_listen_event");
-    for (size_t i = 0; i < this->accept_per_tick; i++)
-    {
-        int new_passive_ipc_client_fd = this->ipc_listen_socket->accept();
-        if (new_passive_ipc_client_fd < 0)
-        {
-            break;
-        }
-        LOG_ERROR("new_passive_ipc_client_fd %d", new_passive_ipc_client_fd);
-        ::close(new_passive_ipc_client_fd);
-    }
-}
-
 void other::on_tunnel_process(ProtoPackage &message)
 {
     int cmd = message.cmd();
@@ -367,5 +367,25 @@ void other::on_tunnel_process(ProtoPackage &message)
     catch (const std::exception &e)
     {
         LOG_ERROR("app on_other_tunnel throw exception cmd %d", tunnelPackage.innerprotopackage().cmd());
+    }
+}
+
+uint64_t other::other_gen_gid()
+{
+    return (this->m_latest_tick_time << 32) | this->m_gid_seq++;
+}
+
+void other::on_ipc_listen_event(uint32_t event)
+{
+    LOG_DEBUG("on_ipc_listen_event");
+    for (size_t i = 0; i < this->accept_per_tick; i++)
+    {
+        int new_passive_ipc_client_fd = this->ipc_listen_socket->accept();
+        if (new_passive_ipc_client_fd < 0)
+        {
+            break;
+        }
+        LOG_ERROR("new_passive_ipc_client_fd %d other_gid %llu", new_passive_ipc_client_fd, other_gen_gid());
+        ::close(new_passive_ipc_client_fd);
     }
 }

@@ -17,6 +17,7 @@
 #include "socket/socket_pair.h"
 #include "connection/connection_mgr.h"
 #include "socket/server_socket.h"
+#include "utility/time.h"
 
 #include "proto_res/proto_cmd.pb.h"
 #include "proto_res/proto_message_head.pb.h"
@@ -102,7 +103,7 @@ namespace avant::server
         void set_ipc_json_path(std::string ipc_json_path);
 
         void set_listen_info(const std::string &ip, int port);
-        uint64_t gen_gid(uint64_t time_seconds, uint64_t gid_seq);
+        uint64_t server_gen_gid();
 
         void on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid);
         void on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event);
@@ -123,6 +124,9 @@ namespace avant::server
         size_t m_max_client_cnt{0};
         size_t m_epoll_wait_time{0};
         size_t m_accept_per_tick{0};
+        avant::utility::time m_server_loop_time;
+        uint64_t m_latest_tick_time{0};
+        uint64_t m_gid_seq{0};
 
         std::string m_http_static_dir{};
         std::string m_lua_dir{};
