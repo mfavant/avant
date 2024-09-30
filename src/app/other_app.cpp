@@ -6,6 +6,7 @@
 #include "app/lua_plugin.h"
 #include "global/tunnel_id.h"
 #include "proto/proto_util.h"
+#include "proto_res/proto_example.pb.h"
 
 using avant::app::other_app;
 namespace utility = avant::utility;
@@ -67,4 +68,83 @@ void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPac
               targettunnelsid.c_str(),
               targetallworker);
 #endif
+}
+
+void other_app::on_new_connection(avant::connection::ipc_stream_ctx &ctx)
+{
+    // LOG_ERROR("other_app on_new_connection %llu", ctx.get_conn_gid());
+}
+
+void other_app::on_close_connection(avant::connection::ipc_stream_ctx &ctx)
+{
+    // auto conn_other_gid = ctx.get_conn_gid();
+    // LOG_ERROR("close ipc_client gid %llu", conn_other_gid);
+}
+
+void other_app::on_process_connection(avant::connection::ipc_stream_ctx &ctx)
+{
+    if (ctx.get_recv_buffer_size() > 2048000)
+    {
+        ctx.set_conn_is_close(true);
+        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        LOG_ERROR("ctx.get_recv_buffer_size() > 2048000");
+        return;
+    }
+
+    // parse protocol
+    while (ctx.get_recv_buffer_size() > 0)
+    {
+        uint64_t data_size = 0;
+        if (ctx.get_recv_buffer_size() >= sizeof(data_size))
+        {
+            data_size = *((uint64_t *)ctx.get_recv_buffer_read_ptr());
+            data_size = avant::proto::toh64(data_size);
+
+            if (data_size + sizeof(data_size) > ctx.get_recv_buffer_size())
+            {
+                break;
+            }
+        }
+        else
+        {
+            break;
+        }
+
+        if (data_size == 0)
+        {
+            LOG_ERROR("other_app::on_process_connection data_size == 0");
+            ctx.recv_buffer_move_read_ptr_n(sizeof(data_size));
+            break;
+        }
+
+        ProtoPackage protoPackage;
+        if (!protoPackage.ParseFromArray(ctx.get_recv_buffer_read_ptr() + sizeof(data_size), data_size))
+        {
+            LOG_ERROR("ipc_stream_ctx protoPackage.ParseFromArra failed %llu", data_size);
+            ctx.recv_buffer_move_read_ptr_n(sizeof(data_size) + data_size);
+            break;
+        }
+
+        ctx.recv_buffer_move_read_ptr_n(sizeof(data_size) + data_size);
+
+        // process protocol package
+        on_recv_package(ctx, protoPackage);
+    }
+}
+
+void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const ProtoPackage &package)
+{
+    // LOG_ERROR("ipc_stream_ctx gid %llu cmd %d", ctx.get_conn_gid(), package.cmd());
+    if (package.cmd() == ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
+    {
+        ProtoCSReqExample req;
+        if (avant::proto::parse(req, package))
+        {
+            ProtoPackage resPackage;
+            ProtoCSResExample res;
+            res.set_testcontext(req.testcontext());
+            std::string data;
+            ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)));
+        }
+    }
 }

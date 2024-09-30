@@ -24,7 +24,7 @@ void ipc_stream_ctx::on_create(connection &conn_obj, workers::other &other_obj)
     try
     {
         this->set_app_layer_notified();
-        // notify app layer
+        avant::app::other_app::on_new_connection(*this);
     }
     catch (const std::exception &e)
     {
@@ -132,7 +132,6 @@ void ipc_stream_ctx::try_send_flush()
 
 void ipc_stream_ctx::on_event(uint32_t event)
 {
-    LOG_ERROR("ipc_stream_ctx::on_event(%u)", event);
     avant::socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)
@@ -152,8 +151,7 @@ void ipc_stream_ctx::on_event(uint32_t event)
         {
             try
             {
-                // avant::app::stream_app::on_close_connection(*this);
-                LOG_ERROR("close ipc_client conn fd %d gid %llu", conn_ptr->fd, conn_ptr->get_gid());
+                avant::app::other_app::on_close_connection(*this);
             }
             catch (const std::exception &e)
             {
@@ -208,14 +206,11 @@ void ipc_stream_ctx::on_event(uint32_t event)
     bool err = false;
     try
     {
-        send_data(std::string(get_recv_buffer_read_ptr(), get_recv_buffer_size()));
-        LOG_ERROR("process ipc_conn %d", get_recv_buffer_size());
-        conn_ptr->recv_buffer.clear();
-        // avant::app::stream_app::on_process_connection(*this);
+        avant::app::other_app::on_process_connection(*this);
     }
     catch (const std::exception &e)
     {
-        // LOG_ERROR("avant::app::stream_app::on_process_connection %s", e.what());
+        LOG_ERROR("avant::app::other_app::on_process_connection %s", e.what());
         err = true;
     }
     if (err)

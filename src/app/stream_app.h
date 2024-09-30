@@ -34,6 +34,7 @@ namespace avant
 
             static void on_close_connection(avant::connection::stream_ctx &ctx);
             static void on_process_connection(avant::connection::stream_ctx &ctx);
+            static void on_recv_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package);
             static int send_sync_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package);
 
             static void on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package);

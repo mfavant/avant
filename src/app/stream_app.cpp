@@ -68,7 +68,7 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
     {
         ctx.set_conn_is_close(true);
         ctx.event_mod(nullptr, event::event_poller::RWE, false);
-        LOG_ERROR("recv_buffer.size() > 1024000");
+        LOG_ERROR("ctx.get_recv_buffer_size() > 2048000");
         return;
     }
 
@@ -114,22 +114,27 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
 
         ctx.recv_buffer_move_read_ptr_n(sizeof(data_size) + data_size);
 
-        if (protoPackage.cmd() == ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
+        on_recv_package(ctx, protoPackage);
+    }
+}
+
+void stream_app::on_recv_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package)
+{
+    if (package.cmd() == ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
+    {
+        ProtoCSReqExample req;
+        if (avant::proto::parse(req, package))
         {
-            ProtoCSReqExample req;
-            if (avant::proto::parse(req, protoPackage))
-            {
-                ProtoPackage resPackage;
-                ProtoCSResExample res;
-                res.set_testcontext(req.testcontext());
+            ProtoPackage resPackage;
+            ProtoCSResExample res;
+            res.set_testcontext(req.testcontext());
 
-                // broadcast all connection in the process including this ctx self, async
-                // ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+            // broadcast all connection in the process including this ctx self, async
+            // ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
 
-                // send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+            // send_sync_package(ctx, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
 
-                ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{ctx.get_conn_gid()}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
-            }
+            ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{ctx.get_conn_gid()}, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
         }
     }
 }
