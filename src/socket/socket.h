@@ -13,6 +13,14 @@ namespace avant::socket
         virtual ~socket();
         socket();
         socket(const std::string &ip, int port);
+
+        socket(const socket &) = delete;
+        socket &operator=(const socket &) = delete;
+
+        socket(socket &&other);
+
+        socket &operator=(socket &&other);
+
         bool bind(const std::string &ip, int port);
 
         /**

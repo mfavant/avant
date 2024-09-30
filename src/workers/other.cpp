@@ -8,12 +8,14 @@
 #include "app/other_app.h"
 #include "global/tunnel_id.h"
 #include "connection/ipc_stream_ctx.h"
+#include "socket/client_socket.h"
 #include <pthread.h>
 #include <signal.h>
 
 using namespace avant::workers;
 using namespace avant::global;
 using namespace avant::connection;
+using namespace avant::socket;
 
 other::other()
 {
@@ -91,6 +93,8 @@ void other::operator()()
     this->m_gid_seq = 0;
     this->m_other_loop_time.update();
     this->m_latest_tick_time = this->m_other_loop_time.get_seconds();
+
+    ipc_client_to_connect();
 
     hooks::init::on_other_init(*this);
     int num = -1;
@@ -399,11 +403,29 @@ void other::close_ipc_client_fd(int fd)
     auto conn_ptr = this->ipc_connection_mgr->get_conn(fd);
     if (conn_ptr)
     {
+        uint64_t gid = conn_ptr->get_gid();
         this->epoller.del(fd, nullptr, 0);
         int iret = this->ipc_connection_mgr->release_connection(fd);
         if (iret != 0)
         {
             LOG_ERROR("ipc_connection_mgr->release_connection(%d) failed", fd);
+        }
+
+        auto this2remote_gid2appid_iter = this->m_this2remote_gid2appid.find(gid);
+        if (this2remote_gid2appid_iter != this->m_this2remote_gid2appid.end())
+        {
+            auto appid2gid_iter = this->m_this2remote_appid2gid.find(this2remote_gid2appid_iter->second);
+            if (appid2gid_iter != this->m_this2remote_appid2gid.end())
+            {
+                this->m_this2remote_appid2gid.erase(appid2gid_iter);
+            }
+            LOG_ERROR("appid %s and %s connect failed", this->app_id.c_str(), this2remote_gid2appid_iter->second.c_str());
+            this->m_this2remote_gid2appid.erase(this2remote_gid2appid_iter);
+
+#if 0
+            // TODO: reconnect remote app_id in here
+            ipc_client_to_connect();
+#endif
         }
     }
     else
@@ -487,4 +509,84 @@ void other::on_ipc_client_event(int fd, uint32_t event)
     }
 
     conn->ctx_ptr->on_event(event);
+}
+
+void other::ipc_client_to_connect()
+{
+    for (auto item : this->ipc_json)
+    {
+        if (item["app_id"].as_string() == this->app_id)
+        {
+            continue;
+        }
+        std::string app_id = item["app_id"].as_string();
+        std::string ip = item["ip"].as_string();
+        int port = item["port"].as_integer();
+
+        if (this->m_this2remote_appid2gid.find(app_id) != this->m_this2remote_appid2gid.end())
+        {
+            continue;
+        }
+
+        socket::client_socket new_client_socket(ip, port);
+        if (new_client_socket.get_fd() <= 0)
+        {
+            LOG_ERROR("new_client_socket.get_fd() <= 0");
+            continue;
+        }
+        int iret = this->ipc_connection_mgr->alloc_connection(new_client_socket.get_fd(), this->other_gen_gid());
+        if (iret != 0)
+        {
+            LOG_ERROR("this->ipc_connection_mgr->alloc_connection failed iret %d", iret);
+            continue;
+        }
+
+        auto conn = this->ipc_connection_mgr->get_conn(new_client_socket.get_fd());
+
+        if (!conn)
+        {
+            LOG_ERROR("this->ipc_connection_mgr->get_conn failed %d", new_client_socket.get_fd());
+            continue;
+        }
+
+        if (!conn->ctx_ptr)
+        {
+            connection::ipc_stream_ctx *new_ctx = new (std::nothrow) connection::ipc_stream_ctx;
+            if (!new_ctx)
+            {
+                LOG_ERROR("new connection::ipc_stream_ctx failed");
+                continue;
+            }
+            conn->ctx_ptr.reset(new_ctx);
+        }
+
+        if (!dynamic_cast<connection::ipc_stream_ctx *>(conn->ctx_ptr.get()))
+        {
+            LOG_ERROR("!dynamic_cast<connection::ipc_stream_ctx *>(conn->ctx_ptr.get())");
+            continue;
+        }
+
+        iret = this->epoller.add(new_client_socket.get_fd(), nullptr, event::event_poller::RWE, false);
+        if (iret != 0)
+        {
+            LOG_ERROR("this->epoller.add ipc client fd failed");
+            return;
+        }
+
+        conn->socket_obj = std::move(new_client_socket);
+        this->m_this2remote_appid2gid[app_id] = conn->get_gid();
+        this->m_this2remote_gid2appid[conn->get_gid()] = app_id;
+
+        dynamic_cast<connection::ipc_stream_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this);
+    }
+}
+
+bool other::is_this2remote(uint64_t gid)
+{
+    return (this->m_this2remote_gid2appid.find(gid) != this->m_this2remote_gid2appid.end());
+}
+
+bool other::is_remote2this(uint64_t gid)
+{
+    return (this->m_remote2this_gid2appid.find(gid) != this->m_remote2this_gid2appid.end());
 }

@@ -70,8 +70,14 @@ void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPac
 #endif
 }
 
-void other_app::on_new_connection(avant::connection::ipc_stream_ctx &ctx)
+void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx &ctx)
 {
+    // TODO: ipc auth
+    // this <-- connect -- remote
+    // this -- whoami --> remote
+    // this <-- whoami -- remote
+    // It's Already
+
     // LOG_ERROR("other_app on_new_connection %llu", ctx.get_conn_gid());
 }
 

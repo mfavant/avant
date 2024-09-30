@@ -10,7 +10,7 @@
 #include "socket/socket.h"
 #include "utility/singleton.h"
 
-using namespace avant::socket;
+using avant::socket::socket;
 using namespace avant::utility;
 using std::string;
 
@@ -20,6 +20,47 @@ socket::socket() : m_port(0), m_sockfd(0)
 
 socket::socket(const string &ip, int port) : m_ip(ip), m_port(port), m_sockfd(0)
 {
+}
+
+socket::socket(avant::socket::socket &&other)
+{
+    this->m_ip = other.m_ip;
+    other.m_ip.clear();
+    this->m_port = other.m_port;
+    other.m_port = 0;
+    this->m_sockfd = other.m_sockfd;
+    other.m_sockfd = 0;
+    this->m_ssl_accepted = other.m_ssl_accepted;
+    other.m_ssl_accepted = false;
+    this->m_ssl_instance = other.m_ssl_instance;
+    other.m_ssl_instance = nullptr;
+
+    this->close_callback = other.close_callback;
+    other.close_callback = nullptr;
+}
+
+avant::socket::socket &socket::operator=(socket &&other)
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+
+    this->m_ip = other.m_ip;
+    other.m_ip.clear();
+    this->m_port = other.m_port;
+    other.m_port = 0;
+    this->m_sockfd = other.m_sockfd;
+    other.m_sockfd = 0;
+    this->m_ssl_accepted = other.m_ssl_accepted;
+    other.m_ssl_accepted = false;
+    this->m_ssl_instance = other.m_ssl_instance;
+    other.m_ssl_instance = nullptr;
+
+    this->close_callback = other.close_callback;
+    other.close_callback = nullptr;
+
+    return *this;
 }
 
 socket::~socket()

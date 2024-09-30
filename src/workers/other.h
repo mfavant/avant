@@ -11,6 +11,7 @@
 #include <avant-json/json.h>
 #include "socket/server_socket.h"
 #include "utility/time.h"
+#include <unordered_map>
 
 namespace avant::workers
 {
@@ -26,6 +27,9 @@ namespace avant::workers
         int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);
         void close_ipc_client_fd(int fd);
 
+        bool is_this2remote(uint64_t gid);
+        bool is_remote2this(uint64_t gid);
+
     private:
         void try_send_flush_tunnel();
         void on_tunnel_event(uint32_t event);
@@ -36,6 +40,7 @@ namespace avant::workers
         void on_new_ipc_client_fd(int fd, uint64_t gid);
 
         void on_ipc_client_event(int fd, uint32_t event);
+        void ipc_client_to_connect();
 
     public:
         bool to_stop{false};
@@ -58,5 +63,13 @@ namespace avant::workers
         avant::utility::time m_other_loop_time;
         uint64_t m_latest_tick_time{0};
         uint64_t m_gid_seq{0};
+
+        // this process -> remote process, info mapping
+        std::unordered_map<std::string, uint64_t> m_this2remote_appid2gid{};
+        std::unordered_map<uint64_t, std::string> m_this2remote_gid2appid{};
+
+        // remote process -> this process, info mapping
+        std::unordered_map<std::string, uint64_t> m_remote2this_appid2gid{};
+        std::unordered_map<uint64_t, std::string> m_remote2this_gid2appid{};
     };
 };

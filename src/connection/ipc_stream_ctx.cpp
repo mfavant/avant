@@ -24,7 +24,10 @@ void ipc_stream_ctx::on_create(connection &conn_obj, workers::other &other_obj)
     try
     {
         this->set_app_layer_notified();
-        avant::app::other_app::on_new_connection(*this);
+        if (this->other_ptr->is_remote2this(this->conn_ptr->get_gid()))
+        {
+            avant::app::other_app::on_new_connection_remote2this(*this);
+        }
     }
     catch (const std::exception &e)
     {
