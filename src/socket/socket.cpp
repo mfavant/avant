@@ -14,7 +14,7 @@ using namespace avant::socket;
 using namespace avant::utility;
 using std::string;
 
-socket::socket() : m_sockfd(0)
+socket::socket() : m_port(0), m_sockfd(0)
 {
 }
 
@@ -108,8 +108,11 @@ bool socket::connect(const string &ip, int port)
         sockaddr6.sin6_port = htons(port);
         if (::connect(m_sockfd, (struct sockaddr *)&sockaddr6, sizeof(sockaddr6)) < 0)
         {
-            LOG_ERROR("isIPV6 %d socket connect error: errno=%d errstr=%s", int_isIPV6, errno, strerror(errno));
-            return false;
+            if (errno != EINPROGRESS)
+            {
+                LOG_ERROR("isIPV6 %d socket connect error: errno=%d errstr=%s", int_isIPV6, errno, strerror(errno));
+                return false;
+            }
         }
     }
     else
@@ -122,8 +125,11 @@ bool socket::connect(const string &ip, int port)
         sockaddr.sin_port = htons(port);
         if (::connect(m_sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
         {
-            LOG_ERROR("isIPV6 %d socket connect error: errno=%d errstr=%s", int_isIPV6, errno, strerror(errno));
-            return false;
+            if (errno != EINPROGRESS)
+            {
+                LOG_ERROR("isIPV6 %d socket connect error: errno=%d errstr=%s", int_isIPV6, errno, strerror(errno));
+                return false;
+            }
         }
     }
 

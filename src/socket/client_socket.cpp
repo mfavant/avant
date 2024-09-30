@@ -21,7 +21,18 @@ client_socket::client_socket(const string &ip, int port) : socket(ip, port)
         LOG_ERROR("create client socket error: errno=%d errstr=%s", errno, strerror(errno));
         return;
     }
-    connect(ip, port);
+    set_non_blocking();
+    set_recv_buffer(10 * 1024);
+    set_send_buffer(10 * 1024);
+    set_linger(true, 0);
+    set_keep_alive();
+    set_reuse_addr();
+    set_reuse_port();
+    if (!connect(ip, port))
+    {
+        LOG_ERROR("client socket connect ip %s port %d failed", ip.c_str(), port);
+        return;
+    }
 }
 
 client_socket::~client_socket()
