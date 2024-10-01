@@ -6,7 +6,7 @@ cpp-version: `C++20`
 os: `linux`  
 protocol: `http` `tcp stream(protobuf)` `websocket`  
 tls/ssl: `openssl`  
-script: `lua`  
+script engin: `lua`  
 
 ## Docker Run
 
@@ -33,6 +33,7 @@ cd protocol
 make
 cd ..
 mkdir build
+rm -rf ./build/*
 cd build
 cmake ..
 make -j4
@@ -77,6 +78,10 @@ ps -ef | grep avant
 kill -10 PID
 ```
 
+### RPC
+
+The configuration file is located at `config/ipc.json`. Adopt one-way TCP active connection. Authentication handshake is verified through the `appid` content in [ProtoIPCStreamAuthhandshake protocol](./protocol/proto_ipc_stream.proto).
+
 ## APP Layer
 
 support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
@@ -88,23 +93,19 @@ support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
 
 ## QPS
 
-CPU: Intel(R) Core(TM) i5-9600KF CPU @ 3.70 GHz
-OS : WSL2 Ubuntu Mem 8GB  (Windows 11)
+### HTTP
 
-```ini
-config/main.ini 
-    worker_cnt:8  
-    max_client_cnt:10000  
-    accept_per_tick: 100  
-```
-
-wrk testing, avant http
+[wrk tool](https://github.com/wg/wrk)
 
 ```bash
 # avant
 wrk -c {{connection_num}} -t {{threads}} http://IP:20023/
 wrk -c {{connection_num}} -t {{threads}} -d60s --header "Connection: keep-alive" http://127.0.0.1:20023/
 ```
+
+### Protobuffer Stream 
+
+Using source code compilation tools. [client.cpp](./client/client.cpp)
 
 ## Third-Party
 

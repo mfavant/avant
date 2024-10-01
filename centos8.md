@@ -16,6 +16,7 @@ cd protocol
 make
 cd ..
 mkdir build
+rm -rf ./build/*
 cd build
 cmake ..
 make -j4

@@ -12,6 +12,7 @@ RUN rm -rf CMakeCache.txt \
     && make \
     && cd .. \
     && mkdir build \
+    && rm -rf ./build/* \
     && cd build \
     && cmake .. \
     && make -j3 \
