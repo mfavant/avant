@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+// PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE
+message ProtoIPCStreamAuthhandshake
+{
+    bytes appId = 1;
+}

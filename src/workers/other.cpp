@@ -422,10 +422,16 @@ void other::close_ipc_client_fd(int fd)
             LOG_ERROR("appid %s and %s connect failed", this->app_id.c_str(), this2remote_gid2appid_iter->second.c_str());
             this->m_this2remote_gid2appid.erase(this2remote_gid2appid_iter);
 
-#if 0
+#if 1
             // TODO: reconnect remote app_id in here
             ipc_client_to_connect();
 #endif
+        }
+
+        auto remote2this_gid_iter = this->m_remote2this_gid.find(gid);
+        if (remote2this_gid_iter != this->m_remote2this_gid.end())
+        {
+            this->m_remote2this_gid.erase(remote2this_gid_iter);
         }
     }
     else
@@ -494,6 +500,8 @@ void other::on_new_ipc_client_fd(int fd, uint64_t gid)
             return;
         }
     }
+
+    this->m_remote2this_gid.insert(gid);
 
     dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get())->on_create(*ipc_conn, *this);
 }
@@ -581,12 +589,12 @@ void other::ipc_client_to_connect()
     }
 }
 
-bool other::is_this2remote(uint64_t gid)
+bool other::is_this2remote(uint64_t gid) const
 {
     return (this->m_this2remote_gid2appid.find(gid) != this->m_this2remote_gid2appid.end());
 }
 
-bool other::is_remote2this(uint64_t gid)
+bool other::is_remote2this(uint64_t gid) const
 {
-    return (this->m_remote2this_gid2appid.find(gid) != this->m_remote2this_gid2appid.end());
+    return (this->m_remote2this_gid.find(gid) != this->m_remote2this_gid.end());
 }

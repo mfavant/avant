@@ -41,6 +41,11 @@ namespace avant::connection
             this->other_ptr->epoller.mod(this->conn_ptr->socket_obj.get_fd(), std::forward<Args>(args)...);
         }
 
+        inline const workers::other *get_other_ptr()
+        {
+            return this->other_ptr;
+        }
+
     protected:
         connection *conn_ptr{nullptr};
         workers::other *other_ptr{nullptr};

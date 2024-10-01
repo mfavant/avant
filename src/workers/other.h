@@ -12,6 +12,7 @@
 #include "socket/server_socket.h"
 #include "utility/time.h"
 #include <unordered_map>
+#include <unordered_set>
 
 namespace avant::workers
 {
@@ -27,8 +28,13 @@ namespace avant::workers
         int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);
         void close_ipc_client_fd(int fd);
 
-        bool is_this2remote(uint64_t gid);
-        bool is_remote2this(uint64_t gid);
+        bool is_this2remote(uint64_t gid) const;
+        bool is_remote2this(uint64_t gid) const;
+
+        inline const std::string get_appid() const
+        {
+            return this->app_id;
+        }
 
     private:
         void try_send_flush_tunnel();
@@ -68,8 +74,6 @@ namespace avant::workers
         std::unordered_map<std::string, uint64_t> m_this2remote_appid2gid{};
         std::unordered_map<uint64_t, std::string> m_this2remote_gid2appid{};
 
-        // remote process -> this process, info mapping
-        std::unordered_map<std::string, uint64_t> m_remote2this_appid2gid{};
-        std::unordered_map<uint64_t, std::string> m_remote2this_gid2appid{};
+        std::unordered_set<uint64_t> m_remote2this_gid{};
     };
 };

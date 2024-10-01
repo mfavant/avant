@@ -7,10 +7,21 @@
 #include "global/tunnel_id.h"
 #include "proto/proto_util.h"
 #include "proto_res/proto_example.pb.h"
+#include "proto_res/proto_ipc_stream.pb.h"
+#include <unordered_map>
 
 using avant::app::other_app;
 namespace utility = avant::utility;
 namespace global = avant::global;
+
+class avant_authenticated_ipc_pair
+{
+public:
+    std::unordered_map<uint64_t, std::string> gid2appid;
+    std::unordered_map<std::string, uint64_t> appid2gid;
+};
+
+static avant_authenticated_ipc_pair authenticated_ipc_pair;
 
 void other_app::on_other_init(avant::workers::other &other_obj)
 {
@@ -72,19 +83,28 @@ void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPac
 
 void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx &ctx)
 {
-    // TODO: ipc auth
+    // ipc auth
     // this <-- connect -- remote
     // this -- whoami --> remote
-    // this <-- whoami -- remote
-    // It's Already
+    {
+        ProtoPackage resPackage;
+        ProtoIPCStreamAuthhandshake res;
+        res.set_appid(ctx.get_other_ptr()->get_appid());
 
+        std::string data;
+        ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)));
+    }
     // LOG_ERROR("other_app on_new_connection %llu", ctx.get_conn_gid());
 }
 
 void other_app::on_close_connection(avant::connection::ipc_stream_ctx &ctx)
 {
-    // auto conn_other_gid = ctx.get_conn_gid();
-    // LOG_ERROR("close ipc_client gid %llu", conn_other_gid);
+    uint64_t gid = ctx.get_conn_gid();
+    // LOG_ERROR("close ipc_client gid %llu", gid);
+    if (authenticated_ipc_pair.gid2appid.find(gid) != authenticated_ipc_pair.gid2appid.end())
+    {
+        authenticated_ipc_pair.gid2appid.erase(gid);
+    }
 }
 
 void other_app::on_process_connection(avant::connection::ipc_stream_ctx &ctx)
@@ -151,6 +171,47 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
             res.set_testcontext(req.testcontext());
             std::string data;
             ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)));
+        }
+    }
+    else if (package.cmd() == ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)
+    {
+        // ipc auth
+        // this <-- whoami -- remote
+        if (ctx.get_other_ptr()->is_this2remote(ctx.get_conn_gid()))
+        {
+            ProtoPackage resPackage;
+            ProtoIPCStreamAuthhandshake res;
+            res.set_appid(ctx.get_other_ptr()->get_appid());
+            std::string data;
+            ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)));
+        }
+
+        ProtoIPCStreamAuthhandshake authInfo;
+        if (avant::proto::parse(authInfo, package))
+        {
+            std::string auth_appId = authInfo.appid();
+            uint64_t auth_gid = ctx.get_conn_gid();
+
+            // {appId, gid} is a binary that has been successfully authenticated
+            bool succ = false;
+            if (authenticated_ipc_pair.appid2gid.find(auth_appId) == authenticated_ipc_pair.appid2gid.end())
+            {
+                if (authenticated_ipc_pair.gid2appid.find(auth_gid) == authenticated_ipc_pair.gid2appid.end())
+                {
+                    authenticated_ipc_pair.appid2gid[auth_appId] = auth_gid;
+                    authenticated_ipc_pair.gid2appid[auth_gid] = auth_appId;
+                    succ = true;
+                }
+            }
+
+            if (succ)
+            {
+                LOG_ERROR("{appId %s, auth_gid %llu} insert to authenticated_ipc_pair succ", auth_appId.c_str(), auth_gid);
+            }
+            else
+            {
+                LOG_ERROR("{appId %s, auth_gid %llu} insert to authenticated_ipc_pair failed", auth_appId.c_str(), auth_gid);
+            }
         }
     }
 }
