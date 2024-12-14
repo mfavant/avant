@@ -458,21 +458,20 @@ int lua_plugin::Lua2Protobuf(lua_State *lua_state)
         lua_pushnil(lua_state);
         return 1;
     }
-    if (cmd != ProtoCmd::PROTO_CMD_LUA_TEST)
+
+    if (cmd == ProtoCmd::PROTO_CMD_LUA_TEST)
     {
-        LOG_ERROR("cmd[%d] != ProtoCmd::PROTO_CMD_LUA_TEST", cmd);
-        lua_pushnil(lua_state);
+        ProtoLuaTest proto_lua_test;
+        lua2protobuf(lua_state, proto_lua_test);
+        LOG_ERROR("ProtoLuaTest %s", proto_lua_test.DebugString().c_str());
+        // call lua function OnWorkerRecvMessage
+        exe_OnWorkerRecvMessage(lua_state, cmd, proto_lua_test);
+        lua_pushinteger(lua_state, 0);
         return 1;
     }
 
-    ProtoLuaTest proto_lua_test;
-    lua2protobuf(lua_state, proto_lua_test);
-    LOG_ERROR("ProtoLuaTest %s", proto_lua_test.DebugString().c_str());
-
-    // call lua function OnWorkerRecvMessage
-    exe_OnWorkerRecvMessage(lua_state, cmd, proto_lua_test);
-
-    lua_pushinteger(lua_state, 0);
+    LOG_ERROR("cmd[%d] != ProtoCmd::PROTO_CMD_LUA_TEST", cmd);
+    lua_pushnil(lua_state);
     return 1;
 }
 
