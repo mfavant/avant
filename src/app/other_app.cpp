@@ -58,6 +58,32 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
         }
         latest_tick_time = tick_time;
     }
+
+#if 0
+    // test ipc message process
+    for (auto item : authenticated_ipc_pair.gid2appid)
+    {
+        uint64_t gid = item.first;
+        avant::connection::connection *conn = other_obj.ipc_connection_mgr.get()->get_conn_by_gid(gid);
+        if (!conn)
+        {
+            continue;
+        }
+        avant::connection::ipc_stream_ctx *ctx = dynamic_cast<avant::connection::ipc_stream_ctx *>(conn->ctx_ptr.get());
+        if (!ctx)
+        {
+            continue;
+        }
+
+        {
+            ProtoPackage resPackage;
+            ProtoCSReqExample req;
+            req.set_testcontext("HELLO WORLD");
+            std::string data;
+            ctx->send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, req, ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)));
+        }
+    }
+#endif
 }
 
 void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
@@ -177,6 +203,14 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
             ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)));
         }
     }
+    else if (package.cmd() == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
+    {
+        ProtoCSResExample res;
+        if (avant::proto::parse(res, package))
+        {
+            // res.testcontext();
+        }
+    }
     else if (package.cmd() == ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)
     {
         // ipc auth
@@ -217,5 +251,9 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
                 LOG_ERROR("{appId %s, auth_gid %llu} insert to authenticated_ipc_pair failed", auth_appId.c_str(), auth_gid);
             }
         }
+    }
+    else
+    {
+        LOG_ERROR("unknow cmd %d", package.cmd());
     }
 }
