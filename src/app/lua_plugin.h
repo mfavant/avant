@@ -32,7 +32,7 @@ namespace avant::app
         void exe_OnWorkerStop(int worker_idx, bool is_hot);
         void exe_OnWorkerTick(int worker_idx);
 
-        static void exe_OnWorkerRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package);
+        static void exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package);
 
         void on_other_init(bool is_hot);
         void on_other_stop(bool is_hot);

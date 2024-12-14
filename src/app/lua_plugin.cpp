@@ -261,35 +261,54 @@ void lua_plugin::exe_OnWorkerTick(int worker_idx)
     }
 }
 
-void lua_plugin::exe_OnWorkerRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package)
+void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package)
 {
     lua_plugin *lua_plugin_ptr = singleton<lua_plugin>::instance();
 
-    lua_getglobal(lua_state, "OnWorkerRecvMessage");
+    lua_getglobal(lua_state, "OnLuaVMRecvMessage");
 
+    int is_mainVM = 0;
+    int is_otherVM = 0;
+    int is_workerVM = 0;
     int worker_idx = -1;
-    for (int i = 0; i < lua_plugin_ptr->worker_lua_cnt; i++)
+
+    if (lua_plugin_ptr->lua_state == lua_state)
     {
-        if (lua_state == lua_plugin_ptr->worker_lua_state[i])
+        is_mainVM = 1;
+    }
+    else if (lua_plugin_ptr->other_lua_state == lua_state)
+    {
+        is_otherVM = 1;
+    }
+    else
+    {
+        for (int i = 0; i < lua_plugin_ptr->worker_lua_cnt; i++)
         {
-            worker_idx = i;
-            break;
+            if (lua_state == lua_plugin_ptr->worker_lua_state[i])
+            {
+                worker_idx = i;
+                is_workerVM = 1;
+                break;
+            }
+        }
+        if (worker_idx == -1)
+        {
+            LOG_ERROR("exe_OnLuaVMRecvMessage find lua_state worker_idx failed");
+            return;
         }
     }
-    if (worker_idx == -1)
-    {
-        LOG_ERROR("exe_OnWorkerRecvMessage find lua_state worker_idx failed");
-        return;
-    }
 
+    lua_pushboolean(lua_state, is_mainVM);
+    lua_pushboolean(lua_state, is_otherVM);
+    lua_pushboolean(lua_state, is_workerVM);
     lua_pushinteger(lua_state, worker_idx);
     lua_pushinteger(lua_state, cmd);
     protobuf2lua(lua_state, package);
 
-    int isok = lua_pcall(lua_state, 3, 0, 0);
+    int isok = lua_pcall(lua_state, 6, 0, 0);
     if (LUA_OK != isok)
     {
-        LOG_ERROR("exe_OnWorkerRecvMessage failed %s", lua_tostring(lua_state, -1));
+        LOG_ERROR("exe_OnLuaVMRecvMessage failed %s", lua_tostring(lua_state, -1));
     }
 }
 
@@ -464,8 +483,8 @@ int lua_plugin::Lua2Protobuf(lua_State *lua_state)
         ProtoLuaTest proto_lua_test;
         lua2protobuf(lua_state, proto_lua_test);
         LOG_ERROR("ProtoLuaTest %s", proto_lua_test.DebugString().c_str());
-        // call lua function OnWorkerRecvMessage
-        exe_OnWorkerRecvMessage(lua_state, cmd, proto_lua_test);
+        // call lua function OnLuaVMRecvMessage
+        exe_OnLuaVMRecvMessage(lua_state, cmd, proto_lua_test);
         lua_pushinteger(lua_state, 0);
         return 1;
     }
