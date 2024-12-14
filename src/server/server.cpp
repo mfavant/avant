@@ -297,6 +297,7 @@ void server::on_start_load_ipc_json_file()
         std::stringstream buffer;
         buffer << file_stream.rdbuf();
         this->m_ipc_json.parse(buffer.str());
+        file_stream.close();
     }
     auto json_iter = this->m_ipc_json.begin();
     int counter = 0;
