@@ -299,6 +299,8 @@ void server::on_start_load_ipc_json_file()
         this->m_ipc_json.parse(buffer.str());
         file_stream.close();
     }
+
+    // Print ipc.json file content using LOG
     auto json_iter = this->m_ipc_json.begin();
     int counter = 0;
     for (; json_iter != this->m_ipc_json.end(); json_iter++)
