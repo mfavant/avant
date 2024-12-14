@@ -100,11 +100,12 @@ void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx 
 void other_app::on_close_connection(avant::connection::ipc_stream_ctx &ctx)
 {
     uint64_t gid = ctx.get_conn_gid();
-    // LOG_ERROR("close ipc_client gid %llu", gid);
-    std::string app_id;
+
+    // is ipc conn
     if (authenticated_ipc_pair.gid2appid.find(gid) != authenticated_ipc_pair.gid2appid.end())
     {
-        app_id = authenticated_ipc_pair.gid2appid[gid];
+        // LOG_ERROR("close ipc_client gid %llu", gid);
+        std::string app_id = authenticated_ipc_pair.gid2appid[gid];
         authenticated_ipc_pair.gid2appid.erase(gid);
         authenticated_ipc_pair.appid2gid.erase(app_id);
     }
