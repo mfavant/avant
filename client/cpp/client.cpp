@@ -1,4 +1,4 @@
-// g++ -o client.exe client.cpp ../protocol/proto_res/*.pb.cc --std=c++17 -lprotobuf -lpthread
+// g++ -o client.exe client.cpp ../../protocol/proto_res/*.pb.cc --std=c++17 -lprotobuf -lpthread
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -18,9 +18,9 @@
 #include <fcntl.h>
 #include <atomic>
 
-#include "../protocol/proto_res/proto_cmd.pb.h"
-#include "../protocol/proto_res/proto_example.pb.h"
-#include "../protocol/proto_res/proto_message_head.pb.h"
+#include "../../protocol/proto_res/proto_cmd.pb.h"
+#include "../../protocol/proto_res/proto_example.pb.h"
+#include "../../protocol/proto_res/proto_message_head.pb.h"
 
 static bool is_ipv6(std::string ip)
 {

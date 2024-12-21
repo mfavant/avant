@@ -1,4 +1,4 @@
-// g++ -o client_ssl.exe client_ssl.cpp ../protocol/proto_res/*.pb.cc -lprotobuf -lssl -lcrypto
+// g++ -o client_ssl.exe client_ssl.cpp ../../protocol/proto_res/*.pb.cc -lprotobuf -lssl -lcrypto
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -12,9 +12,9 @@
 #include <thread>
 #include <chrono>
 
-#include "../protocol/proto_res/proto_cmd.pb.h"
-#include "../protocol/proto_res/proto_example.pb.h"
-#include "../protocol/proto_res/proto_message_head.pb.h"
+#include "../../protocol/proto_res/proto_cmd.pb.h"
+#include "../../protocol/proto_res/proto_example.pb.h"
+#include "../../protocol/proto_res/proto_message_head.pb.h"
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
