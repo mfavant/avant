@@ -203,7 +203,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
 
             if (frame.payload_length != 0)
             {
-                payload_data = std::move(std::string(&data[index], frame.payload_length));
+                payload_data = std::string(&data[index], frame.payload_length);
             }
 
             if (frame.mask)
