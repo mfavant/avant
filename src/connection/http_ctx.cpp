@@ -171,7 +171,10 @@ void http_ctx::on_event(uint32_t event)
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)
     {
-        socket_ptr->close_callback = [socket_ptr]() {};
+        socket_ptr->close_callback = [socket_ptr]()
+        {
+            LOG_DEBUG("http_ctx socket close_callback fd %d", socket_ptr->get_fd());
+        };
     }
 
     if (event & event::event_poller::ERR)
