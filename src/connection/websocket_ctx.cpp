@@ -138,7 +138,10 @@ void websocket_ctx::on_event(uint32_t event)
     {
         socket_ptr->close_callback = [socket_ptr]()
         {
-            LOG_DEBUG("websocket_ctx socket close_callback fd %d", socket_ptr->get_fd());
+            if (socket_ptr)
+            {
+                // LOG_DEBUG("websocket_ctx socket close_callback fd %d", socket_ptr->get_fd());
+            }
         };
     }
     if (event & event::event_poller::ERR)

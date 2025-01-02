@@ -141,7 +141,10 @@ void ipc_stream_ctx::on_event(uint32_t event)
     {
         this->conn_ptr->socket_obj.close_callback = [socket_ptr]()
         {
-            LOG_DEBUG("ipc_stream_ctx socket close_callback fd %d", socket_ptr->get_fd());
+            if (socket_ptr)
+            {
+                // LOG_DEBUG("ipc_stream_ctx socket close_callback fd %d", socket_ptr->get_fd());
+            }
         };
     }
 
