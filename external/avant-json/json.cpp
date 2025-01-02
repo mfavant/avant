@@ -452,69 +452,9 @@ bool json::operator==(const json &other)
     return false;
 }
 
-bool json::operator==(bool value)
-{
-    json other = value;
-    return (*this == other);
-}
-
-bool json::operator==(long long value)
-{
-    json other = value;
-    return (*this == other);
-}
-
-bool json::operator==(double value)
-{
-    json other = value;
-    return (*this == other);
-}
-
-bool json::operator==(const std::string &value)
-{
-    json other = value;
-    return (*this == other);
-}
-
-bool json::operator==(const char *value)
-{
-    json other = value;
-    return (*this == other);
-}
-
 bool json::operator!=(const json &other)
 {
     return !(*this == other);
-}
-
-bool json::operator!=(bool value)
-{
-    json other = value;
-    return (*this != other);
-}
-
-bool json::operator!=(long long value)
-{
-    json other = value;
-    return (*this != other);
-}
-
-bool json::operator!=(double value)
-{
-    json other = value;
-    return (*this != other);
-}
-
-bool json::operator!=(const std::string &value)
-{
-    json other = value;
-    return (*this != other);
-}
-
-bool json::operator!=(const char *value)
-{
-    json other = value;
-    return (*this != other);
 }
 
 json &json::operator[](size_t index)

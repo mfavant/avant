@@ -80,18 +80,7 @@ namespace avant::json
         json &operator=(const char *value);
 
         bool operator==(const json &other);
-        bool operator==(bool value);
-        bool operator==(long long value);
-        bool operator==(double value);
-        bool operator==(const std::string &value);
-        bool operator==(const char *value);
-
         bool operator!=(const json &other);
-        bool operator!=(bool value);
-        bool operator!=(long long value);
-        bool operator!=(double value);
-        bool operator!=(const std::string &value);
-        bool operator!=(const char *value);
 
         json &operator[](size_t index);
         const json &operator[](size_t index) const;
