@@ -4,6 +4,73 @@ const net = require("net")
 const IP = "127.0.0.1"
 const PORT = 20023
 
+const RPCIP = "127.0.0.1"
+const RPCPORT = 20024
+
+const APPID = "0.0.0.369"
+
+function CreateAvantRPC(RPCIP, RPCPORT, protoRoot) {
+    let newAvantRPCObj = {
+        client: null,
+        recvBuffer: Buffer.alloc(0),
+        OnRecvPackage: null,
+        SendPackage(cmd, package) {
+            console.log("will comming")
+        },
+        protoRoot
+    };
+
+    let tryConnect = () => {
+        console.log(`tryConnect RPC ${RPCIP}:${RPCPORT}`)
+        const client = net.createConnection({ port: RPCPORT, host: RPCIP }, () => {
+            console.log("RPC Connected to server")
+            const ProtoPackage = newAvantRPCObj.protoRoot.lookupType("ProtoPackage")
+            // handshake to remove , PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE
+            const ProtoCmd = newAvantRPCObj.protoRoot.lookupEnum("ProtoCmd")
+            const PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE = ProtoCmd.values['PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE']
+            const ProtoIPCStreamAuthhandshake = newAvantRPCObj.protoRoot.lookupType("ProtoIPCStreamAuthhandshake")
+            const protoIPCStreamAuthHandshake = ProtoIPCStreamAuthhandshake.create({
+                appId: Buffer.from(APPID, "utf8")
+            });
+
+            const reqPackage = ProtoPackage.create({
+                cmd: PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE,
+                protocol: ProtoIPCStreamAuthhandshake.encode(protoIPCStreamAuthHandshake).finish()
+            });
+
+            const needSendBytes = ProtoPackage.encode(reqPackage).finish()
+            const headLen = Buffer.alloc(8)
+            {
+                const uint64Value = BigInt(needSendBytes.length)
+                const high = Number(uint64Value >> BigInt(32))
+                const low = Number(uint64Value & BigInt(0xFFFFFFFF))
+                headLen.writeUint32BE(high, 0)
+                headLen.writeUint32BE(low, 4)
+            }
+            client.write(headLen)
+            client.write(needSendBytes)
+        });
+        client.on('data', (data) => {
+            console.log('RPC data', data);
+        });
+        client.on('end', () => {
+            console.log('RPC end');
+            setTimeout(tryConnect, 1000);
+        });
+        client.on('error', (err) => {
+            console.log(err.message)
+            setTimeout(tryConnect, 1000);
+        });
+
+        newAvantRPCObj.client = client;
+    }
+
+    tryConnect();
+
+    return newAvantRPCObj;
+}
+
+
 function loadProtobuf() {
     return new Promise((resolve, reject) => {
         protobuf.load(
@@ -59,6 +126,7 @@ loadProtobuf().then(root => {
     };
 
     let doConnect = () => {
+        console.log(`doConnect Client ${IP}:${PORT}`)
         const client = net.createConnection({ port: PORT, host: IP }, () => {
             console.log("Connected to server")
             sendCSReqExample(client)
@@ -102,6 +170,7 @@ loadProtobuf().then(root => {
 
         client.on('end', () => {
             console.log("client end");
+            setTimeout(doConnect, 1000)
         });
 
         client.on('error', (err) => {
@@ -110,7 +179,13 @@ loadProtobuf().then(root => {
         });
     }
 
-    doConnect();
+    doConnect(); // mock client
+
+    // mock rpc
+    const RPCConn = CreateAvantRPC(RPCIP, RPCPORT, root)
+    RPCConn.OnRecvPackage = (cmd, package) => {
+    }
+
 }).catch(err => {
     console.log("LoadProtobuf Err", err);
 });
