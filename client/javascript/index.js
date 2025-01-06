@@ -9,26 +9,46 @@ const RPCPORT = 20024
 
 const APPID = "0.0.0.369"
 
-function CreateAvantRPC(RPCIP, RPCPORT, protoRoot) {
+function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
     let newAvantRPCObj = {
         client: null,
         recvBuffer: Buffer.alloc(0),
-        OnRecvPackage: null,
-        SendPackage(cmd, package) {
-            console.log("will comming")
+        OnRecvPackage,
+        SendPackage(package) {
+            if (!package) {
+                return;
+            }
+            if (!this.client) {
+                console.error("RPCObj Client is null");
+                return;
+            }
+            const needSendBytes = ProtoPackage.encode(package).finish()
+            const headLen = Buffer.alloc(8)
+            {
+                const uint64Value = BigInt(needSendBytes.length)
+                const high = Number(uint64Value >> BigInt(32))
+                const low = Number(uint64Value & BigInt(0xFFFFFFFF))
+                headLen.writeUint32BE(high, 0)
+                headLen.writeUint32BE(low, 4)
+            }
+            this.client.write(headLen)
+            this.client.write(needSendBytes)
         },
-        protoRoot
+        protoRoot,
+        appId: null
     };
+
+    const ProtoPackage = newAvantRPCObj.protoRoot.lookupType("ProtoPackage")
+    // handshake to remove , PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE
+    const ProtoCmd = newAvantRPCObj.protoRoot.lookupEnum("ProtoCmd")
+    const PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE = ProtoCmd.values['PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE']
+    const ProtoIPCStreamAuthhandshake = newAvantRPCObj.protoRoot.lookupType("ProtoIPCStreamAuthhandshake")
 
     let tryConnect = () => {
         console.log(`tryConnect RPC ${RPCIP}:${RPCPORT}`)
         const client = net.createConnection({ port: RPCPORT, host: RPCIP }, () => {
             console.log("RPC Connected to server")
-            const ProtoPackage = newAvantRPCObj.protoRoot.lookupType("ProtoPackage")
-            // handshake to remove , PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE
-            const ProtoCmd = newAvantRPCObj.protoRoot.lookupEnum("ProtoCmd")
-            const PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE = ProtoCmd.values['PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE']
-            const ProtoIPCStreamAuthhandshake = newAvantRPCObj.protoRoot.lookupType("ProtoIPCStreamAuthhandshake")
+
             const protoIPCStreamAuthHandshake = ProtoIPCStreamAuthhandshake.create({
                 appId: Buffer.from(APPID, "utf8")
             });
@@ -38,20 +58,49 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot) {
                 protocol: ProtoIPCStreamAuthhandshake.encode(protoIPCStreamAuthHandshake).finish()
             });
 
-            const needSendBytes = ProtoPackage.encode(reqPackage).finish()
-            const headLen = Buffer.alloc(8)
-            {
-                const uint64Value = BigInt(needSendBytes.length)
-                const high = Number(uint64Value >> BigInt(32))
-                const low = Number(uint64Value & BigInt(0xFFFFFFFF))
-                headLen.writeUint32BE(high, 0)
-                headLen.writeUint32BE(low, 4)
-            }
-            client.write(headLen)
-            client.write(needSendBytes)
+            newAvantRPCObj.SendPackage(reqPackage);
         });
+
+        newAvantRPCObj.client = client;
+        newAvantRPCObj.recvBuffer = Buffer.alloc(0)
+        newAvantRPCObj.appId = null
+
         client.on('data', (data) => {
-            console.log('RPC data', data);
+            // decode
+            if (data.length > 0) {
+                newAvantRPCObj.recvBuffer = Buffer.concat([newAvantRPCObj.recvBuffer, data])
+            }
+            while (true) {
+                if (newAvantRPCObj.recvBuffer.length <= 8) {
+                    return;
+                }
+                const high = newAvantRPCObj.recvBuffer.readUint32BE(0)
+                const low = newAvantRPCObj.recvBuffer.readUint32BE(4)
+                const uint64 = Number(BigInt(high) << BigInt(32) | BigInt(low))
+                if (newAvantRPCObj.recvBuffer.length < 8 + uint64) {
+                    return;
+                }
+
+                let packageData = newAvantRPCObj.recvBuffer.subarray(8, 8 + uint64);
+
+                newAvantRPCObj.recvBuffer = newAvantRPCObj.recvBuffer.subarray(8 + uint64, -1)
+
+                try {
+                    const recvPackageData = ProtoPackage.decode(packageData)
+                    if (recvPackageData.cmd == PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE) {
+                        const ptotoIPCStreamAuthhandshake = ProtoIPCStreamAuthhandshake.decode(recvPackageData.protocol)
+                        const appIdString = ptotoIPCStreamAuthhandshake.appId.toString('utf8')
+                        console.log("appIdString ", appIdString)
+                        newAvantRPCObj.appId = appIdString
+                    }
+
+                    if (newAvantRPCObj.OnRecvPackage) {
+                        newAvantRPCObj.OnRecvPackage(newAvantRPCObj, recvPackageData);
+                    }
+                } catch (err) {
+                    console.log(err.message)
+                }
+            }
         });
         client.on('end', () => {
             console.log('RPC end');
@@ -61,8 +110,6 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot) {
             console.log(err.message)
             setTimeout(tryConnect, 1000);
         });
-
-        newAvantRPCObj.client = client;
     }
 
     tryConnect();
@@ -182,9 +229,10 @@ loadProtobuf().then(root => {
     doConnect(); // mock client
 
     // mock rpc
-    const RPCConn = CreateAvantRPC(RPCIP, RPCPORT, root)
-    RPCConn.OnRecvPackage = (cmd, package) => {
-    }
+    const RPCConn = CreateAvantRPC(RPCIP, RPCPORT, root, (rpcObj, package) => {
+        console.log("RPC OnRecvPackage", `CMD = ${package.cmd} FROM APPID=${rpcObj.appId}`)
+    });
+    RPCConn.SendPackage();
 
 }).catch(err => {
     console.log("LoadProtobuf Err", err);
