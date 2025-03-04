@@ -1,0 +1,34 @@
+name: Docker Image Pull Request
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  IMAGE: mfavant/avant
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v3
+      
+    - name: create tag
+      run: |
+          SHA=${{ github.sha }}
+          TAG=${IMAGE}:$(TZ=UTC-9 date '+%Y%m')-${SHA:0:7}
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            TAG="${IMAGE}:latest"
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo TAG $TAG 
+
+    - name: build docker image
+      run: |
+        docker build . -t ${{ env.TAG }}
+        
