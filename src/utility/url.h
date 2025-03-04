@@ -66,6 +66,7 @@ namespace avant::utility
 
         bool secure{false};
         bool ipv6_host{false};
+        bool only_path_query_fragment{false};
         bool authority_present = false;
 
         std::string whole_url_storage;

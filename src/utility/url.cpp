@@ -241,23 +241,35 @@ void url::from_string(const std::string &s)
     this->parse_target = this->whole_url_storage;
     this->left_position = 0;
     this->right_position = 0;
-    this->authority_present = false;
+    this->only_path_query_fragment = false;
 
-    // scheme
-    this->scheme = this->capture_up_to(":", "Expected : in url");
-    std::transform(this->scheme.begin(), this->scheme.end(),
-                   this->scheme.begin(), [](std::string_view::value_type c)
-                   { return std::tolower(c); });
-    this->left_position += this->scheme.size() + 1; // skip ":"
-
-    // authority
-    if (this->move_before("//"))
+    if (s.empty())
     {
-        this->authority_present = true;
-        this->left_position += 2; // skip "//"
+        return;
     }
 
-    if (this->authority_present)
+    if (s[0] == '/')
+    {
+        this->only_path_query_fragment = true;
+    }
+    else
+    {
+        // scheme
+        this->scheme = this->capture_up_to(":", "Expected : in url");
+        std::transform(this->scheme.begin(), this->scheme.end(),
+                       this->scheme.begin(), [](std::string_view::value_type c)
+                       { return std::tolower(c); });
+        this->left_position += this->scheme.size() + 1; // skip ":"
+
+        // authority
+        if (this->move_before("//"))
+        {
+            this->authority_present = true;
+            this->left_position += 2; // skip "//"
+        }
+    }
+
+    if (this->authority_present || this->only_path_query_fragment)
     {
         this->authority = this->capture_up_to("/");
         bool path_exists = true;
@@ -473,8 +485,6 @@ bool url::unescape_path(const std::string &in, std::string &out)
 
         default:
         {
-            if (!std::isalnum(in[i]))
-                return false;
             out += in[i];
         }
         break;
