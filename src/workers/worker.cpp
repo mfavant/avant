@@ -49,6 +49,8 @@ void worker::operator()()
         }
     }
 
+    this->worker_connection_num.store(0);
+
     hooks::init::on_worker_init(*this);
 
     this->m_worker_loop_time.update();
@@ -246,6 +248,8 @@ void worker::close_client_fd(int fd)
         LOG_ERROR("worker close_client_fd conn_ptr is null, ::close %d", fd);
         ::close(fd);
     }
+
+    this->worker_connection_num.fetch_sub(1);
     this->curr_connection_num->fetch_sub(1);
 }
 

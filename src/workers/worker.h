@@ -31,12 +31,16 @@ namespace avant::workers
         bool use_ssl{false};
         size_t epoll_wait_time{0};
 
+        // worker connection num
+        std::atomic<int> worker_connection_num;
+
         SSL_CTX *ssl_context{nullptr};
 
         static std::string http_static_dir;
 
         avant::task::task_type type{avant::task::task_type::NONE};
 
+        // server curr_connection_num
         std::shared_ptr<std::atomic<int>> curr_connection_num{nullptr};
 
         avant::socket::socket_pair *main_worker_tunnel{nullptr};

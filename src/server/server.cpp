@@ -24,6 +24,7 @@
 #include <sstream>
 #include <fstream>
 #include <stdexcept>
+#include <cmath>
 
 using namespace std;
 using namespace avant::server;
@@ -110,6 +111,18 @@ void server::start()
     if (0 != i_ret)
     {
         LOG_ERROR("avant::global::tunnel_id::init(%llu) failed return %d", m_worker_cnt, i_ret);
+        return;
+    }
+
+    if (m_max_client_cnt <= 0 || m_max_client_cnt > 8388607)
+    {
+        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > 8388607 %d", m_max_client_cnt);
+        return;
+    }
+
+    if (m_worker_cnt <= 0 || m_worker_cnt > 511)
+    {
+        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > 511 %d", m_worker_cnt);
         return;
     }
 
@@ -326,20 +339,20 @@ void server::on_start()
     // main m_epoller
     int iret = 0;
     {
-        iret = m_epoller.create(m_max_client_cnt);
+        iret = m_epoller.create(m_max_client_cnt + 10);
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt), iret);
+            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt + 10), iret);
             return;
         }
     }
 
     // main_connection_mgr
     {
-        iret = m_main_connection_mgr.init(m_max_client_cnt);
+        iret = m_main_connection_mgr.init(m_worker_cnt * 4);
         if (iret != 0)
         {
-            LOG_ERROR("m_main_connection_mgr.init failed[%d]", iret);
+            LOG_ERROR("m_main_connection_mgr.init(%d) failed[%d]", (m_worker_cnt * 4), iret);
             return;
         }
     }
@@ -405,11 +418,15 @@ void server::on_start()
             LOG_ERROR("new worker::worker failed");
             return;
         }
+
+        uint64_t worker_max_client_cnt = std::ceil((double)m_max_client_cnt / (double)m_worker_cnt) + m_worker_cnt;
+
         worker::worker::http_static_dir = m_http_static_dir;
         for (size_t i = 0; i < m_worker_cnt; i++)
         {
             m_workers[i].worker_id = i;
             m_workers[i].curr_connection_num = m_curr_connection_num;
+            m_workers[i].worker_connection_num.store(0);
             m_workers[i].main_worker_tunnel = &m_main_worker_tunnel[i];
             m_workers[i].epoll_wait_time = m_epoll_wait_time;
             m_workers[i].use_ssl = m_use_ssl;
@@ -423,17 +440,18 @@ void server::on_start()
                 return;
             }
             std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
-            iret = new_connection_mgr->init(m_max_client_cnt);
+
+            iret = new_connection_mgr->init(worker_max_client_cnt);
             if (iret != 0)
             {
-                LOG_ERROR("new_connection_mgr->init failed");
+                LOG_ERROR("new_connection_mgr->init(%d) failed", worker_max_client_cnt);
                 return;
             }
             m_workers[i].worker_connection_mgr = new_connection_mgr_shared_ptr;
-            iret = m_workers[i].epoller.create(m_max_client_cnt);
+            iret = m_workers[i].epoller.create(worker_max_client_cnt);
             if (iret != 0)
             {
-                LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt), iret);
+                LOG_ERROR("m_epoller.create(%d) iret[%d]", worker_max_client_cnt, iret);
                 return;
             }
 
@@ -678,13 +696,13 @@ void server::on_start()
                         }
                         else
                         {
-                            if (*m_curr_connection_num >= (int)m_max_client_cnt)
+                            if (m_curr_connection_num->load() >= (int)m_max_client_cnt)
                             {
                                 LOG_ERROR("m_curr_connection_num >= m_max_client_cnt");
                                 ::close(new_client_fd);
                                 break;
                             }
-                            *m_curr_connection_num += 1;
+                            m_curr_connection_num->fetch_add(1);
                             clients_fd.push_back(new_client_fd);
                             gids.push_back(server_gen_gid());
                         }
@@ -721,9 +739,14 @@ void server::on_start()
     }
 }
 
+// 32bit(timestamp) 23bit(m_gid_seq) 9bit(worker_idx)
 uint64_t server::server_gen_gid()
 {
-    return (this->m_latest_tick_time << 32) | this->m_gid_seq++;
+    uint64_t gen_gid_seq = this->m_gid_seq++;
+    gen_gid_seq = gen_gid_seq & 0x7FFFFF;
+    gen_gid_seq = gen_gid_seq << 9;
+
+    return (this->m_latest_tick_time << 32) | gen_gid_seq;
 }
 
 void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uint64_t> vec_gid)
@@ -733,15 +756,38 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
         const int &new_client_fd = vec_new_client_fd[loop];
         const uint64_t &gid = vec_gid[loop];
 
+        uint64_t target_worker_idx = 0;
+        int worker_connection_num = 0;
+
+        for (uint64_t worker_idx = 0; worker_idx < this->m_worker_cnt; worker_idx++)
+        {
+            if (target_worker_idx == worker_idx)
+            {
+                worker_connection_num = m_workers[worker_idx].worker_connection_num.load();
+                continue;
+            }
+            int temp_val = m_workers[worker_idx].worker_connection_num.load();
+            if (temp_val <= worker_connection_num)
+            {
+                worker_connection_num = temp_val;
+                target_worker_idx = worker_idx;
+            }
+        }
+
+        target_worker_idx = target_worker_idx & 0x1FF; // 9 bits
+
+        m_workers[target_worker_idx].worker_connection_num.fetch_add(1);
+
+        int target_worker_tunnel_id = tunnel_id::get().get_worker_tunnel_id(target_worker_idx);
+
         ProtoTunnelMain2WorkerNewClient main2worker_new_client;
         main2worker_new_client.set_fd(new_client_fd);
-        main2worker_new_client.set_gid(gid);
+        uint64_t real_gid = gid | target_worker_idx;
+        main2worker_new_client.set_gid(real_gid);
 
         ProtoPackage need_forward_package;
         proto::pack_package(need_forward_package, main2worker_new_client, ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT);
         // LOG_ERROR("need_forward_package %d", need_forward_package.cmd());
-
-        int target_worker_tunnel_id = tunnel_id::get().hash_gid_2_worker_tunnel_id(gid);
 
         int forward_ret = tunnel_forward(tunnel_id::get().get_main_tunnel_id(), target_worker_tunnel_id, need_forward_package);
 
@@ -749,7 +795,7 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
         {
             LOG_ERROR("tunnel_forward err %d target_worker_tunnel_id %d", forward_ret, target_worker_tunnel_id);
             ::close(new_client_fd);
-            *m_curr_connection_num -= 1;
+            m_curr_connection_num->fetch_sub(1);
         }
     }
 }

@@ -55,7 +55,7 @@ namespace avant::global
 
         inline int hash_gid_2_worker_tunnel_id(uint64_t gid)
         {
-            return gid % m_worker_cnt;
+            return get_worker_tunnel_id(gid & 0x1FF);
         }
 
         inline bool is_tunnel_id(int id)
