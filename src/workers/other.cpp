@@ -245,6 +245,7 @@ void other::try_send_flush_tunnel()
         int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
         if (len > 0)
         {
+            tunnel_conn->record_sent_bytes(len);
             tunnel_conn->send_buffer.move_read_ptr_n(len);
         }
         else
@@ -303,6 +304,7 @@ void other::on_tunnel_event(uint32_t event)
         }
         if (buffer_len > 0)
         {
+            tunnel_conn->record_recv_bytes(buffer_len);
             tunnel_conn->recv_buffer.append(buffer, buffer_len);
         }
 

@@ -186,6 +186,7 @@ void stream_ctx::on_event(uint32_t event)
 
         if (buffer_len > 0)
         {
+            conn_ptr->record_recv_bytes(buffer_len);
             conn_ptr->recv_buffer.append(buffer, buffer_len);
         }
     }
@@ -232,6 +233,7 @@ void stream_ctx::try_send_flush()
         int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
         if (len > 0)
         {
+            conn_ptr->record_sent_bytes(len);
             conn_ptr->send_buffer.move_read_ptr_n(len);
         }
         else

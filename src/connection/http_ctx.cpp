@@ -284,6 +284,7 @@ void http_ctx::on_event(uint32_t event)
             }
             else if (len > 0)
             {
+                this->conn_ptr->record_recv_bytes(len);
                 int nparsed = http_parser_execute(&this->http_parser_obj, http_ctx::settings.get(), buffer + buffer_len, len);
                 buffer_len += len;
                 if (this->http_parser_obj.upgrade)
@@ -360,6 +361,7 @@ void http_ctx::on_event(uint32_t event)
             }
             else
             {
+                conn_ptr->record_sent_bytes(len);
                 conn_ptr->send_buffer.move_read_ptr_n(len);
             }
         }

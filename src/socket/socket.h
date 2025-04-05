@@ -35,8 +35,10 @@ namespace avant::socket
         bool connect(const std::string &ip, int port);
         bool close();
         int accept();
+
         int recv(char *buf, size_t len, int &oper_errno);
         int send(const char *buf, size_t len, int &oper_errno);
+
         bool set_non_blocking();
         bool set_blocking();
         bool set_send_buffer(size_t size);

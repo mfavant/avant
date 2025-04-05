@@ -840,6 +840,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
         }
         if (buffer_used_idx > 0)
         {
+            tunnel_conn->record_recv_bytes(buffer_used_idx);
             tunnel_conn->recv_buffer.append(buffer, buffer_used_idx);
         }
 
@@ -1011,6 +1012,7 @@ void server::try_send_flush_tunnel(avant::socket::socket_pair &tunnel)
         if (len > 0)
         {
             // LOG_ERROR("flush bytes %d", len);
+            tunnel_conn->record_sent_bytes(len);
             tunnel_conn->send_buffer.move_read_ptr_n(len);
         }
         else

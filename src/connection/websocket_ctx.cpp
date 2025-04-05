@@ -237,6 +237,7 @@ void websocket_ctx::on_event(uint32_t event)
                 }
                 else if (len > 0)
                 {
+                    this->conn_ptr->record_recv_bytes(len);
                     int nparsed = http_parser_execute(&this->http_parser_obj, websocket_ctx::settings.get(), buffer + buffer_len, len);
                     buffer_len += len;
                     if (this->http_parser_obj.upgrade)
@@ -389,6 +390,7 @@ void websocket_ctx::on_event(uint32_t event)
 
             if (buffer_len > 0)
             {
+                conn_ptr->record_recv_bytes(buffer_len);
                 conn_ptr->recv_buffer.append(buffer, buffer_len);
             }
         }
@@ -450,6 +452,7 @@ void websocket_ctx::try_send_flush()
         int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
         if (len > 0)
         {
+            conn_ptr->record_sent_bytes(len);
             conn_ptr->send_buffer.move_read_ptr_n(len);
         }
         else
