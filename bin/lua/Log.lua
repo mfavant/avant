@@ -1,4 +1,4 @@
-local Log = {}
+local Log = {};
 
 function Log:Error(...)
     local args = {...};
@@ -13,4 +13,4 @@ function Log:Error(...)
     avant.Logger(string.format("[%s:%d] %s", source, line, message));
 end
 
-return Log
+return Log;

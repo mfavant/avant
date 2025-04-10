@@ -1,57 +1,43 @@
 package.path = "./lua/?.lua;" .. package.path
 local Log = require("Log")
+local Main = require("Main")
+local Worker = require("Worker")
+local Other = require("Other")
 
 function OnMainInit(isHot)
-    Log:Error("OnMainInit isHot %s", tostring(isHot));
+    Main:OnInit(isHot);
 end
 
 function OnMainStop(isHot)
-    local log = "OnMainStop isHot " .. tostring(isHot);
-    Log:Error(log);
+    Main:OnStop(isHot);
 end
 
 function OnMainTick()
-    -- Log:Error("OnMainTick ")
-    -- local t = {
-    --     ["num"] = 2,
-    --     ["int32array"] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-    --     ["data"] = {
-    --         ["str"] = "hello world"
-    --     }
-    -- };
-    -- local res = avant.Lua2Protobuf(t, 8);
-    -- if res == nil then
-    --     Log:Error("avant.Lua2Protobuf res nil ");
-    -- else
-    --     Log:Error("avant.Lua2Protobuf res " .. res);
-    -- end
+    Main:OnTick();
 end
 
 function OnWorkerInit(workerIdx, isHot)
-    local log = "OnWorkerInit workerIdx " .. workerIdx .. " isHot " .. tostring(isHot);
-    Log:Error(log)
+    Worker:OnInit(workerIdx, isHot);
 end
 
 function OnWorkerStop(workerIdx, isHot)
-    local log = "OnWorkerStop" .. workerIdx .. " isHot " .. tostring(isHot);
-    Log:Error(log)
+    Worker:OnStop(workerIdx, isHot);
 end
 
 function OnWorkerTick(workerIdx)
-    -- Log:Error("OnWorkerTick " .. workerIdx)
-    -- local t = {
-    --     ["num"] = 2,
-    --     ["int32array"] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-    --     ["data"] = {
-    --         ["str"] = "hello world"
-    --     }
-    -- };
-    -- local res = avant.Lua2Protobuf(t, 8);
-    -- if res == nil then
-    --     Log:Error("avant.Lua2Protobuf res nil " .. workerIdx);
-    -- else
-    --     Log:Error("avant.Lua2Protobuf res " .. workerIdx .. " " .. res);
-    -- end
+    Worker:OnTick(workerIdx);
+end
+
+function OnOtherInit(isHot)
+    Other:OnInit(isHot);
+end
+
+function OnOtherStop(isHot)
+    Other:OnStop(isHot);
+end
+
+function OnOtherTick()
+    Other:OnTick();
 end
 
 function OnLuaVMRecvMessage(isMainVM, isOtherVM, isWorkerVM, workerIdx, cmd, message)
@@ -66,32 +52,14 @@ function OnLuaVMRecvMessage(isMainVM, isOtherVM, isWorkerVM, workerIdx, cmd, mes
         Log:Error("avant.OnLuaVMRecvMessage num " .. num .. " " .. "int32array " .. int32array_str .. " " .. data_str);
     else
         Log:Error("avant.OnLuaVMRecvMessage cmd != 8");
+
+        if isMainVM then
+            Main:OnLuaVMRecvMessage(cmd, message);
+        elseif isOtherVM then
+            Other:OnLuaVMRecvMessage(cmd, message);
+        elseif isWorkerVM then
+            Worker:OnLuaVMRecvMessage(workerIdx, cmd, message);
+        end
     end
-end
 
-function OnOtherInit(isHot)
-    local log = "OnOtherInit isHot " .. tostring(isHot);
-    Log:Error(log);
-end
-
-function OnOtherStop(isHot)
-    local log = "OnOtherStop isHot " .. tostring(isHot);
-    Log:Error(log);
-end
-
-function OnOtherTick()
-    -- Log:Error("OnOtherTick ")
-    -- local t = {
-    --     ["num"] = 2,
-    --     ["int32array"] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-    --     ["data"] = {
-    --         ["str"] = "hello world"
-    --     }
-    -- };
-    -- local res = avant.Lua2Protobuf(t, 8);
-    -- if res == nil then
-    --     Log:Error("avant.Lua2Protobuf res nil ");
-    -- else
-    --     Log:Error("avant.Lua2Protobuf res " .. res);
-    -- end
 end
