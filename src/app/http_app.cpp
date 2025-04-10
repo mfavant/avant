@@ -82,7 +82,7 @@ struct http_app_reponse
 void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_alive)
 {
     // send new_connection protocol to other thread
-#if 0
+    if constexpr (false)
     {
         ProtoPackage package;
         ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
@@ -90,7 +90,6 @@ void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_
         ctx.tunnel_forward(std::vector<int>{avant::global::tunnel_id::get().get_other_tunnel_id()},
                            avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION));
     }
-#endif
     // LOG_ERROR("http_app new socket gid %llu", ctx.get_conn_gid());
 }
 
@@ -123,23 +122,26 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
         }
 
-#if 0
-        if (exist_keep_live)
+        if constexpr (false)
         {
-            ctx.keep_alive = true;
+            if (exist_keep_live)
+            {
+                ctx.keep_alive = true;
+            }
+            {
+                const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
+                ctx.send_buffer_append(response, strlen(response));
+                ctx.set_process_end(true);
+                return;
+            }
         }
+        else
         {
-            const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
-            ctx.send_buffer_append(response, strlen(response));
-            ctx.set_process_end(true);
-            return;
+            if (exist_keep_live)
+            {
+                ctx.keep_alive = false; // app not use keep_alive
+            }
         }
-#else
-        if (exist_keep_live)
-        {
-            ctx.keep_alive = false; // app not use keep_alive
-        }
-#endif
 
         std::string url;
         if (!utility::url::unescape_path(ctx.url, url))
