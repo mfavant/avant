@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <string>
 #include <cstring>
+#include <chrono>
 
 namespace avant
 {
@@ -34,12 +35,13 @@ namespace avant
             };
 
             /**
-             * @brief open log file
+             * @brief open log file directory
              *
-             * @param log_file_path
+             * @param log_file_base_path directory path for log files (e.g., "logs")
+             * @param log_level
              */
 
-            void open(const string &log_file_path);
+            void open(const string &log_file_base_path, const int log_level);
 
             /**
              * @brief close log file
@@ -99,9 +101,18 @@ namespace avant
 
         protected:
             void log(flag f, const char *file, int line, const char *format, va_list arg_ptr);
+            void rotate_log_file(std::time_t ticks);
 
         protected:
             FILE *m_fp{nullptr};
+            // Store base path for log files
+            std::string m_base_path;
+            // Track current hour for rotation
+            struct tm m_last_tm;
+            bool m_has_valid_tm{false};
+
+            int m_log_level{0};
+
             static const char *s_flag[FLAG_COUNT];
         };
     }

@@ -44,6 +44,8 @@ int system::init()
 
     const int daemon = (*ini)["server"]["daemon"];
 
+    const int log_level = (*ini)["server"]["log_level"];
+
     const int max_ipc_conn_num = (*ini)["ipc"]["max_ipc_conn_num"];
     const string ipc_json_path = (*ini)["ipc"]["ipc_json_path"];
 
@@ -70,7 +72,7 @@ int system::init()
     {
         closedir(dp);
     }
-    logger::instance().open(m_root_path + "/log/avant.log");
+    logger::instance().open(m_root_path + "/log/", log_level);
 
     // server
     auto m_server = singleton<server::server>::instance();

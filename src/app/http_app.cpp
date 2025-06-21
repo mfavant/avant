@@ -150,7 +150,9 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             ctx.set_response_end(true);
             return;
         }
-        // LOG_ERROR("%s", url.c_str());
+
+        LOG_DEBUG("HttpUrl %s", url.c_str());
+
         auto find_res = url.find("..");
         if (std::string::npos != find_res)
         {
