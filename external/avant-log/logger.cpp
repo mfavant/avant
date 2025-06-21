@@ -93,7 +93,7 @@ void logger::log(flag f, const char *file, int line, const char *format, va_list
     struct tm *ptm = std::localtime(&ticks);
     char buf[32];
     memset(buf, 0, sizeof(buf));
-    strftime(buf, sizeof(buf), "%Y-%m-%D %H:%M:%S  ", ptm);
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ptm);
     // ensure safe using file in different thread
     flockfile(m_fp); // print time
     // using log file
