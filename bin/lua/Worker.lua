@@ -1,13 +1,13 @@
 local Worker = {};
 local Log = require("Log");
 
-function Worker:OnInit(workerIdx, isHot)
-    local log = "OnWorkerInit workerIdx " .. workerIdx .. " isHot " .. tostring(isHot);
+function Worker:OnInit(workerIdx)
+    local log = "OnWorkerInit workerIdx " .. workerIdx;
     Log:Error(log);
 end
 
-function Worker:OnStop(workerIdx, isHot)
-    local log = "OnWorkerStop" .. workerIdx .. " isHot " .. tostring(isHot);
+function Worker:OnStop(workerIdx)
+    local log = "OnWorkerStop" .. workerIdx;
     Log:Error(log);
 end
 
@@ -26,6 +26,10 @@ function Worker:OnTick(workerIdx)
     -- else
     --     Log:Error("avant.Lua2Protobuf res " .. workerIdx .. " " .. res);
     -- end
+end
+
+function Worker:OnReload(workerIdx)
+    Log:Error("luavm Worker:OnReload workerIdx " .. tostring(workerIdx));
 end
 
 function Worker:OnLuaVMRecvMessage(workerIdx, cmd, message)

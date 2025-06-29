@@ -18,28 +18,31 @@ namespace avant::app
 
         void on_main_init(const std::string &lua_dir, const int worker_cnt);
 
-        void real_on_main_init(bool is_hot);
-        void on_main_stop(bool is_hot);
+        void real_on_main_init();
+        void on_main_stop();
         void on_main_tick();
-        void exe_OnMainInit(bool is_hot);
-        void exe_OnMainStop(bool is_hot);
+        void exe_OnMainInit();
+        void exe_OnMainStop();
         void exe_OnMainTick();
+        void exe_OnMainReload();
 
-        void on_worker_init(int worker_idx, bool is_hot);
-        void on_worker_stop(int worker_idx, bool is_hot);
+        void on_worker_init(int worker_idx);
+        void on_worker_stop(int worker_idx);
         void on_worker_tick(int worker_idx);
-        void exe_OnWorkerInit(int worker_idx, bool is_hot);
-        void exe_OnWorkerStop(int worker_idx, bool is_hot);
+        void exe_OnWorkerInit(int worker_idx);
+        void exe_OnWorkerStop(int worker_idx);
         void exe_OnWorkerTick(int worker_idx);
+        void exe_OnWorkerReload(int worker_idx);
 
         static void exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package);
 
-        void on_other_init(bool is_hot);
-        void on_other_stop(bool is_hot);
+        void on_other_init();
+        void on_other_stop();
         void on_other_tick();
-        void exe_OnOtherInit(bool is_hot);
-        void exe_OnOtherStop(bool is_hot);
+        void exe_OnOtherInit();
+        void exe_OnOtherStop();
         void exe_OnOtherTick();
+        void exe_OnOtherReload();
 
         void main_mount();
         void worker_mount(int worker_idx);

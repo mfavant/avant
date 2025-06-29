@@ -28,19 +28,19 @@ void websocket_app::on_main_init(avant::server::server &server_obj)
 void websocket_app::on_worker_init(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("websocket_app::on_worker_init %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id, false);
+    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
 }
 
 void websocket_app::on_main_stop(avant::server::server &server_obj)
 {
     LOG_ERROR("websocket_app::on_main_stop");
-    utility::singleton<lua_plugin>::instance()->on_main_stop(false);
+    utility::singleton<lua_plugin>::instance()->on_main_stop();
 }
 
 void websocket_app::on_worker_stop(avant::workers::worker &worker_obj)
 {
     LOG_ERROR("websocket_app::on_worker_stop %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id, false);
+    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
 }
 
 void websocket_app::on_main_tick(avant::server::server &server_obj)

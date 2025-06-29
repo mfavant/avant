@@ -4,40 +4,52 @@ local Main = require("Main")
 local Worker = require("Worker")
 local Other = require("Other")
 
-function OnMainInit(isHot)
-    Main:OnInit(isHot);
+function OnMainInit()
+    Main:OnInit();
 end
 
-function OnMainStop(isHot)
-    Main:OnStop(isHot);
+function OnMainStop()
+    Main:OnStop();
 end
 
 function OnMainTick()
     Main:OnTick();
 end
 
-function OnWorkerInit(workerIdx, isHot)
-    Worker:OnInit(workerIdx, isHot);
+function OnMainReload()
+    Main:OnReload();
 end
 
-function OnWorkerStop(workerIdx, isHot)
-    Worker:OnStop(workerIdx, isHot);
+function OnWorkerInit(workerIdx)
+    Worker:OnInit(workerIdx);
+end
+
+function OnWorkerStop(workerIdx)
+    Worker:OnStop(workerIdx);
 end
 
 function OnWorkerTick(workerIdx)
     Worker:OnTick(workerIdx);
 end
 
-function OnOtherInit(isHot)
-    Other:OnInit(isHot);
+function OnWorkerReload(workerIdx)
+    Worker:OnReload(workerIdx);
 end
 
-function OnOtherStop(isHot)
-    Other:OnStop(isHot);
+function OnOtherInit()
+    Other:OnInit();
+end
+
+function OnOtherStop()
+    Other:OnStop();
 end
 
 function OnOtherTick()
     Other:OnTick();
+end
+
+function OnOtherReload()
+    Other:OnReload();
 end
 
 function OnLuaVMRecvMessage(isMainVM, isOtherVM, isWorkerVM, workerIdx, cmd, message)

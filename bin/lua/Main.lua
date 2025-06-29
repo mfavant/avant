@@ -1,12 +1,12 @@
 local Main = {};
 local Log = require("Log");
 
-function Main:OnInit(isHot)
-    Log:Error("OnMainInit isHot %s", tostring(isHot));
+function Main:OnInit()
+    Log:Error("OnMainInit");
 end
 
-function Main:OnStop(isHot)
-    local log = "OnMainStop isHot " .. tostring(isHot);
+function Main:OnStop()
+    local log = "OnMainStop";
     Log:Error(log);
 end
 
@@ -25,6 +25,10 @@ function Main:OnTick()
     -- else
     --     Log:Error("avant.Lua2Protobuf res " .. res);
     -- end
+end
+
+function Main:OnReload()
+    Log:Error("luavm Main:OnReload");
 end
 
 function Main:OnLuaVMRecvMessage(cmd, message)

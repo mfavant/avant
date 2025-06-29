@@ -26,13 +26,13 @@ static avant_authenticated_ipc_pair authenticated_ipc_pair;
 void other_app::on_other_init(avant::workers::other &other_obj)
 {
     LOG_ERROR("other_app::on_other_init()");
-    utility::singleton<lua_plugin>::instance()->on_other_init(false);
+    utility::singleton<lua_plugin>::instance()->on_other_init();
 }
 
 void other_app::on_other_stop(avant::workers::other &other_obj)
 {
     LOG_ERROR("other_app::on_other_stop()");
-    utility::singleton<lua_plugin>::instance()->on_other_stop(false);
+    utility::singleton<lua_plugin>::instance()->on_other_stop();
 }
 
 void other_app::on_other_tick(avant::workers::other &other_obj)
