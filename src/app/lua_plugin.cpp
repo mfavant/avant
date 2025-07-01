@@ -412,6 +412,10 @@ void lua_plugin::main_mount()
     {
         // mount main lua vm
         luaL_newlib(this->lua_state, main_lulibs);
+
+        lua_pushstring(this->lua_state, this->lua_dir.c_str());
+        lua_setfield(this->lua_state, -2, "LuaDir");
+
         lua_setglobal(this->lua_state, "avant");
     }
 }
@@ -423,6 +427,10 @@ void lua_plugin::worker_mount(int worker_idx)
         {"Lua2Protobuf", Lua2Protobuf},
         {NULL, NULL}};
     luaL_newlib(this->worker_lua_state[worker_idx], worker_lulibs);
+
+    lua_pushstring(this->worker_lua_state[worker_idx], this->lua_dir.c_str());
+    lua_setfield(this->worker_lua_state[worker_idx], -2, "LuaDir");
+
     lua_setglobal(this->worker_lua_state[worker_idx], "avant");
 }
 
@@ -434,6 +442,10 @@ void lua_plugin::other_mount()
         {NULL, NULL}};
     {
         luaL_newlib(this->other_lua_state, other_lulibs);
+
+        lua_pushstring(this->other_lua_state, this->lua_dir.c_str());
+        lua_setfield(this->other_lua_state, -2, "LuaDir");
+
         lua_setglobal(this->other_lua_state, "avant");
     }
 }

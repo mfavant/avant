@@ -1,4 +1,6 @@
-package.path = "./lua/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/Player/?.lua;" .. package.path
+
 local Log = require("Log")
 local Main = require("Main")
 local Worker = require("Worker")
