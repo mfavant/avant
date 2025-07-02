@@ -33,10 +33,20 @@ end
 -- kill -10 {avant PID}
 function Other:OnReload()
     Log:Error("luavm Other:OnReload");
-    -- hot load PlayerLogic script
-    package.loaded["PlayerLogic"] = nil;
-    require("PlayerLogic");
-    Log:Error("PlayerLogic.lua Reload");
+
+    local reloadList = {}
+    table.insert(reloadList, "PlayerLogic")
+
+    for i, name in ipairs(reloadList) do
+        package.loaded[name] = nil;
+        local ok, module = pcall(require, name)
+        if ok then
+            Log:Error("%s.lua Reloaded", name);
+        else
+            Log:Error("%s.lua Reload Err %s ", tostring(module or ""));
+        end
+    end
+
 end
 
 function Other:OnLuaVMRecvMessage(cmd, message)
