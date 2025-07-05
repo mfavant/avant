@@ -1,12 +1,26 @@
 syntax = "proto3";
 
-// PROTO_CMD_LUA_TEST
+message ProtoLuaTestInner
+{
+    double double_val = 1;
+    float float_val = 2;
+    int32 int32_val = 3;
+    int64 int64_val = 4;
+    uint32 uint32_val = 5;
+    uint64 uint64_val = 6;
+    bool bool_val = 7;
+    string str_val = 8;
+}
+
 message ProtoLuaTestData
 {
     string str = 1;
     repeated string strarray = 2;
+    repeated ProtoLuaTestInner inner_array = 3;
+    ProtoLuaTestInner inner = 4;
 }
 
+// PROTO_CMD_LUA_TEST
 message ProtoLuaTest
 {
     int32 num = 1;

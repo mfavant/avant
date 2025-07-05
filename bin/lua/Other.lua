@@ -20,15 +20,53 @@ function Other:OnTick()
         ["int32array"] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
         ["data"] = {
             ["str"] = "hello world",
-            ["strarray"] = {"hello", "world", "this", "is", "avant"}
+            ["strarray"] = {"hello", "world", "this", "is", "avant"},
+            ["inner"] = {
+                ["double_val"] = 1.1,
+                ["float_val"] = 1.0,
+                ["int32_val"] = 99,
+                ["int64_val"] = 110,
+                ["uint32_val"] = 111,
+                ["uint64_val"] = 112,
+                ["bool_val"] = true,
+                ["str_val"] = "this is str_val"
+            },
+            ["inner_array"] = {{
+                ["double_val"] = 1.2,
+                ["float_val"] = 1.1,
+                ["int32_val"] = 100,
+                ["int64_val"] = 111,
+                ["uint32_val"] = 112,
+                ["uint64_val"] = 113,
+                ["bool_val"] = true,
+                ["str_val"] = "this is str_val 1"
+            }, {
+                ["double_val"] = 1.3,
+                ["float_val"] = 1.2,
+                ["int32_val"] = 101,
+                ["int64_val"] = 112,
+                ["uint32_val"] = 113,
+                ["uint64_val"] = 114,
+                ["bool_val"] = true,
+                ["str_val"] = "this is str_val 2"
+            }, {
+                ["double_val"] = 1.4,
+                ["float_val"] = 1.3,
+                ["int32_val"] = 102,
+                ["int64_val"] = 113,
+                ["uint32_val"] = 114,
+                ["uint64_val"] = 115,
+                ["bool_val"] = true,
+                ["str_val"] = "this is str_val 3"
+            }}
         }
     };
     -- ProtoCmd::PROTO_CMD_LUA_TEST = 8;
     local res = avant.Lua2Protobuf(t, 8);
     if res == nil then
-        -- Log:Error("avant.Lua2Protobuf failed");
+        Log:Error("avant.Lua2Protobuf failed");
     else
-        -- Log:Error("avant.Lua2Protobuf succ " .. res);
+        Log:Error("avant.Lua2Protobuf succ " .. res);
     end
 end
 
