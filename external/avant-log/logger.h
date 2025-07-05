@@ -123,3 +123,10 @@ namespace avant
 #define LOG_WARN(...) avant::log::logger::instance().warn(__FILE__, __LINE__, __VA_ARGS__)
 #define LOG_ERROR(...) avant::log::logger::instance().error(__FILE__, __LINE__, __VA_ARGS__)
 #define LOG_FATAL(...) avant::log::logger::instance().fatal(__FILE__, __LINE__, __VA_ARGS__)
+
+#define ASSERT_LOG_EXIT(EXPR) \
+    if (!(EXPR))              \
+    {                         \
+        LOG_FATAL(#EXPR);     \
+        exit(-1);             \
+    }

@@ -106,22 +106,22 @@ void lua_plugin::real_on_main_init()
         std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->lua_state, filename.data());
 
-        if (isok == LUA_OK)
-        {
-            LOG_ERROR("main Init.lua load succ");
-        }
-        else
-        {
-            LOG_ERROR("main Init.lua load failed, %s", lua_tostring(this->lua_state, -1));
-            exit(-1);
-        }
+        ASSERT_LOG_EXIT(isok == LUA_OK);
     }
+
+    int old_lua_stack_size = lua_gettop(this->lua_state);
     exe_OnMainInit();
+    int new_lua_stack_size = lua_gettop(this->lua_state);
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::on_main_stop()
 {
+    int old_lua_stack_size = lua_gettop(this->lua_state);
     exe_OnMainStop();
+    int new_lua_stack_size = lua_gettop(this->lua_state);
+
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::on_main_tick()
@@ -131,11 +131,19 @@ void lua_plugin::on_main_tick()
         LOG_ERROR("this->lua_state_be_reload is true");
         this->lua_state_be_reload = false;
 
+        int old_lua_stack_size = lua_gettop(this->lua_state);
         exe_OnMainReload();
+        int new_lua_stack_size = lua_gettop(this->lua_state);
+
+        ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 
         return;
     }
+
+    int old_lua_stack_size = lua_gettop(this->lua_state);
     exe_OnMainTick();
+    int new_lua_stack_size = lua_gettop(this->lua_state);
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::on_worker_init(int worker_idx)
@@ -146,22 +154,22 @@ void lua_plugin::on_worker_init(int worker_idx)
         worker_mount(worker_idx);
         std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->worker_lua_state[worker_idx], filename.data());
-        if (isok == LUA_OK)
-        {
-            LOG_ERROR("worker vm[%d] Init.lua load succ", worker_idx);
-        }
-        else
-        {
-            LOG_ERROR("main worker vm[%d] Init.lua load failed, %s", worker_idx, lua_tostring(this->worker_lua_state[worker_idx], -1));
-            exit(-1);
-        }
+
+        ASSERT_LOG_EXIT(isok == LUA_OK);
     }
+
+    int old_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
     exe_OnWorkerInit(worker_idx);
+    int new_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::on_worker_stop(int worker_idx)
 {
+    int old_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
     exe_OnWorkerStop(worker_idx);
+    int new_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::on_worker_tick(int worker_idx)
@@ -171,107 +179,113 @@ void lua_plugin::on_worker_tick(int worker_idx)
         LOG_ERROR("this->worker_lua_state_be_reload[%d] is true", worker_idx);
         this->worker_lua_state_be_reload[worker_idx] = false;
 
+        int old_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
         exe_OnWorkerReload(worker_idx);
+        int new_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
+        ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 
         return;
     }
+
+    int old_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
     exe_OnWorkerTick(worker_idx);
+    int new_lua_stack_size = lua_gettop(this->worker_lua_state[worker_idx]);
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::exe_OnMainInit()
 {
+    int isok = LUA_OK;
     lua_getglobal(this->lua_state, "OnMainInit");
-    int isok = lua_pcall(this->lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnMainInit failed %s", lua_tostring(this->lua_state, -1));
-    }
+
+    int old_lua_stack_size = lua_gettop(this->lua_state);
+    isok = lua_pcall(this->lua_state, 0, 0, 0);
+    ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnMainStop()
 {
+    int isok = LUA_OK;
     lua_getglobal(this->lua_state, "OnMainStop");
-    int isok = lua_pcall(this->lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnMainStop failed %s", lua_tostring(this->lua_state, -1));
-    }
+
+    isok = lua_pcall(this->lua_state, 0, 0, 0);
+    ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnMainTick()
 {
+    static int isok = LUA_OK;
     lua_getglobal(this->lua_state, "OnMainTick");
-    static int isok = 0;
+
     isok = lua_pcall(this->lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnMainTick failed %s", lua_tostring(this->lua_state, -1));
-    }
+    ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnMainReload()
 {
+    static int isok = LUA_OK;
+
     lua_getglobal(this->lua_state, "OnMainReload");
-    static int isok = 0;
+
     isok = lua_pcall(this->lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnMainReload failed %s", lua_tostring(this->lua_state, -1));
-    }
+    ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnWorkerInit(int worker_idx)
 {
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
+
+    int isok = LUA_OK;
     lua_getglobal(lua_ptr, "OnWorkerInit");
+
     lua_pushinteger(lua_ptr, worker_idx);
-    int isok = lua_pcall(lua_ptr, 1, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnWorkerInit failed %s", lua_tostring(lua_ptr, -1));
-    }
+
+    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnWorkerStop(int worker_idx)
 {
+    int isok = LUA_OK;
+
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
+
     lua_getglobal(lua_ptr, "OnWorkerStop");
+
     lua_pushinteger(lua_ptr, worker_idx);
-    int isok = lua_pcall(lua_ptr, 1, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnWorkerStop failed %s", lua_tostring(lua_ptr, -1));
-    }
+    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnWorkerTick(int worker_idx)
 {
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
+
+    int isok = LUA_OK;
     lua_getglobal(lua_ptr, "OnWorkerTick");
+
     lua_pushinteger(lua_ptr, worker_idx);
-    int isok = lua_pcall(lua_ptr, 1, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnWorkerTick failed %s", lua_tostring(lua_ptr, -1));
-    }
+    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnWorkerReload(int worker_idx)
 {
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
+
+    int isok = LUA_OK;
     lua_getglobal(lua_ptr, "OnWorkerReload");
+
     lua_pushinteger(lua_ptr, worker_idx);
-    int isok = lua_pcall(lua_ptr, 1, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnWorkerReload failed %s", lua_tostring(lua_ptr, -1));
-    }
+    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package)
 {
     lua_plugin *lua_plugin_ptr = singleton<lua_plugin>::instance();
 
+    int isok = LUA_OK;
     lua_getglobal(lua_state, "OnLuaVMRecvMessage");
 
     int is_mainVM = 0;
@@ -298,11 +312,7 @@ void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const goo
                 break;
             }
         }
-        if (worker_idx == -1)
-        {
-            LOG_ERROR("exe_OnLuaVMRecvMessage find lua_state worker_idx failed");
-            return;
-        }
+        ASSERT_LOG_EXIT(worker_idx != -1);
     }
 
     lua_pushboolean(lua_state, is_mainVM);
@@ -312,11 +322,8 @@ void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const goo
     lua_pushinteger(lua_state, cmd);
     protobuf2lua(lua_state, package);
 
-    int isok = lua_pcall(lua_state, 6, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnLuaVMRecvMessage failed %s", lua_tostring(lua_state, -1));
-    }
+    isok = lua_pcall(lua_state, 6, 0, 0);
+    ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::on_other_init()
@@ -328,22 +335,22 @@ void lua_plugin::on_other_init()
         std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->other_lua_state, filename.data());
 
-        if (isok == LUA_OK)
-        {
-            LOG_ERROR("other Init.lua load succ");
-        }
-        else
-        {
-            LOG_ERROR("other Init.lua load failed, %s", lua_tostring(this->other_lua_state, -1));
-            exit(-1);
-        }
+        ASSERT_LOG_EXIT(isok == LUA_OK);
     }
+
+    int old_lua_stack_size = lua_gettop(this->other_lua_state);
     exe_OnOtherInit();
+    int new_lua_stack_size = lua_gettop(this->other_lua_state);
+
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::on_other_stop()
 {
+    int old_lua_stack_size = lua_gettop(this->other_lua_state);
     exe_OnOtherStop();
+    int new_lua_stack_size = lua_gettop(this->other_lua_state);
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::on_other_tick()
@@ -353,55 +360,55 @@ void lua_plugin::on_other_tick()
         LOG_ERROR("this->other_lua_state_be_reload is true");
         this->other_lua_state_be_reload = false;
 
+        int old_lua_stack_size = lua_gettop(this->other_lua_state);
         exe_OnOtherReload();
+        int new_lua_stack_size = lua_gettop(this->other_lua_state);
+        ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 
         return;
     }
+
+    int old_lua_stack_size = lua_gettop(this->other_lua_state);
     exe_OnOtherTick();
+    int new_lua_stack_size = lua_gettop(this->other_lua_state);
+    ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 }
 
 void lua_plugin::exe_OnOtherInit()
 {
+    static int isok = LUA_OK;
+
     lua_getglobal(this->other_lua_state, "OnOtherInit");
-    static int isok = 0;
+
     isok = lua_pcall(this->other_lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnOtherInit failed %s", lua_tostring(this->other_lua_state, -1));
-    }
+    ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnOtherStop()
 {
+    static int isok = LUA_OK;
     lua_getglobal(this->other_lua_state, "OnOtherStop");
-    static int isok = 0;
+
     isok = lua_pcall(this->other_lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnOtherStop failed %s", lua_tostring(this->other_lua_state, -1));
-    }
+    ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnOtherTick()
 {
+    static int isok = LUA_OK;
     lua_getglobal(this->other_lua_state, "OnOtherTick");
-    static int isok = 0;
+
     isok = lua_pcall(this->other_lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnOtherTick failed %s", lua_tostring(this->other_lua_state, -1));
-    }
+    ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnOtherReload()
 {
+    static int isok = LUA_OK;
     lua_getglobal(this->other_lua_state, "OnOtherReload");
-    static int isok = 0;
+
     isok = lua_pcall(this->other_lua_state, 0, 0, 0);
-    if (LUA_OK != isok)
-    {
-        LOG_ERROR("exe_OnOtherReload failed %s", lua_tostring(this->other_lua_state, -1));
-    }
+    ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::main_mount()
@@ -454,22 +461,19 @@ void lua_plugin::other_mount()
 int lua_plugin::Logger(lua_State *lua_state)
 {
     int num = lua_gettop(lua_state);
-    if (num != 1)
-    {
-        lua_pushinteger(lua_state, -1);
-        return -1;
-    }
-    if (lua_isstring(lua_state, 1) == 0)
-    {
-        lua_pushinteger(lua_state, -1);
-        return -1;
-    }
+    ASSERT_LOG_EXIT(num == 1);
+
+    int isok = LUA_OK;
+    isok = lua_isstring(lua_state, 1);
+    ASSERT_LOG_EXIT(isok);
+
     size_t len = 0;
     const char *type = lua_tolstring(lua_state, 1, &len);
     std::string str(type, len);
-    // LOG_ERROR("lua => %s", str.data());
+    LOG_ERROR("lua => %s", str.data());
+    lua_pop(lua_state, 1);
     lua_pushinteger(lua_state, 0);
-    return 0;
+    return 1;
 }
 
 // 此处只是测试 lua其实不应该直接调用 lua_plugin::Lua2Protobuf
@@ -477,44 +481,39 @@ int lua_plugin::Logger(lua_State *lua_state)
 int lua_plugin::Lua2Protobuf(lua_State *lua_state)
 {
     int num = lua_gettop(lua_state);
-    if (num != 2)
-    {
-        LOG_ERROR("num!=2");
-        lua_pushnil(lua_state);
-        return 1;
-    }
-    if (lua_isinteger(lua_state, 2) == 0)
-    {
-        LOG_ERROR("lua_isinteger 2 false");
-        lua_pushnil(lua_state);
-        return 1;
-    }
-    int cmd = lua_tointeger(lua_state, 2);
-    lua_pop(lua_state, 1);
+    ASSERT_LOG_EXIT(num == 2);
 
-    if (lua_istable(lua_state, 1) == 0)
-    {
-        LOG_ERROR("lua_istable 1 false");
-        lua_pushnil(lua_state);
-        return 1;
-    }
+    int isok = lua_isinteger(lua_state, 2);
+    ASSERT_LOG_EXIT(isok);
+
+    int cmd = lua_tointeger(lua_state, 2);
+    lua_pop(lua_state, 1); // 弹出cmd
+
+    isok = lua_istable(lua_state, 1);
+    ASSERT_LOG_EXIT(isok);
+
+    int old_lua_stack_size = lua_gettop(lua_state);
 
     // 注意应该把消息通过管道传输而不是直接调用exe_onLuaVMRecvMessage不然可能造成递归
     if (cmd == ProtoCmd::PROTO_CMD_LUA_TEST)
     {
         ProtoLuaTest proto_lua_test;
+        // TODO FIX 栈不平衡
         lua2protobuf_nostack(lua_state, proto_lua_test);
 
         // LOG_ERROR("ProtoLuaTest\n%s", proto_lua_test.DebugString().c_str());
-        //  call lua function OnLuaVMRecvMessage
-        exe_OnLuaVMRecvMessage(lua_state, cmd, proto_lua_test);
 
-        // 把解析过的表从lua栈中也弹出来
-        lua_pop(lua_state, 1);
+        exe_OnLuaVMRecvMessage(lua_state, cmd, proto_lua_test);
+        int new_lua_stack_size = lua_gettop(lua_state);
+
+        ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
+
+        lua_pop(lua_state, 1); // 弹出val
         lua_pushinteger(lua_state, 0);
         return 1;
     }
 
+    lua_pop(lua_state, 1); // 弹出val
     LOG_ERROR("cmd[%d] != ProtoCmd::PROTO_CMD_LUA_TEST", cmd);
     lua_pushnil(lua_state);
     return 1;
@@ -838,6 +837,11 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                 if (frame.luapop_num_on_destory == 1)
                 {
                     lua_pop(L, 1); // arr_item_val
+                }
+                else if (frame.luapop_num_on_destory == 2)
+                {
+                    lua_pop(L, 1); // field_val
+                    lua_pop(L, 1); // field_key
                 }
                 else if (frame.luapop_num_on_destory == 3)
                 {

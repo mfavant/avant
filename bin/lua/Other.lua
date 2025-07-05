@@ -64,9 +64,9 @@ function Other:OnTick()
     -- ProtoCmd::PROTO_CMD_LUA_TEST = 8;
     local res = avant.Lua2Protobuf(t, 8);
     if res == nil then
-        Log:Error("avant.Lua2Protobuf failed");
+        -- Log:Error("avant.Lua2Protobuf failed");
     else
-        Log:Error("avant.Lua2Protobuf succ " .. res);
+        -- Log:Error("avant.Lua2Protobuf succ " .. res);
     end
 end
 
