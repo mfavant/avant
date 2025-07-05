@@ -500,7 +500,7 @@ int lua_plugin::Lua2Protobuf(lua_State *lua_state)
     {
         ProtoLuaTest proto_lua_test;
         lua2protobuf(lua_state, proto_lua_test);
-        LOG_ERROR("ProtoLuaTest %s", proto_lua_test.DebugString().c_str());
+        // LOG_ERROR("ProtoLuaTest\n%s", proto_lua_test.DebugString().c_str());
         // call lua function OnLuaVMRecvMessage
         exe_OnLuaVMRecvMessage(lua_state, cmd, proto_lua_test);
         lua_pushinteger(lua_state, 0);

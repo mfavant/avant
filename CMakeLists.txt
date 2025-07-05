@@ -35,6 +35,7 @@ list(APPEND SOURCE_FILES ${SOURCE_PROTOCOL_FILES})
 # message("SourceFile: ${item}")
 # endforeach()
 add_executable(${PROJECT_NAME} src/main.cpp ${SOURCE_FILES})
+target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unused-variable)
 
 # for src/plugin CMakeLists.txt
 # add_subdirectory(${PROJECT_SOURCE_DIR}/src/plugin)

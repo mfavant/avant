@@ -4,6 +4,7 @@ syntax = "proto3";
 message ProtoLuaTestData
 {
     string str = 1;
+    repeated string strarray = 2;
 }
 
 message ProtoLuaTest
