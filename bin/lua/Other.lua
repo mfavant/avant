@@ -80,7 +80,7 @@ function Other:OnLuaVMRecvMessage(cmd, message)
 
     -- ProtoCmd::PROTO_CMD_LUA_TEST = 8;
     if cmd == 8 then
-        -- Log:Error("OnLuaVMRecvMessage cmd 8 %s", DebugTableToString(message));
+        -- Log:Error("OnLuaVMRecvMessage cmd[%d] %s", cmd, DebugTableToString(message));
     end
 end
 
