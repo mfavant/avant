@@ -1,6 +1,8 @@
 local Other = {};
 local Log = require("Log");
 
+Other.OnLuaVMRecvMessageCnt = 0;
+
 function Other:OnInit()
     local log = "OnOtherInit";
     Log:Error(log);
@@ -15,7 +17,7 @@ end
 function Other:OnTick()
     PlayerLogic.Move(1001, 1, 1);
     -- Log:Error("OnOtherTick ");
-    local t = {
+    local t1 = {
         ["num"] = 2,
         ["int32array"] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
         ["data"] = {
@@ -61,8 +63,26 @@ function Other:OnTick()
             }}
         }
     };
+    local t2 = {
+        ["num"] = nil,
+        ["int32array"] = {1},
+        ["data"] = {
+            ["strarray"] = {},
+            ["inner"] = {}
+        }
+    };
+    local t3 = {};
+    -- 勘误inner下面这样写会崩溃
+    local t4 = {
+        -- ["num1"] = "cds",
+        ["int32array"] = {"as"},
+        ["data"] = {
+            -- ["strarray"] = {1},
+            ["inner"] = {"cds", "vfd"}
+        }
+    };
     -- ProtoCmd::PROTO_CMD_LUA_TEST = 8;
-    local res = avant.Lua2Protobuf(t, 8);
+    local res = avant.Lua2Protobuf(t1, 8);
     if res == nil then
         -- Log:Error("avant.Lua2Protobuf failed");
     else
@@ -90,6 +110,14 @@ function Other:OnReload()
 end
 
 function Other:OnLuaVMRecvMessage(cmd, message)
+    self.OnLuaVMRecvMessageCnt = self.OnLuaVMRecvMessageCnt + 1;
+    if (math.maxinteger == self.OnLuaVMRecvMessageCnt) then
+        self.OnLuaVMRecvMessageCnt = 0;
+    end
+    if (self.OnLuaVMRecvMessageCnt % 10000 == 0) then
+        Log:Error("self.OnLuaVMRecvMessageCnt %d", self.OnLuaVMRecvMessageCnt);
+    end
+
     function DebugTableToString(t, indent)
         if type(t) == "string" then
             return "\"" .. tostring(t) .. "\""

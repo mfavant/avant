@@ -55,7 +55,7 @@ namespace avant::app
         static int Lua2Protobuf(lua_State *lua_state);
 
     public:
-        static void protobuf2lua(lua_State *L, const google::protobuf::Message &package);
+        static void protobuf2lua_nostack(lua_State *L, const google::protobuf::Message &package);
         static void lua2protobuf_nostack(lua_State *L, const google::protobuf::Message &package);
 
     private:

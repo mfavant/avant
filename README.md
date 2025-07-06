@@ -8,7 +8,7 @@ cpp-version: `C++20`
 os: `linux`  
 protocol: `http` `tcp stream(protobuf)` `websocket`  
 tls/ssl: `openssl`  
-script engin: `lua`  
+script engin: `lua 5.4.6`  
 
 ## Docker Run
 
