@@ -99,16 +99,15 @@ void server::start()
         }
         // 设置最低版本协议
         SSL_CTX_set_min_proto_version(m_ssl_context, TLS1_2_VERSION);
-        // 启用 SSL_OP_SINGLE_DH_USE 增强前向安全性
-        SSL_CTX_set_options(m_ssl_context, SSL_OP_SINGLE_DH_USE);
+
         // 设置加密套件，优先 ECDHE
-        SSL_CTX_set_cipher_list(m_ssl_context, "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384");
+        SSL_CTX_set_cipher_list(m_ssl_context, "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256");
 
         // 设置高效椭圆曲线
         SSL_CTX_set1_curves_list(m_ssl_context, "P-256:P-384");
         // 启用会话缓存
         SSL_CTX_set_session_cache_mode(m_ssl_context, SSL_SESS_CACHE_SERVER);
-        SSL_CTX_set_timeout(m_ssl_context, 300);
+        SSL_CTX_set_timeout(m_ssl_context, 3600);
 
         // 加载证书链
         std::string crt_pem_path = get_crt_pem();
