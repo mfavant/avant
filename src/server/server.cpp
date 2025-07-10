@@ -83,26 +83,48 @@ void server::start()
         LOG_ERROR("SSLeay_version %s", SSLeay_version(SSLEAY_VERSION));
         SSL_library_init();
         SSL_load_error_strings();
-        m_ssl_context = SSL_CTX_new(SSLv23_server_method());
+
+        const SSL_METHOD *ssl_method = TLS_server_method();
+        if (!ssl_method)
+        {
+            LOG_ERROR("TLS_server_method() failed");
+            return;
+        }
+
+        m_ssl_context = SSL_CTX_new(ssl_method);
         if (!m_ssl_context)
         {
-            LOG_ERROR("SSL_CTX_new error");
+            LOG_ERROR("SSL_CTX_new(ssl_method) error");
             return;
         }
+        // 设置最低版本协议
+        SSL_CTX_set_min_proto_version(m_ssl_context, TLS1_2_VERSION);
+        // 启用 SSL_OP_SINGLE_DH_USE 增强前向安全性
         SSL_CTX_set_options(m_ssl_context, SSL_OP_SINGLE_DH_USE);
+        // 设置加密套件，优先 ECDHE
+        SSL_CTX_set_cipher_list(m_ssl_context, "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384");
 
+        // 加载证书链
         std::string crt_pem_path = get_crt_pem();
-        int i_ret = SSL_CTX_use_certificate_file(m_ssl_context, crt_pem_path.c_str(), SSL_FILETYPE_PEM);
+        int i_ret = SSL_CTX_use_certificate_chain_file(m_ssl_context, crt_pem_path.c_str());
         if (1 != i_ret)
         {
-            LOG_ERROR("SSL_CTX_use_certificate_file error: %s", ERR_error_string(ERR_get_error(), nullptr));
+            LOG_ERROR("SSL_CTX_use_certificate_chain_file error: %s", ERR_error_string(ERR_get_error(), nullptr));
             return;
         }
+        // 加载私钥
         std::string key_pem_path = get_key_pem();
         i_ret = SSL_CTX_use_PrivateKey_file(m_ssl_context, key_pem_path.c_str(), SSL_FILETYPE_PEM);
         if (1 != i_ret)
         {
             LOG_ERROR("SSL_CTX_use_PrivateKey_file error: %s", ERR_error_string(ERR_get_error(), nullptr));
+            return;
+        }
+        // 验证私钥和证书匹配
+        i_ret = SSL_CTX_check_private_key(m_ssl_context);
+        if (1 != i_ret)
+        {
+            LOG_ERROR("SSL_CTX_check_private_key error: %s", ERR_error_string(ERR_get_error(), nullptr));
             return;
         }
     }
