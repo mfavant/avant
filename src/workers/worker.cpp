@@ -97,7 +97,6 @@ void worker::operator()()
                     }
                 }
                 this->m_timeout_fd.clear();
-                this->m_conn_timeout_timer_manager.clean_up();
             }
         }
 

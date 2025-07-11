@@ -23,7 +23,6 @@ namespace avant
             void check_and_handle(uint64_t now_time_stamp);
 
             void mark_delete(uint64_t timer_id);
-            void clean_up();
 
         private:
             std::multimap<uint64_t, std::shared_ptr<timer>> m_queue;
