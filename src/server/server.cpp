@@ -107,7 +107,8 @@ void server::start()
         SSL_CTX_set1_curves_list(m_ssl_context, "P-256:P-384");
         // 启用会话缓存
         SSL_CTX_set_session_cache_mode(m_ssl_context, SSL_SESS_CACHE_SERVER);
-        SSL_CTX_set_timeout(m_ssl_context, 3600);
+        SSL_CTX_set_timeout(m_ssl_context, 60);
+        SSL_CTX_sess_set_cache_size(m_ssl_context, 1024);
 
         // 加载证书链
         std::string crt_pem_path = get_crt_pem();

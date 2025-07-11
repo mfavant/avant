@@ -79,7 +79,7 @@ struct http_app_reponse
     }
 };
 
-void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_alive)
+void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_alive_call)
 {
     // send new_connection protocol to other thread
     if constexpr (false)
@@ -90,7 +90,7 @@ void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_
         ctx.tunnel_forward(std::vector<int>{avant::global::tunnel_id::get().get_other_tunnel_id()},
                            avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION));
     }
-    // LOG_ERROR("http_app new socket gid %llu", ctx.get_conn_gid());
+    // LOG_DEBUG("http_app new socket gid %llu", ctx.get_conn_gid());
 }
 
 void http_app::process_connection(avant::connection::http_ctx &ctx)
@@ -102,6 +102,8 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         {
             http_app_reponse *reponse_ptr = (http_app_reponse *)ctx.ptr;
             reponse_ptr->destory();
+
+            // LOG_DEBUG("reponse_ptr->destory() conngid %llu", ctx.get_conn_gid());
             delete reponse_ptr;
             ctx.ptr = nullptr;
         }
@@ -109,6 +111,18 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
     ctx.process_callback = [](avant::connection::http_ctx &ctx) -> void
     {
+        static auto return_404 = [](avant::connection::http_ctx &ctx) -> void
+        {
+            std::string response = "HTTP/1.1 404 Not Found\r\nServer: avant\r\n";
+            response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            response += "Content-Type: text/plain; charset=UTF-8\r\n";
+            response += "Content-Length: 3\r\n";
+            response += "\r\n";
+            response += "404";
+            ctx.send_buffer_append(response.c_str(), response.size());
+            ctx.set_response_end(true);
+        };
+
         bool exist_keep_live = false;
         if (ctx.headers.find("Connection") != ctx.headers.end())
         {
@@ -124,38 +138,33 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
         if constexpr (false)
         {
-            if (exist_keep_live)
-            {
-                ctx.keep_alive = true;
-            }
-            {
-                const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
-                ctx.send_buffer_append(response, strlen(response));
-                ctx.set_process_end(true);
-                return;
-            }
+            ctx.keep_alive = exist_keep_live;
+            const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
+            ctx.send_buffer_append(response, strlen(response));
+            ctx.set_response_end(true);
+            return;
         }
         else
         {
-            if (exist_keep_live)
-            {
-                ctx.keep_alive = false; // app not use keep_alive
-            }
+            ctx.keep_alive = exist_keep_live; // app not use keep_alive
         }
 
         std::string url;
         if (!utility::url::unescape_path(ctx.url, url))
         {
             LOG_ERROR("url::unescape_path false %s", ctx.url.c_str());
+            return_404(ctx);
             ctx.set_response_end(true);
             return;
         }
 
-        LOG_DEBUG("HttpUrl %s", url.c_str());
+        // LOG_DEBUG("HttpUrl %s", url.c_str());
 
         auto find_res = url.find("..");
         if (std::string::npos != find_res)
         {
+            LOG_ERROR("exist .. in url");
+            return_404(ctx);
             ctx.set_response_end(true);
             return;
         }
@@ -163,23 +172,18 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         const string &prefix = workers::worker::http_static_dir;
 
         fs::path t_path = prefix + url;
-        // if (url.empty() || url[0] != '/')
-        // {
-        //     t_path = prefix + url;
-        // }
-        // else
-        // {
-        //     t_path = url;
-        // }
 
         if (fs::exists(t_path) && fs::is_regular_file(t_path))
         {
             auto response_ptr = new (std::nothrow) http_app_reponse;
             if (!response_ptr)
             {
+                LOG_ERROR("new (std::nothrow) http_app_reponse failed");
+                return_404(ctx);
                 ctx.set_response_end(true);
                 return;
             }
+
             ctx.ptr = response_ptr;
             response_ptr->ptr_type = http_app_reponse::FD;
 
@@ -192,18 +196,29 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             {
                 mime_type = "application/octet-stream";
             }
-            std::string response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: close\r\n";
-            response += "Content-Type: ";
-            response += mime_type + "\r\n\r\n";
-
-            ctx.send_buffer_append(response.c_str(), response.size());
 
             response_ptr->ptr = ::fopen(t_path.c_str(), "r");
-            if (response_ptr->ptr == nullptr)
+            if (response_ptr->ptr == NULL)
             {
+                LOG_ERROR("fopen(%s, r) failed", t_path.c_str());
+                return_404(ctx);
                 ctx.set_response_end(true);
                 return;
             }
+
+            fseek((FILE *)response_ptr->ptr, 0, SEEK_END);
+            long size = ftell((FILE *)response_ptr->ptr);
+            rewind((FILE *)response_ptr->ptr);
+
+            std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
+            response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            response_head += "Content-Type: ";
+            response_head += mime_type;
+            response_head += "\r\nContent-Length: " + std::to_string(size);
+            response_head += "\r\n\r\n";
+
+            ctx.send_buffer_append(response_head.c_str(), response_head.size());
+
             // Write when the contents of the buffer have been sent write_end_callback will be executed,
             // and the response must be set response_end to true, then write after write_end_callback will be continuously recalled
             ctx.write_end_callback = [](connection::http_ctx &ctx) -> void
@@ -222,6 +237,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 }
             };
             ctx.write_end_callback(ctx);
+
             return;
         }
         else if (fs::exists(t_path) && fs::is_directory(t_path))
@@ -229,6 +245,8 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             auto response_ptr = new (std::nothrow) http_app_reponse;
             if (!response_ptr)
             {
+                LOG_ERROR("new (std::nothrow) http_app_reponse failed");
+                return_404(ctx);
                 ctx.set_response_end(true);
                 return;
             }
@@ -237,13 +255,12 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             response_ptr->ptr = new (std::nothrow) http_app_reponse::DIR_TYPE;
             if (!response_ptr->ptr)
             {
+                delete response_ptr;
+                return_404(ctx);
                 ctx.set_response_end(true);
                 return;
             }
             auto dir_type_ptr = (http_app_reponse::DIR_TYPE *)response_ptr->ptr;
-
-            const char *response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: close\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n";
-            ctx.send_buffer_append(response_head, strlen(response_head));
 
             //  generate dir list
             vector<string> a_tags;
@@ -268,7 +285,15 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             std::get<0>(*dir_type_ptr) = html_loader::load(body);
             std::get<1>(*dir_type_ptr) = 0;
 
-            ctx.write_end_callback = [](connection::http_ctx &ctx) -> void
+            std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
+            response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            response_head += "Content-Type: text/html; charset=UTF-8\r\n";
+            response_head += "Content-Length: " + std::to_string(std::get<0>(*dir_type_ptr).size());
+            response_head += "\r\n\r\n";
+
+            ctx.send_buffer_append(response_head.c_str(), response_head.size());
+
+            ctx.write_end_callback = [exist_keep_live](connection::http_ctx &ctx) -> void
             {
                 http_app_reponse *response_ptr = (http_app_reponse *)ctx.ptr;
                 auto dir_type_ptr = (http_app_reponse::DIR_TYPE *)response_ptr->ptr;
@@ -288,14 +313,15 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                     ctx.set_response_end(true);
                 }
             };
+
             ctx.write_end_callback(ctx);
             return;
         }
         else
         {
-            const char *response = "HTTP/1.1 404 Not Found\r\nServer: avant\r\nConnection: close\r\nContent-Type: text/text; charset=UTF-8\r\n\r\n";
-            ctx.send_buffer_append(response, strlen(response));
+            return_404(ctx);
             ctx.set_response_end(true);
+            return;
         }
     };
 }
