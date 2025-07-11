@@ -6,6 +6,7 @@
 #include <string>
 #include <cstring>
 #include <chrono>
+#include <mutex>
 
 namespace avant
 {
@@ -112,6 +113,8 @@ namespace avant
             bool m_has_valid_tm{false};
 
             int m_log_level{0};
+
+            std::mutex m_log_mutex;
 
             static const char *s_flag[FLAG_COUNT];
         };

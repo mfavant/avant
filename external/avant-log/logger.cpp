@@ -166,6 +166,8 @@ void logger::fatal(const char *file, int line, const char *format, ...)
 
 void logger::log(flag f, const char *file, int line, const char *format, va_list arg_ptr)
 {
+    std::lock_guard<std::mutex> lock(m_log_mutex);
+
     if (m_fp == nullptr)
     {
         printf("open log file failed: m_fp==nullptr\n");
@@ -183,8 +185,6 @@ void logger::log(flag f, const char *file, int line, const char *format, va_list
     memset(buf, 0, sizeof(buf));
     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ptm);
 
-    // ensure safe using file in different thread
-    flockfile(m_fp); // print time
     // using log file
     fprintf(m_fp, "%s  ", buf);
     fprintf(m_fp, "%s  ", s_flag[f]); // print flag
@@ -193,5 +193,4 @@ void logger::log(flag f, const char *file, int line, const char *format, va_list
     fprintf(m_fp, "\r\n");
     // free lock
     fflush(m_fp);
-    funlockfile(m_fp);
 }
