@@ -25,6 +25,7 @@ client_socket::client_socket(const string &ip, int port) : socket(ip, port)
     set_recv_buffer(10 * 1024);
     set_send_buffer(10 * 1024);
     set_linger(true, 0);
+    set_nodelay(true);
     set_keep_alive();
     set_reuse_addr();
     set_reuse_port();

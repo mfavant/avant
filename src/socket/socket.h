@@ -44,6 +44,8 @@ namespace avant::socket
         bool set_send_buffer(size_t size);
         bool set_recv_buffer(size_t size);
         bool set_linger(bool active, size_t seconds);
+        bool set_nodelay(bool active);
+
         /**
          * @brief heart beat config
          *

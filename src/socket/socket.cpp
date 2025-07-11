@@ -1,5 +1,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -385,6 +386,17 @@ bool socket::set_linger(bool active, size_t seconds)
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_LINGER, &l, sizeof(l)) < 0)
     {
         LOG_ERROR("socket set linger error errno=%d errstr=%s", errno, strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+bool socket::set_nodelay(bool active)
+{
+    int flag = active ? 1 : 0;
+    if (setsockopt(m_sockfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) < 0)
+    {
+        LOG_ERROR("set TCP_NODELAY errno=%d errstr=%s", errno, strerror(errno));
         return false;
     }
     return true;
