@@ -617,6 +617,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         conn->socket_obj.close_callback = nullptr;
         conn->socket_obj.set_non_blocking();
         conn->socket_obj.set_linger(false, 0);
+        conn->socket_obj.set_nodelay(true);
         conn->socket_obj.set_send_buffer(65536);
         conn->socket_obj.set_recv_buffer(65536);
 
