@@ -373,7 +373,7 @@ int http_app::on_body_before(avant::connection::http_ctx &ctx, const char *at, s
 
     if (body_size + length > max_body_size)
     {
-        LOG_ERROR("body_size[%llu] + length[%llu] > max_body_size[%llu]");
+        LOG_ERROR("body_size[%zu] + length[%zu] > max_body_size[%zu]", body_size, length, max_body_size);
         return -1;
     }
 
@@ -394,8 +394,8 @@ int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
 
     if (body_size > max_body_size)
     {
-        LOG_ERROR("recv_buffer_size %llu length %llu body_size %llu", recv_buffer_size, length, body_size);
-        LOG_ERROR("http_app::on_body body_size > %llu", max_body_size);
+        LOG_ERROR("recv_buffer_size %zu length %zu body_size %zu", recv_buffer_size, length, body_size);
+        LOG_ERROR("http_app::on_body body_size > %zu", max_body_size);
         return -1;
     }
 

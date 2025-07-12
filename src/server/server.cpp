@@ -138,7 +138,7 @@ void server::start()
     int i_ret = tunnel_id::init(m_worker_cnt);
     if (0 != i_ret)
     {
-        LOG_ERROR("avant::global::tunnel_id::init(%llu) failed return %d", m_worker_cnt, i_ret);
+        LOG_ERROR("avant::global::tunnel_id::init(%zu) failed return %d", m_worker_cnt, i_ret);
         return;
     }
 
@@ -1097,7 +1097,7 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
 
     std::string data;
     proto::pack_package(data, package, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE);
-    // LOG_ERROR("forward datasize %llu cmd %d", data.size(), package.innerprotopackage().cmd());
+    // LOG_ERROR("forward datasize %zu cmd %d", data.size(), package.innerprotopackage().cmd());
 
     dest_tunnel_conn_ptr->send_buffer.append(data.c_str(), data.size());
     if (flush)

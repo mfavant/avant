@@ -126,7 +126,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
         {
             if (index >= all_data_len) // need next 1 byte
             {
-                // LOG_ERROR("index[%llu] >= all_data_len[%llu]", index, all_data_len);
+                // LOG_ERROR("index[%zu] >= all_data_len[%llu]", index, all_data_len);
                 break;
             }
             frame.mask = (data[index] & 0x80) != 0;
@@ -140,7 +140,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
                 frame.payload_length = 0;
                 if (index + 1 >= all_data_len) // need next 2 bytes
                 {
-                    // LOG_ERROR("index[%llu] + 1 >= all_data_len[%llu]", index, all_data_len);
+                    // LOG_ERROR("index[%zu] + 1 >= all_data_len[%llu]", index, all_data_len);
                     break;
                 }
                 uint16_t tmp = 0;
@@ -157,7 +157,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
                 frame.payload_length = 0;
                 if (index + 7 >= all_data_len) // need next 8 bytes
                 {
-                    // LOG_ERROR("index[%llu] + 7 >= all_data_len[%llu]", index, all_data_len);
+                    // LOG_ERROR("index[%zu] + 7 >= all_data_len[%llu]", index, all_data_len);
                     break;
                 }
                 uint32_t tmp = 0;
@@ -183,7 +183,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
             {
                 if (index + 3 >= all_data_len) // need next 4 bytes
                 {
-                    // LOG_ERROR("index[%llu] + 3 >= all_data_len[%llu]", index, all_data_len);
+                    // LOG_ERROR("index[%zu] + 3 >= all_data_len[%llu]", index, all_data_len);
                     break;
                 }
                 frame.masking_key = {(uint8_t)data[index], (uint8_t)data[index + 1], (uint8_t)data[index + 2], (uint8_t)data[index + 3]};
@@ -195,7 +195,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
             // already parser (value of the index) bytes
             if (index + frame.payload_length - 1 >= all_data_len) // need next frame.playload_length bytes
             {
-                // LOG_ERROR("index[%llu] + frame.payload_length[%llu] - 1 >= all_data_len[%llu]", index, frame.payload_length, all_data_len);
+                // LOG_ERROR("index[%zu] + frame.payload_length[%llu] - 1 >= all_data_len[%llu]", index, frame.payload_length, all_data_len);
                 break;
             }
 
