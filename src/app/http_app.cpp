@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <avant-log/logger.h>
 #include <vector>
+#include <sys/stat.h>
 #include "global/tunnel_id.h"
 #include "proto/proto_util.h"
 
@@ -135,6 +136,15 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 }
             }
         }
+        std::string etag;
+        auto if_none_match = ctx.headers.find("If-None-Match");
+        if (if_none_match != ctx.headers.end())
+        {
+            if (if_none_match->second.size() == 1)
+            {
+                etag = if_none_match->second.at(0);
+            }
+        }
 
         if constexpr (false)
         {
@@ -175,6 +185,32 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
         if (fs::exists(t_path) && fs::is_regular_file(t_path))
         {
+            auto generate_etag_for_regular_file = [](const fs::path &t_path) -> std::string
+            {
+                struct stat st;
+                if (stat(t_path.c_str(), &st) != 0)
+                {
+                    return ""; // 文件不存在或读取错误
+                }
+                std::ostringstream oss;
+                oss << "\"" << std::hex << st.st_mtime << "-" << st.st_size << "\"";
+                return oss.str();
+            };
+
+            std::string now_etag = generate_etag_for_regular_file(t_path);
+
+            // 命中缓存
+            if (now_etag.size() > 0 && etag.size() > 0 && now_etag == etag)
+            {
+                std::string response = "HTTP/1.1 304 Not Modified\r\nServer: avant\r\n";
+                response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+                response += "Content-Length: 0\r\n";
+                response += "\r\n";
+                ctx.send_buffer_append(response.c_str(), response.size());
+                ctx.set_response_end(true);
+                return;
+            }
+
             auto response_ptr = new (std::nothrow) http_app_reponse;
             if (!response_ptr)
             {
@@ -212,6 +248,10 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
             std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
             response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            if (now_etag.size() > 0)
+            {
+                response_head += std::string("ETag: ") + now_etag + "\r\n";
+            }
             response_head += "Content-Type: ";
             response_head += mime_type;
             response_head += "\r\nContent-Length: " + std::to_string(size);
