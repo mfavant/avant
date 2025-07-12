@@ -61,17 +61,31 @@ void http_ctx::init_http_settings()
     http_ctx::settings->on_body = [](http_parser *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
-        t_http_ctx->conn_ptr->recv_buffer.append(at, length);
-        t_http_ctx->recv_body_size += length;
         int iret = 0;
+
         try
         {
-            iret = app::http_app::on_body(*t_http_ctx, length);
+            iret = app::http_app::on_body_before(*t_http_ctx, at, length);
         }
         catch (const std::exception &e)
         {
             iret = -1;
             LOG_ERROR(e.what());
+        }
+
+        if (iret == 0)
+        {
+            t_http_ctx->conn_ptr->recv_buffer.append(at, length);
+            t_http_ctx->recv_body_size += length;
+            try
+            {
+                iret = app::http_app::on_body(*t_http_ctx, length);
+            }
+            catch (const std::exception &e)
+            {
+                iret = -1;
+                LOG_ERROR(e.what());
+            }
         }
 
         return iret;

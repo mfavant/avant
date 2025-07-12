@@ -366,8 +366,24 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
     };
 }
 
+int http_app::on_body_before(avant::connection::http_ctx &ctx, const char *at, size_t length)
+{
+    constexpr size_t max_body_size = 2048000;
+    size_t body_size = ctx.get_recv_body_size();
+
+    if (body_size + length > max_body_size)
+    {
+        LOG_ERROR("body_size[%llu] + length[%llu] > max_body_size[%llu]");
+        return -1;
+    }
+
+    return 0;
+}
+
 int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
 {
+    constexpr size_t max_body_size = 2048000;
+
     size_t recv_buffer_size = ctx.get_recv_buffer_size();
     size_t body_size = ctx.get_recv_body_size();
 
@@ -375,8 +391,6 @@ int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
     {
         ctx.clear_recv_buffer();
     }
-
-    constexpr size_t max_body_size = 2048000;
 
     if (body_size > max_body_size)
     {

@@ -23,6 +23,10 @@ namespace avant
 
             static void process_connection(avant::connection::http_ctx &ctx);
 
+            // Prior to appending the HTTP body data uploaded by the client to the recv_buffer, an advance notification is issued
+            static int on_body_before(avant::connection::http_ctx &ctx, const char *at, size_t length);
+
+            // The client's uploaded HTTP body data has just been appended to the recv_buffer
             static int on_body(avant::connection::http_ctx &ctx, size_t length);
 
             static void on_main_init(avant::server::server &server_obj);
