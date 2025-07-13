@@ -1,8 +1,14 @@
 syntax = "proto3";
 
+package avant;
+
+option go_package = "/proto_res";
+
+import "proto_cmd.proto";
+
 // ProtoCmd
 message ProtoPackage
 {
-    int32 cmd = 1;
+    ProtoCmd cmd = 1;
     bytes protocol = 2;
 }

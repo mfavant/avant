@@ -1,5 +1,9 @@
 syntax = "proto3";
 
+package avant;
+
+option go_package = "/proto_res";
+
 // PROTO_CMD_CS_REQ_EXAMPLE
 message ProtoCSReqExample
 {

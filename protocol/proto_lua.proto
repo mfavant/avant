@@ -1,5 +1,9 @@
 syntax = "proto3";
 
+package avant;
+
+option go_package = "/proto_res";
+
 message ProtoLuaTestInner
 {
     double double_val = 1;

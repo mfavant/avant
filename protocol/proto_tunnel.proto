@@ -1,5 +1,9 @@
 syntax = "proto3";
 
+package avant;
+
+option go_package = "/proto_res";
+
 import "proto_message_head.proto";
 
 enum ProtoTunnelID
