@@ -16,6 +16,7 @@ using namespace avant::utility;
 
 lua_plugin::lua_plugin()
 {
+    init_message_factory();
 }
 
 lua_plugin::~lua_plugin()
@@ -503,23 +504,29 @@ int lua_plugin::Lua2Protobuf(lua_State *lua_state)
     int old_lua_stack_size = lua_gettop(lua_state);
 
     // 注意应该把消息通过管道传输而不是直接调用exe_onLuaVMRecvMessage不然可能造成递归
-    if (cmd == ProtoCmd::PROTO_CMD_LUA_TEST)
+    std::shared_ptr<google::protobuf::Message> msg_ptr = singleton<lua_plugin>::instance()->protobuf_cmd2message(cmd);
+    if (msg_ptr)
     {
-        ProtoLuaTest proto_lua_test;
         // lua栈必须平衡
-        lua2protobuf_nostack(lua_state, proto_lua_test);
+        lua2protobuf_nostack(lua_state, *msg_ptr);
         int new_lua_stack_size = lua_gettop(lua_state);
         ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 
         LOG_LUA_PLUGIN_RUNTIME("ProtoLuaTest\n%s", proto_lua_test.DebugString().c_str());
 
-        exe_OnLuaVMRecvMessage(lua_state, cmd, proto_lua_test);
+        // 模拟向lua发包
+        exe_OnLuaVMRecvMessage(lua_state, cmd, *msg_ptr);
+
         new_lua_stack_size = lua_gettop(lua_state);
         ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 
         lua_pop(lua_state, 1); // 弹出val
         lua_pushinteger(lua_state, 0);
         return 1;
+    }
+    else
+    {
+        LOG_ERROR("protobuf_cmd2message(%d) return nullptr", cmd);
     }
 
     lua_pop(lua_state, 1); // 弹出val
@@ -1307,4 +1314,21 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             }
         }
     }
+}
+
+std::shared_ptr<google::protobuf::Message>
+lua_plugin::protobuf_cmd2message(int cmd)
+{
+    auto it = this->message_factory.find(cmd);
+    if (it != this->message_factory.end())
+        return it->second();
+
+    return nullptr;
+}
+
+// 将C++与Lua需要交互的协议加进来
+void lua_plugin::init_message_factory()
+{
+    this->message_factory[ProtoCmd::PROTO_CMD_LUA_TEST] = []()
+    { return std::make_shared<ProtoLuaTest>(); };
 }

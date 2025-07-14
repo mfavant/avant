@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <memory>
+#include <unordered_map>
 #include "proto/proto_util.h"
 
 extern "C"
@@ -15,6 +17,8 @@ namespace avant::app
     public:
         lua_plugin();
         ~lua_plugin();
+
+        void init_message_factory();
 
         void on_main_init(const std::string &lua_dir, const int worker_cnt);
 
@@ -55,6 +59,7 @@ namespace avant::app
         static int Lua2Protobuf(lua_State *lua_state);
 
     public:
+        std::shared_ptr<google::protobuf::Message> protobuf_cmd2message(int cmd);
         static void protobuf2lua_nostack(lua_State *L, const google::protobuf::Message &package);
         static void lua2protobuf_nostack(lua_State *L, const google::protobuf::Message &package);
 
@@ -76,5 +81,7 @@ namespace avant::app
         bool other_lua_state_be_reload{false};
 
         std::string lua_dir;
+
+        std::unordered_map<int, std::function<std::shared_ptr<google::protobuf::Message>()>> message_factory;
     };
 }
