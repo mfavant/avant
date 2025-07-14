@@ -1,4 +1,4 @@
-# Avant
+# avant
 
 [![Docker Image CI](https://github.com/mfavant/avant/actions/workflows/docker-image.yml/badge.svg)](https://github.com/mfavant/avant/actions/workflows/docker-image.yml)
 
@@ -41,7 +41,7 @@ cmake ..
 make -j4
 ```
 
-### CentOS8 (Docker)
+CentOS8 (Docker)
 
 [centos8](./centos8.md)
 
@@ -67,6 +67,22 @@ ps -ef | grep avant
 kill PID
 ```
 
+## APP
+
+support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
+
+1. [framework config](https://github.com/crust-hub/avant/blob/main/bin/config/main.ini)
+2. [stream protobuf app](https://github.com/crust-hub/avant/blob/main/src/app/stream_app.cpp)
+3. [http app](https://github.com/crust-hub/avant/blob/main/src/app/http_app.cpp)
+4. [websocket app](https://github.com/crust-hub/avant/blob/main/src/app/websocket_app.cpp)
+
+## Client
+
+- [C++](client/cpp/)
+- [Websocket](client/websocket/)
+- [Node.js](client/javascript/)
+- [Go](client/go/avant/)
+
 ## Lua
 
 The main thread, other thread, and each worker thread have their own independent Lua virtual machine. `config/Init.lua`
@@ -82,20 +98,9 @@ kill -10 PID
 
 ### RPC
 
-The configuration file is located at `config/ipc.json`. Adopt one-way TCP active connection. Authentication handshake is verified through the `appid` content in [ProtoIPCStreamAuthhandshake protocol](./protocol/proto_ipc_stream.proto).
+The configuration file is located at `config/ipc.json`. Adopt one-way TCP active connection. Authentication handshake is verified through the `appid` content in [ProtoIPCStreamAuthHandshake protocol](./protocol/proto_ipc_stream.proto).
 
-## APP Layer
-
-support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
-
-1. [framework config](https://github.com/crust-hub/avant/blob/main/bin/config/main.ini)
-2. [stream protobuf app](https://github.com/crust-hub/avant/blob/main/src/app/stream_app.cpp)
-3. [http app](https://github.com/crust-hub/avant/blob/main/src/app/http_app.cpp)
-4. [websocket app](https://github.com/crust-hub/avant/blob/main/src/app/websocket_app.cpp)
-
-## QPS
-
-### HTTP
+## Wrk
 
 [wrk tool](https://github.com/wg/wrk)
 
@@ -104,31 +109,6 @@ support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
 wrk -c {{connection_num}} -t {{threads}} http://IP:20023/
 wrk -c {{connection_num}} -t {{threads}} -d60s --header "Connection: keep-alive" http://127.0.0.1:20023/
 ```
-
-### Client
-
-#### Cpp
-
-TCP protobuf
-
-- [client/cpp/client.cpp](./client/cpp/client.cpp)
-- [client/cpp/client_ssl.cpp](./client/cpp/client_ssl.cpp)
-- [client/cpp/client_nb_connect.cpp](./client/cpp/client_nb_connect.cpp)
-
-#### Websocket
-
-Websocket with JavaScript in html
-
-- [client/websocket/websocket.html](./client/websocket/websocket.html)
-- [client/websocket/websocket_read_only.html](./client/websocket/websocket_read_only.html)
-- [client/websocket/websocket_ssl.html](./client/websocket/websocket_ssl.html)
-- [client/websocket/websocket_ssl_read_only.html](./client/websocket/websocket_ssl_read_only.html)
-
-#### JavaScript
-
-Nodejs
-
-- [client/javascript](./client/javascript)
 
 ## Third-Party
 
