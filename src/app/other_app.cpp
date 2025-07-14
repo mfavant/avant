@@ -116,7 +116,7 @@ void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx 
     // this -- whoami --> remote
     {
         ProtoPackage resPackage;
-        ProtoIPCStreamAuthhandshake res;
+        ProtoIPCStreamAuthHandshake res;
         res.set_appid(ctx.get_other_ptr()->get_appid());
 
         std::string data;
@@ -220,13 +220,13 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
         if (ctx.get_other_ptr()->is_this2remote(ctx.get_conn_gid()))
         {
             ProtoPackage resPackage;
-            ProtoIPCStreamAuthhandshake res;
+            ProtoIPCStreamAuthHandshake res;
             res.set_appid(ctx.get_other_ptr()->get_appid());
             std::string data;
             ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)));
         }
 
-        ProtoIPCStreamAuthhandshake authInfo;
+        ProtoIPCStreamAuthHandshake authInfo;
         if (avant::proto::parse(authInfo, package))
         {
             std::string auth_appId = authInfo.appid();

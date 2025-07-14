@@ -26,7 +26,7 @@ func main() {
 			log.Println("RPC 收到包 CMD =", pkg.Cmd)
 
 			if pkg.Cmd == proto_res.ProtoCmd_PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE {
-				var msg proto_res.ProtoIPCStreamAuthhandshake
+				var msg proto_res.ProtoIPCStreamAuthHandshake
 				if err := proto.Unmarshal(pkg.Protocol, &msg); err != nil {
 					log.Println("解析失败:", err)
 				} else {

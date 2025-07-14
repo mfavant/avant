@@ -42,20 +42,20 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
     // handshake to remove , PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE
     const ProtoCmd = newAvantRPCObj.protoRoot.lookupEnum("ProtoCmd")
     const PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE = ProtoCmd.values['PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE']
-    const ProtoIPCStreamAuthhandshake = newAvantRPCObj.protoRoot.lookupType("ProtoIPCStreamAuthhandshake")
+    const ProtoIPCStreamAuthHandshake = newAvantRPCObj.protoRoot.lookupType("ProtoIPCStreamAuthHandshake")
 
     let tryConnect = () => {
         console.log(`tryConnect RPC ${RPCIP}:${RPCPORT}`)
         const client = net.createConnection({ port: RPCPORT, host: RPCIP }, () => {
             console.log("RPC Connected to server")
 
-            const protoIPCStreamAuthHandshake = ProtoIPCStreamAuthhandshake.create({
+            const ProtoIPCStreamAuthHandshake = ProtoIPCStreamAuthHandshake.create({
                 appId: Buffer.from(APPID, "utf8")
             });
 
             const reqPackage = ProtoPackage.create({
                 cmd: PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE,
-                protocol: ProtoIPCStreamAuthhandshake.encode(protoIPCStreamAuthHandshake).finish()
+                protocol: ProtoIPCStreamAuthHandshake.encode(ProtoIPCStreamAuthHandshake).finish()
             });
 
             newAvantRPCObj.SendPackage(reqPackage);
@@ -88,7 +88,7 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
                 try {
                     const recvPackageData = ProtoPackage.decode(packageData)
                     if (recvPackageData.cmd == PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE) {
-                        const ptotoIPCStreamAuthhandshake = ProtoIPCStreamAuthhandshake.decode(recvPackageData.protocol)
+                        const ptotoIPCStreamAuthhandshake = ProtoIPCStreamAuthHandshake.decode(recvPackageData.protocol)
                         const appIdString = ptotoIPCStreamAuthhandshake.appId.toString('utf8')
                         console.log("appIdString ", appIdString)
                         newAvantRPCObj.appId = appIdString

@@ -78,7 +78,7 @@ func (client *Client) connectLoop() {
 }
 
 func (client *Client) SendHandshake() error {
-	msg := &proto_res.ProtoIPCStreamAuthhandshake{
+	msg := &proto_res.ProtoIPCStreamAuthHandshake{
 		AppId: []byte(client.appId),
 	}
 	return client.Send(proto_res.ProtoCmd_PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE, msg)
