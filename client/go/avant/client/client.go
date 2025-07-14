@@ -15,13 +15,13 @@ import (
 )
 
 type Client struct {
-	Addr        string
-	AppId       string
+	addr        string
+	appId       string
 	OnPackage   func(client *Client, pkg *proto_res.ProtoPackage) error
 	OnReconnect func(client *Client) error
 
-	Conn    net.Conn
-	RecvBuf []byte
+	conn    net.Conn
+	recvBuf []byte
 	lock    sync.Mutex
 }
 
@@ -30,11 +30,11 @@ func NewClient(addr string, appId string,
 	onPkg func(client *Client, pkg *proto_res.ProtoPackage) error) (*Client, error) {
 
 	client := &Client{
-		Addr:        addr,
-		AppId:       appId,
+		addr:        addr,
+		appId:       appId,
 		OnPackage:   onPkg,
 		OnReconnect: onReconnect,
-		RecvBuf:     make([]byte, 0),
+		recvBuf:     make([]byte, 0),
 	}
 	// 为连接开一个协程去处理
 	go client.connectLoop()
@@ -43,15 +43,15 @@ func NewClient(addr string, appId string,
 
 func (client *Client) connectLoop() {
 	for {
-		conn, err := net.Dial("tcp", client.Addr)
+		conn, err := net.Dial("tcp", client.addr)
 		if err != nil {
 			log.Println("reconnect failed:", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
 		client.lock.Lock()
-		client.Conn = conn
-		client.RecvBuf = make([]byte, 0)
+		client.conn = conn
+		client.recvBuf = make([]byte, 0)
 		client.lock.Unlock()
 
 		if client.OnReconnect != nil {
@@ -67,9 +67,9 @@ func (client *Client) connectLoop() {
 		client.recvLoop()
 
 		client.lock.Lock()
-		if client.Conn != nil {
-			client.Conn.Close()
-			client.Conn = nil
+		if client.conn != nil {
+			client.conn.Close()
+			client.conn = nil
 		}
 		client.lock.Unlock()
 
@@ -79,7 +79,7 @@ func (client *Client) connectLoop() {
 
 func (client *Client) SendHandshake() error {
 	msg := &proto_res.ProtoIPCStreamAuthhandshake{
-		AppId: []byte(client.AppId),
+		AppId: []byte(client.appId),
 	}
 	return client.Send(proto_res.ProtoCmd_PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE, msg)
 }
@@ -105,11 +105,11 @@ func (client *Client) Send(cmd proto_res.ProtoCmd, message proto.Message) error 
 
 	client.lock.Lock()
 	defer client.lock.Unlock()
-	if client.Conn == nil {
+	if client.conn == nil {
 		return fmt.Errorf("connection is nil")
 	}
 
-	_, err = client.Conn.Write(append(head, encoded...))
+	_, err = client.conn.Write(append(head, encoded...))
 	if err != nil {
 		return fmt.Errorf("write failed: %w", err)
 	}
@@ -119,7 +119,7 @@ func (client *Client) Send(cmd proto_res.ProtoCmd, message proto.Message) error 
 func (client *Client) recvLoop() {
 	buf := make([]byte, 4096)
 	for {
-		n, err := client.Conn.Read(buf)
+		n, err := client.conn.Read(buf)
 		if err != nil {
 			if err != io.EOF {
 				log.Println("read error:", err)
@@ -127,23 +127,23 @@ func (client *Client) recvLoop() {
 			return
 		}
 
-		client.RecvBuf = append(client.RecvBuf, buf[:n]...)
+		client.recvBuf = append(client.recvBuf, buf[:n]...)
 
 		for {
-			if len(client.RecvBuf) < 8 {
+			if len(client.recvBuf) < 8 {
 				break
 			}
 
-			total := int(binary.BigEndian.Uint64(client.RecvBuf[:8]))
+			total := int(binary.BigEndian.Uint64(client.recvBuf[:8]))
 
-			if len(client.RecvBuf) < 8+total {
+			if len(client.recvBuf) < 8+total {
 				break
 			}
 
 			// 包体数据
-			body := client.RecvBuf[8 : 8+total]
+			body := client.recvBuf[8 : 8+total]
 			// 把开头的内容删掉
-			client.RecvBuf = client.RecvBuf[8+total:]
+			client.recvBuf = client.recvBuf[8+total:]
 
 			var pkg proto_res.ProtoPackage
 			if err := proto.Unmarshal(body, &pkg); err != nil {
