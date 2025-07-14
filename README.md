@@ -96,7 +96,7 @@ ps -ef | grep avant
 kill -10 PID
 ```
 
-### RPC
+### IPC
 
 The configuration file is located at `config/ipc.json`. Adopt one-way TCP active connection. Authentication handshake is verified through the `appid` content in [ProtoIPCStreamAuthHandshake protocol](./protocol/proto_ipc_stream.proto).
 
