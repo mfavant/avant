@@ -179,7 +179,12 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             return;
         }
 
-        const string &prefix = workers::worker::http_static_dir;
+        if (url == "" || url == "/")
+        {
+            url = "/index.html";
+        }
+
+        const string &prefix = ctx.get_worker_ptr()->get_server()->get_config()->get_http_static_dir();
 
         fs::path t_path = prefix + url;
 
@@ -405,7 +410,7 @@ int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
 void http_app::on_main_init(avant::server::server &server_obj)
 {
     LOG_ERROR("http_app::on_main_init");
-    utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_lua_dir(), server_obj.get_worker_cnt());
+    utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_config()->get_lua_dir(), server_obj.get_config()->get_worker_cnt());
 }
 
 void http_app::on_worker_init(avant::workers::worker &worker_obj)

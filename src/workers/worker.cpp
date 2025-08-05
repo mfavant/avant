@@ -17,6 +17,7 @@
 #include "app/http_app.h"
 #include "app/stream_app.h"
 #include "app/websocket_app.h"
+#include "server/server.h"
 #include <pthread.h>
 #include <signal.h>
 
@@ -25,9 +26,7 @@ using namespace avant::global;
 using namespace avant::proto;
 using namespace avant::utility;
 
-std::string worker::http_static_dir;
-
-worker::worker()
+worker::worker(avant::server::server *server /*= nullptr*/) : m_server(server)
 {
 }
 
@@ -59,7 +58,7 @@ void worker::operator()()
     int num = -1;
     while (true)
     {
-        num = this->epoller.wait(this->epoll_wait_time);
+        num = this->epoller.wait(this->get_server()->get_config()->get_epoll_wait_time());
         if (num < 0)
         {
             if (errno == EINTR)
@@ -629,7 +628,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         }
 
         // SSL
-        if (use_ssl)
+        if (this->get_server()->get_config()->get_use_ssl())
         {
             if (conn->socket_obj.get_ssl_instance())
             {

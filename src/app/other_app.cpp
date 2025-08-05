@@ -5,6 +5,7 @@
 #include "utility/time.h"
 #include "app/lua_plugin.h"
 #include "global/tunnel_id.h"
+#include "server/server.h"
 #include "proto/proto_util.h"
 #include "proto_res/proto_example.pb.h"
 #include "proto_res/proto_ipc_stream.pb.h"
@@ -117,7 +118,7 @@ void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx 
     {
         ProtoPackage resPackage;
         ProtoIPCStreamAuthHandshake res;
-        res.set_appid(ctx.get_other_ptr()->get_appid());
+        res.set_appid(ctx.get_other_ptr()->get_server()->get_config()->get_app_id());
 
         std::string data;
         ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)));
@@ -221,7 +222,7 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
         {
             ProtoPackage resPackage;
             ProtoIPCStreamAuthHandshake res;
-            res.set_appid(ctx.get_other_ptr()->get_appid());
+            res.set_appid(ctx.get_other_ptr()->get_server()->get_config()->get_app_id());
             std::string data;
             ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)));
         }

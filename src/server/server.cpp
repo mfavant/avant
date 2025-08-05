@@ -43,7 +43,7 @@ server::server()
 server::~server()
 {
     // release SSL_CTX
-    if (get_use_ssl() && m_ssl_context)
+    if (this->m_config_mgr->get_use_ssl() && m_ssl_context)
     {
         SSL_CTX_free(m_ssl_context);
         m_ssl_context = nullptr;
@@ -66,18 +66,12 @@ server::~server()
     }
 }
 
-void server::set_listen_info(const std::string &ip, int port)
-{
-    m_ip = ip;
-    m_port = port;
-}
-
 void server::start()
 {
     LOG_ERROR("server::start ...");
 
     // init OpenSSL CTX
-    if (get_use_ssl())
+    if (this->m_config_mgr->get_use_ssl())
     {
         LOG_ERROR("OpenSSL_version %s", OpenSSL_version(OPENSSL_VERSION));
         LOG_ERROR("SSLeay_version %s", SSLeay_version(SSLEAY_VERSION));
@@ -111,7 +105,7 @@ void server::start()
         SSL_CTX_sess_set_cache_size(m_ssl_context, 1024);
 
         // 加载证书链
-        std::string crt_pem_path = get_crt_pem();
+        std::string crt_pem_path = this->m_config_mgr->get_crt_pem();
         int i_ret = SSL_CTX_use_certificate_chain_file(m_ssl_context, crt_pem_path.c_str());
         if (1 != i_ret)
         {
@@ -119,7 +113,7 @@ void server::start()
             return;
         }
         // 加载私钥
-        std::string key_pem_path = get_key_pem();
+        std::string key_pem_path = this->m_config_mgr->get_key_pem();
         i_ret = SSL_CTX_use_PrivateKey_file(m_ssl_context, key_pem_path.c_str(), SSL_FILETYPE_PEM);
         if (1 != i_ret)
         {
@@ -135,159 +129,52 @@ void server::start()
         }
     }
 
-    int i_ret = tunnel_id::init(m_worker_cnt);
+    int i_ret = tunnel_id::init(this->m_config_mgr->get_worker_cnt());
     if (0 != i_ret)
     {
-        LOG_ERROR("avant::global::tunnel_id::init(%zu) failed return %d", m_worker_cnt, i_ret);
+        LOG_ERROR("avant::global::tunnel_id::init(%zu) failed return %d", this->m_config_mgr->get_worker_cnt(), i_ret);
         return;
     }
 
-    if (m_max_client_cnt <= 0 || m_max_client_cnt > 8388607)
+    if (this->m_config_mgr->get_max_client_cnt() <= 0 || this->m_config_mgr->get_max_client_cnt() > 8388607)
     {
-        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > 8388607 %d", m_max_client_cnt);
+        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > 8388607 %d", this->m_config_mgr->get_max_client_cnt());
         return;
     }
 
-    if (m_worker_cnt <= 0 || m_worker_cnt > 511)
+    if (this->m_config_mgr->get_worker_cnt() <= 0 || this->m_config_mgr->get_worker_cnt() > 511)
     {
-        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > 511 %d", m_worker_cnt);
+        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > 511 %d", this->m_config_mgr->get_worker_cnt());
         return;
     }
 
     {
-        LOG_ERROR("m_app_id %s", m_app_id.c_str());
-        LOG_ERROR("m_ip %s", m_ip.c_str());
-        LOG_ERROR("m_port %d", m_port);
-        LOG_ERROR("m_worker_cnt %d", m_worker_cnt);
-        LOG_ERROR("m_max_client_cnt %d", m_max_client_cnt);
-        LOG_ERROR("m_epoll_wait_time %d", m_epoll_wait_time);
-        LOG_ERROR("m_accept_per_tick %d", m_accept_per_tick);
-        LOG_ERROR("m_http_static_dir %s", m_http_static_dir.c_str());
-        LOG_ERROR("m_lua_dir %s", m_lua_dir.c_str());
-        LOG_ERROR("m_task_type %s", m_task_type.c_str());
-        LOG_ERROR("m_use_ssl %d", (int)m_use_ssl);
-        LOG_ERROR("m_crt_pem %s", m_crt_pem.c_str());
-        LOG_ERROR("m_key_pem %s", m_key_pem.c_str());
+        LOG_ERROR("m_app_id %s", this->m_config_mgr->get_app_id().c_str());
+        LOG_ERROR("m_ip %s", this->m_config_mgr->get_ip().c_str());
+        LOG_ERROR("m_port %d", this->m_config_mgr->get_port());
+        LOG_ERROR("m_worker_cnt %d", this->m_config_mgr->get_worker_cnt());
+        LOG_ERROR("m_max_client_cnt %d", this->m_config_mgr->get_max_client_cnt());
+        LOG_ERROR("m_epoll_wait_time %d", this->m_config_mgr->get_epoll_wait_time());
+        LOG_ERROR("m_accept_per_tick %d", this->m_config_mgr->get_accept_per_tick());
+        LOG_ERROR("m_http_static_dir %s", this->m_config_mgr->get_http_static_dir());
+        LOG_ERROR("m_lua_dir %s", this->m_config_mgr->get_lua_dir());
+        LOG_ERROR("m_task_type %s", this->m_config_mgr->get_task_type().c_str());
+        LOG_ERROR("m_use_ssl %d", this->m_config_mgr->get_use_ssl());
+        LOG_ERROR("m_crt_pem %s", this->m_config_mgr->get_crt_pem().c_str());
+        LOG_ERROR("m_key_pem %s", this->m_config_mgr->get_key_pem().c_str());
     }
 
     on_start();
 }
 
-void server::set_worker_cnt(size_t worker_cnt)
-{
-    m_worker_cnt = worker_cnt;
-}
-
-void server::set_max_client_cnt(size_t max_client_cnt)
-{
-    m_max_client_cnt = max_client_cnt;
-}
-
-void server::set_epoll_wait_time(size_t epoll_wait_time)
-{
-    m_epoll_wait_time = epoll_wait_time;
-}
-
-void server::set_task_type(std::string task_type)
-{
-    m_task_type = task_type;
-}
-
-void server::set_http_static_dir(std::string http_static_dir)
-{
-    m_http_static_dir = http_static_dir;
-}
-
-void server::set_max_ipc_conn_num(size_t max_ipc_conn_num)
-{
-    this->m_max_ipc_conn_num = max_ipc_conn_num;
-}
-
-void server::set_ipc_json_path(std::string ipc_json_path)
-{
-    this->m_ipc_json_path = ipc_json_path;
-}
-
-const std::string &server::get_http_static_dir()
-{
-    return m_http_static_dir;
-}
-
-void server::set_lua_dir(std::string lua_dir)
-{
-    m_lua_dir = lua_dir;
-}
-
-const std::string &server::get_lua_dir()
-{
-    return m_lua_dir;
-}
-
 task_type server::get_task_type()
 {
-    return str2task_type(m_task_type);
+    return str2task_type(this->m_config_mgr->get_task_type());
 }
 
-void server::set_use_ssl(bool use_ssl)
+void server::config(system::config_mgr *config_mgr)
 {
-    m_use_ssl = use_ssl;
-}
-
-void server::set_crt_pem(std::string crt_pem)
-{
-    m_crt_pem = crt_pem;
-}
-
-void server::set_key_pem(std::string key_pem)
-{
-    m_key_pem = key_pem;
-}
-
-bool server::get_use_ssl()
-{
-    return m_use_ssl;
-}
-
-std::string server::get_crt_pem()
-{
-    return m_crt_pem;
-}
-
-std::string server::get_key_pem()
-{
-    return m_key_pem;
-}
-
-void server::config(const std::string &app_id,
-                    const std::string &ip,
-                    int port,
-                    size_t worker_cnt,
-                    size_t max_client_cnt,
-                    size_t epoll_wait_time,
-                    size_t accept_per_tick,
-                    std::string task_type,
-                    std::string http_static_dir,
-                    std::string lua_dir,
-                    size_t max_ipc_conn_num,
-                    std::string ipc_json_path,
-                    std::string crt_pem /*= ""*/,
-                    std::string key_pem /*= ""*/,
-                    bool use_ssl /*= false*/)
-{
-    set_app_id(app_id);
-    set_listen_info(ip, port);
-    set_worker_cnt(worker_cnt);
-    set_max_client_cnt(max_client_cnt);
-    set_epoll_wait_time(epoll_wait_time);
-    set_accept_per_tick(accept_per_tick);
-    set_task_type(task_type);
-    set_http_static_dir(http_static_dir);
-    set_lua_dir(lua_dir);
-    set_crt_pem(crt_pem);
-    set_key_pem(key_pem);
-    set_use_ssl(use_ssl);
-    set_max_ipc_conn_num(max_ipc_conn_num);
-    set_ipc_json_path(ipc_json_path);
+    this->m_config_mgr = config_mgr;
 }
 
 bool server::is_stop()
@@ -313,7 +200,7 @@ void server::to_stop()
     // main thread stop_flag
     stop_flag = true;
     // worker thread stop_flag
-    for (size_t i = 0; i < m_worker_cnt; i++)
+    for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
     {
         m_workers[i].to_stop = true;
     }
@@ -328,12 +215,12 @@ void server::on_start_load_ipc_json_file()
 {
     // load ipc json
     {
-        const std::filesystem::path file_path(this->m_ipc_json_path);
+        const std::filesystem::path file_path(this->m_config_mgr->get_ipc_json_path());
         std::ifstream file_stream(file_path);
         if (!file_stream)
         {
-            LOG_ERROR("could not open file %d", this->m_ipc_json_path.c_str());
-            throw std::runtime_error(std::string("could not open file ") + this->m_ipc_json_path);
+            LOG_ERROR("could not open file %d", this->m_config_mgr->get_ipc_json_path().c_str());
+            throw std::runtime_error(std::string("could not open file ") + this->m_config_mgr->get_ipc_json_path());
         }
         std::stringstream buffer;
         buffer << file_stream.rdbuf();
@@ -367,20 +254,20 @@ void server::on_start()
     // main m_epoller
     int iret = 0;
     {
-        iret = m_epoller.create(m_max_client_cnt + 10);
+        iret = m_epoller.create(this->m_config_mgr->get_max_client_cnt() + 10);
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_max_client_cnt + 10), iret);
+            LOG_ERROR("m_epoller.create(%d) iret[%d]", (this->m_config_mgr->get_max_client_cnt() + 10), iret);
             return;
         }
     }
 
     // main_connection_mgr
     {
-        iret = m_main_connection_mgr.init(m_worker_cnt * 4);
+        iret = m_main_connection_mgr.init(this->m_config_mgr->get_worker_cnt() * 4);
         if (iret != 0)
         {
-            LOG_ERROR("m_main_connection_mgr.init(%d) failed[%d]", (m_worker_cnt * 4), iret);
+            LOG_ERROR("m_main_connection_mgr.init(%d) failed[%d]", (this->m_config_mgr->get_worker_cnt() * 4), iret);
             return;
         }
     }
@@ -397,14 +284,14 @@ void server::on_start()
 
     // main_worker_tunnel
     {
-        m_main_worker_tunnel = new (std::nothrow) avant::socket::socket_pair[m_worker_cnt];
+        m_main_worker_tunnel = new (std::nothrow) avant::socket::socket_pair[this->m_config_mgr->get_worker_cnt()];
         if (!m_main_worker_tunnel)
         {
             LOG_ERROR("new socket_pair err");
             return;
         }
         // init tunnel
-        for (size_t i = 0; i < m_worker_cnt; i++)
+        for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
         {
             iret = m_main_worker_tunnel[i].init();
             if (iret != 0)
@@ -413,7 +300,7 @@ void server::on_start()
                 return;
             }
         }
-        for (size_t i = 0; i < m_worker_cnt; i++)
+        for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
         {
             if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, event::event_poller::RWE, false))
             {
@@ -439,7 +326,8 @@ void server::on_start()
 
     // worker init
     {
-        workers::worker *worker_arr = new workers::worker[m_worker_cnt];
+        workers::worker *worker_arr = new workers::worker[this->m_config_mgr->get_worker_cnt()];
+
         m_workers = worker_arr;
         if (!worker_arr)
         {
@@ -447,19 +335,21 @@ void server::on_start()
             return;
         }
 
-        uint64_t worker_max_client_cnt = std::ceil((double)m_max_client_cnt / (double)m_worker_cnt) + m_worker_cnt;
+        for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
+        {
+            worker_arr[i].set_server(this);
+        }
 
-        worker::worker::http_static_dir = m_http_static_dir;
-        for (size_t i = 0; i < m_worker_cnt; i++)
+        uint64_t worker_max_client_cnt = std::ceil((double)this->m_config_mgr->get_max_client_cnt() / (double)this->m_config_mgr->get_worker_cnt()) + this->m_config_mgr->get_worker_cnt();
+
+        for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
         {
             m_workers[i].worker_id = i;
             m_workers[i].curr_connection_num = m_curr_connection_num;
             m_workers[i].worker_connection_num.store(0);
             m_workers[i].main_worker_tunnel = &m_main_worker_tunnel[i];
-            m_workers[i].epoll_wait_time = m_epoll_wait_time;
-            m_workers[i].use_ssl = m_use_ssl;
             m_workers[i].ssl_context = m_ssl_context;
-            m_workers[i].type = avant::task::str2task_type(m_task_type);
+            m_workers[i].type = get_task_type();
 
             connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
             if (!new_connection_mgr)
@@ -533,19 +423,15 @@ void server::on_start()
 
     // other init
     {
-        workers::other *other_ptr = new workers::other;
+        workers::other *other_ptr = new workers::other(this);
         m_other = other_ptr;
         if (!m_other)
         {
             LOG_ERROR("new workers::other failed");
             return;
         }
-        m_other->max_ipc_conn_num = this->m_max_ipc_conn_num;
-        m_other->epoll_wait_time = this->m_epoll_wait_time;
         m_other->main_other_tunnel = &m_main_other_tunnel;
         m_other->ipc_json = this->m_ipc_json;
-        m_other->app_id = this->m_app_id;
-        m_other->accept_per_tick = this->m_accept_per_tick;
 
         connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
         if (!new_connection_mgr)
@@ -555,17 +441,18 @@ void server::on_start()
         }
 
         std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
-        iret = new_connection_mgr->init(m_other->max_ipc_conn_num);
+
+        iret = new_connection_mgr->init(this->m_config_mgr->get_max_ipc_conn_num());
         if (iret != 0)
         {
             LOG_ERROR("new_connection_mgr->init failed");
             return;
         }
         m_other->ipc_connection_mgr = new_connection_mgr_shared_ptr;
-        iret = m_other->epoller.create(m_other->max_ipc_conn_num);
+        iret = m_other->epoller.create(this->m_config_mgr->get_max_ipc_conn_num());
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create(%d) iret[%d]", (m_other->max_ipc_conn_num), iret);
+            LOG_ERROR("m_epoller.create(%d) iret[%d]", (this->m_config_mgr->get_max_ipc_conn_num()), iret);
             return;
         }
 
@@ -598,7 +485,9 @@ void server::on_start()
 
     // listen_socket init
     {
-        server_socket *listen_socket = new (std::nothrow) server_socket(m_ip, m_port, m_max_client_cnt);
+        server_socket *listen_socket = new (std::nothrow) server_socket(this->m_config_mgr->get_ip(),
+                                                                        this->m_config_mgr->get_port(),
+                                                                        this->m_config_mgr->get_max_client_cnt());
         if (!listen_socket)
         {
             LOG_ERROR("new listen socket object failed");
@@ -606,7 +495,7 @@ void server::on_start()
         }
         this->m_server_listen_socket.reset(listen_socket);
 
-        LOG_ERROR("IP %s PORT %d", m_ip.c_str(), m_port);
+        LOG_ERROR("IP %s PORT %d", this->m_config_mgr->get_ip().c_str(), this->m_config_mgr->get_port());
         if (0 > this->m_server_listen_socket->get_fd())
         {
             LOG_ERROR("listen_socket failed get_fd() < 0");
@@ -634,7 +523,7 @@ void server::on_start()
     }
     // worker thread start
     {
-        for (size_t i = 0; i < m_worker_cnt; i++)
+        for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
         {
             std::thread t(std::ref(m_workers[i]));
             t.detach();
@@ -650,7 +539,7 @@ void server::on_start()
     {
         while (true)
         {
-            int num = m_epoller.wait(m_epoll_wait_time);
+            int num = m_epoller.wait(this->m_config_mgr->get_epoll_wait_time());
 
             if (num < 0)
             {
@@ -680,7 +569,7 @@ void server::on_start()
                     {
                         bool flag = true;
                         // checking all worker stoped
-                        for (size_t i = 0; i < m_worker_cnt; i++)
+                        for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
                         {
                             if (!m_workers[i].is_stoped)
                             {
@@ -715,7 +604,7 @@ void server::on_start()
                 {
                     std::vector<int> clients_fd;
                     std::vector<uint64_t> gids;
-                    for (size_t loop = 0; loop < m_accept_per_tick; loop++)
+                    for (int loop = 0; loop < this->m_config_mgr->get_accept_per_tick(); loop++)
                     {
                         int new_client_fd = this->m_server_listen_socket->accept();
                         if (new_client_fd < 0)
@@ -724,7 +613,7 @@ void server::on_start()
                         }
                         else
                         {
-                            if (m_curr_connection_num->load() >= (int)m_max_client_cnt)
+                            if (m_curr_connection_num->load() >= (int)this->m_config_mgr->get_max_client_cnt())
                             {
                                 LOG_ERROR("m_curr_connection_num >= m_max_client_cnt");
                                 ::close(new_client_fd);
@@ -787,9 +676,9 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
         uint64_t target_worker_idx = 0;
         int worker_connection_num = 0;
 
-        for (uint64_t worker_idx = 0; worker_idx < this->m_worker_cnt; worker_idx++)
+        for (int worker_idx = 0; worker_idx < this->m_config_mgr->get_worker_cnt(); worker_idx++)
         {
-            if (target_worker_idx == worker_idx)
+            if (target_worker_idx == static_cast<uint64_t>(worker_idx))
             {
                 worker_connection_num = m_workers[worker_idx].worker_connection_num.load();
                 continue;

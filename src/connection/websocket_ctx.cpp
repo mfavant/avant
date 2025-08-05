@@ -1,5 +1,6 @@
 #include "connection/websocket_ctx.h"
 #include "app/websocket_app.h"
+#include "server/server.h"
 #include <stdexcept>
 #include <avant-log/logger.h>
 #include <openssl/ssl.h>
@@ -167,7 +168,7 @@ void websocket_ctx::on_event(uint32_t event)
     }
 
     // ssl not ready
-    if (this->worker_ptr->use_ssl && !socket_ptr->get_ssl_accepted())
+    if (this->worker_ptr->get_server()->get_config()->get_use_ssl() && !socket_ptr->get_ssl_accepted())
     {
         int ssl_status = SSL_accept(socket_ptr->get_ssl_instance());
         if (1 == ssl_status)

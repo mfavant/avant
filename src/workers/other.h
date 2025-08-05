@@ -14,14 +14,25 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace avant
+{
+    namespace server
+    {
+        class server;
+    }
+}
+
 namespace avant::workers
 {
     class other
     {
     public:
-        other();
+        other(avant::server::server *server = nullptr);
         ~other();
         void operator()();
+
+        void set_server(avant::server::server *server) { m_server = server; }
+        const avant::server::server *get_server() const { return m_server; }
         int init_call_by_server();
 
     public:
@@ -30,11 +41,6 @@ namespace avant::workers
 
         bool is_this2remote(uint64_t gid) const;
         bool is_remote2this(uint64_t gid) const;
-
-        inline const std::string get_appid() const
-        {
-            return this->app_id;
-        }
 
     private:
         void try_send_flush_tunnel();
@@ -52,14 +58,10 @@ namespace avant::workers
         bool to_stop{false};
         bool is_stoped{false};
 
-        size_t max_ipc_conn_num{0};
-        size_t epoll_wait_time{0};
-        size_t accept_per_tick{0};
-
         avant::socket::socket_pair *main_other_tunnel{nullptr};
         avant::json::json ipc_json;
         avant::json::json ipc_self_json;
-        std::string app_id;
+
         std::shared_ptr<avant::socket::server_socket> ipc_listen_socket{nullptr};
 
         avant::event::event_poller epoller;
@@ -75,5 +77,7 @@ namespace avant::workers
         std::unordered_map<uint64_t, std::string> m_this2remote_gid2appid{};
 
         std::unordered_set<uint64_t> m_remote2this_gid{};
+
+        avant::server::server *m_server;
     };
 };

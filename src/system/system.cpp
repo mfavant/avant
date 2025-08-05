@@ -13,6 +13,7 @@
 #include "system/system.h"
 #include "utility/singleton.h"
 #include "server/server.h"
+#include "system/config_mgr.h"
 
 using avant::utility::singleton;
 using namespace avant::server;
@@ -24,33 +25,15 @@ using std::string;
 int system::init()
 {
     // load config ini file
-    inifile::inifile *ini = singleton<inifile::inifile>::instance();
-    ini->load(get_root_path() + "/config/main.ini");
-
-    const string app_id = (*ini)["server"]["app_id"];
-    const string &ip = (*ini)["server"]["ip"];
-    const int port = (*ini)["server"]["port"];
-    const int worker_cnt = (*ini)["server"]["worker_cnt"];
-    const int max_client_cnt = (*ini)["server"]["max_client_cnt"];
-    const int epoll_wait_time = (*ini)["server"]["epoll_wait_time"];
-    const int accept_per_tick = (*ini)["server"]["accept_per_tick"];
-    const string task_type = (*ini)["server"]["task_type"];
-    const string http_static_dir = (*ini)["server"]["http_static_dir"];
-    const string lua_dir = (*ini)["server"]["lua_dir"];
-
-    const string crt_pem = (*ini)["server"]["crt.pem"];
-    const string key_pem = (*ini)["server"]["key.pem"];
-    const int use_ssl = (*ini)["server"]["use_ssl"];
-
-    const int daemon = (*ini)["server"]["daemon"];
-
-    const int log_level = (*ini)["server"]["log_level"];
-
-    const int max_ipc_conn_num = (*ini)["ipc"]["max_ipc_conn_num"];
-    const string ipc_json_path = (*ini)["ipc"]["ipc_json_path"];
+    singleton<config_mgr>::instance()->set_root_path(get_root_path());
+    if (0 != singleton<config_mgr>::instance()->init(get_root_path() + "/config/main.ini"))
+    {
+        std::cerr << "system::init() config_mgr init error" << std::endl;
+        return -1;
+    }
 
     // daemon
-    if (daemon)
+    if (singleton<config_mgr>::instance()->get_daemon())
     {
         create_daemon();
     }
@@ -62,7 +45,7 @@ int system::init()
     signal_conf();
 
     // logger
-    const string log_dir_path = get_root_path() + "/log";
+    const string log_dir_path = singleton<config_mgr>::instance()->get_root_path() + "/log";
     DIR *dp = opendir(log_dir_path.c_str());
     if (dp == nullptr)
     {
@@ -72,25 +55,11 @@ int system::init()
     {
         closedir(dp);
     }
-    logger::instance().open(m_root_path + "/log/", log_level);
+    logger::instance().open(m_root_path + "/log/", singleton<config_mgr>::instance()->get_log_level());
 
     // server
     auto m_server = singleton<server::server>::instance();
-    m_server->config(app_id,
-                     ip,
-                     port,
-                     worker_cnt,
-                     max_client_cnt,
-                     epoll_wait_time,
-                     accept_per_tick,
-                     task_type,
-                     http_static_dir,
-                     lua_dir,
-                     max_ipc_conn_num,
-                     ipc_json_path,
-                     crt_pem,
-                     key_pem,
-                     use_ssl);
+    m_server->config(singleton<config_mgr>::instance());
 
     m_server->start(); // main thread loop
     LOG_ERROR("m_server_start() return");

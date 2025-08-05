@@ -23,6 +23,8 @@ namespace avant::connection
 
         void on_event(uint32_t event) override;
 
+        const workers::worker *get_worker_ptr() const { return this->worker_ptr; }
+
         void set_recv_end(bool recv_end);
         bool get_recv_end();
         void set_process_end(bool process_end);

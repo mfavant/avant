@@ -9,6 +9,7 @@
 #include "global/tunnel_id.h"
 #include "connection/ipc_stream_ctx.h"
 #include "socket/client_socket.h"
+#include "server/server.h"
 #include <pthread.h>
 #include <signal.h>
 
@@ -17,7 +18,7 @@ using namespace avant::global;
 using namespace avant::connection;
 using namespace avant::socket;
 
-other::other()
+other::other(avant::server::server *server /*=nullptr*/) : m_server(server)
 {
 }
 
@@ -31,7 +32,7 @@ int other::init_call_by_server()
     bool found = false;
     for (auto &item : this->ipc_json)
     {
-        if (item["app_id"] == this->app_id)
+        if (item["app_id"] == this->get_server()->get_config()->get_app_id())
         {
             found = true;
             this->ipc_self_json = item;
@@ -41,7 +42,7 @@ int other::init_call_by_server()
 
     if (false == found)
     {
-        LOG_ERROR("this process json app_id %s not be found", this->app_id.c_str());
+        LOG_ERROR("this process json app_id %s not be found", this->get_server()->get_config()->get_app_id().c_str());
         return -1;
     }
 
@@ -52,7 +53,7 @@ int other::init_call_by_server()
     LOG_ERROR("ipc self json app_id[%s] ip[%s] port[%d]", app_id.c_str(), ip.c_str(), port);
 
     // Create IPC listen socket
-    avant::socket::server_socket *ipc_listen_socket = new (std::nothrow) avant::socket::server_socket(ip, port, this->max_ipc_conn_num);
+    avant::socket::server_socket *ipc_listen_socket = new (std::nothrow) avant::socket::server_socket(ip, port, this->get_server()->get_config()->get_max_ipc_conn_num());
     if (!ipc_listen_socket)
     {
         LOG_ERROR("new ipc_listen_socket failed");
@@ -100,7 +101,7 @@ void other::operator()()
     int num = -1;
     while (true)
     {
-        num = this->epoller.wait(this->epoll_wait_time);
+        num = this->epoller.wait(this->get_server()->get_config()->get_epoll_wait_time());
         if (num < 0)
         {
             if (errno == EINTR)
@@ -389,7 +390,7 @@ uint64_t other::other_gen_gid()
 
 void other::on_ipc_listen_event(uint32_t event)
 {
-    for (size_t i = 0; i < this->accept_per_tick; i++)
+    for (int i = 0; i < this->get_server()->get_config()->get_accept_per_tick(); i++)
     {
         int new_ipc_client_fd = this->ipc_listen_socket->accept();
         if (new_ipc_client_fd < 0)
@@ -421,7 +422,9 @@ void other::close_ipc_client_fd(int fd)
             {
                 this->m_this2remote_appid2gid.erase(appid2gid_iter);
             }
-            LOG_ERROR("appid %s and %s connect failed", this->app_id.c_str(), this2remote_gid2appid_iter->second.c_str());
+            LOG_ERROR("appid %s and %s connect failed", this->get_server()->get_config()->get_app_id().c_str(),
+                      this2remote_gid2appid_iter->second.c_str());
+
             this->m_this2remote_gid2appid.erase(this2remote_gid2appid_iter);
 
 #if 1
@@ -525,7 +528,7 @@ void other::ipc_client_to_connect()
 {
     for (auto item : this->ipc_json)
     {
-        if (item["app_id"].as_string() == this->app_id)
+        if (item["app_id"].as_string() == this->get_server()->get_config()->get_app_id())
         {
             continue;
         }

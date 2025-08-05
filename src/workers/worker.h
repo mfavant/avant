@@ -14,13 +14,24 @@
 #include "utility/time.h"
 #include <unordered_set>
 
+namespace avant
+{
+    namespace server
+    {
+        class server;
+    }
+}
+
 namespace avant::workers
 {
     class worker
     {
     public:
-        worker();
+        worker(avant::server::server *server = nullptr);
         ~worker();
+        void set_server(avant::server::server *server) { m_server = server; }
+        const avant::server::server *get_server() const { return m_server; }
+
         void operator()();
 
         bool to_stop{false};
@@ -28,15 +39,11 @@ namespace avant::workers
 
         int worker_id{-1};
         size_t max_client_num{0};
-        bool use_ssl{false};
-        size_t epoll_wait_time{0};
 
         // worker connection num
         std::atomic<int> worker_connection_num;
 
         SSL_CTX *ssl_context{nullptr};
-
-        static std::string http_static_dir;
 
         avant::task::task_type type{avant::task::task_type::NONE};
 
@@ -53,6 +60,8 @@ namespace avant::workers
         avant::timer::timer_manager m_conn_timeout_timer_manager;
         avant::utility::time m_worker_loop_time;
         uint64_t m_latest_tick_time{0};
+
+        avant::server::server *m_server;
 
     public:
         int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);

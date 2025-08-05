@@ -9,8 +9,9 @@ namespace avant::system
     public:
         system() = default;
         ~system() = default;
-        int init();                  // init avant system
-        std::string get_root_path(); // get executable file location path
+        // init avant system
+        int init();
+
         static void signal_term(int sig);
         static void signal_usr1(int sig);
         static void signal_int(int sig);
@@ -19,6 +20,8 @@ namespace avant::system
         int set_sys_limits();
         void signal_conf();
         void create_daemon();
+
+        std::string get_root_path(); // get executable file location path
 
     private:
         std::string m_root_path{};
