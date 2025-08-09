@@ -19,7 +19,7 @@ using std::vector;
 namespace fs = std::filesystem;
 namespace utility = avant::utility;
 
-class html_loader
+class avant_html_loader
 {
 public:
     static string load(string body)
@@ -41,7 +41,7 @@ public:
     }
 };
 
-struct http_app_reponse
+struct avant_http_app_reponse
 {
     enum type
     {
@@ -80,6 +80,52 @@ struct http_app_reponse
     }
 };
 
+struct avant_http_range
+{
+    int64_t start;
+    int64_t end;
+};
+
+bool avant_parse_range_header(const std::string &range_header,
+                              std::vector<avant_http_range> &ranges)
+{
+    if (range_header.empty() || range_header.find("bytes=") != 0)
+    {
+        return false;
+    }
+
+    // skip "bytes="
+    std::string range_str = range_header.substr(6);
+    std::stringstream ss(range_str);
+    std::string range_item;
+
+    while (std::getline(ss, range_item, ','))
+    {
+        size_t dash_pos = range_item.find('-');
+        if (dash_pos == std::string::npos)
+        {
+            return false;
+        }
+        std::string start_str = range_item.substr(0, dash_pos);
+        std::string end_str = range_item.substr(dash_pos + 1);
+
+        int64_t start, end;
+        try
+        {
+            start = start_str.empty() ? 0 : std::stoll(start_str);
+            end = end_str.empty() ? -1 : std::stoll(end_str);
+        }
+        catch (...)
+        {
+            return false;
+        }
+
+        ranges.push_back({start, end});
+    }
+
+    return !ranges.empty();
+}
+
 void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_alive_call)
 {
     // send new_connection protocol to other thread
@@ -101,7 +147,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
     {
         if (ctx.ptr)
         {
-            http_app_reponse *reponse_ptr = (http_app_reponse *)ctx.ptr;
+            avant_http_app_reponse *reponse_ptr = (avant_http_app_reponse *)ctx.ptr;
             reponse_ptr->destory();
 
             // LOG_DEBUG("reponse_ptr->destory() conngid %llu", ctx.get_conn_gid());
@@ -124,31 +170,66 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             ctx.set_response_end(true);
         };
 
-        bool exist_keep_live = false;
-        if (ctx.headers.find("Connection") != ctx.headers.end())
+        // Header: Connection
+        bool header_exist_keep_live = false;
         {
-            for (const std::string &str : ctx.headers.find("Connection")->second)
+            if (ctx.headers.find("Connection") != ctx.headers.end())
             {
-                if (str == "keep-alive")
+                for (const std::string &str : ctx.headers.find("Connection")->second)
                 {
-                    exist_keep_live = true;
-                    break;
+                    if (str == "keep-alive")
+                    {
+                        header_exist_keep_live = true;
+                        break;
+                    }
                 }
             }
         }
-        std::string etag;
-        auto if_none_match = ctx.headers.find("If-None-Match");
-        if (if_none_match != ctx.headers.end())
+        // Header: If-None-Match
+        std::string header_etag;
         {
-            if (if_none_match->second.size() == 1)
+            auto if_none_match = ctx.headers.find("If-None-Match");
+            if (if_none_match != ctx.headers.end())
             {
-                etag = if_none_match->second.at(0);
+                if (if_none_match->second.size() == 1)
+                {
+                    header_etag = if_none_match->second.at(0);
+                }
+            }
+        }
+        // Header: Range
+        std::string header_range;
+        std::vector<avant_http_range> header_ranges;
+        {
+            auto iter_header_range = ctx.headers.find("Range");
+
+            if (iter_header_range != ctx.headers.end() &&
+                iter_header_range->second.size() == 1)
+            {
+                header_range = iter_header_range->second.at(0);
+                // std::cout << "header_range: " << header_range << std::endl;
+
+                if (!avant_parse_range_header(header_range,
+                                              header_ranges))
+                {
+                    LOG_ERROR("!avant_parse_range_header failed");
+                }
+            }
+        }
+        // Header: If-Range
+        std::string header_if_range;
+        {
+            auto iter_header_if_range = ctx.headers.find("If-Range");
+            if (iter_header_if_range != ctx.headers.end() &&
+                iter_header_if_range->second.size() == 1)
+            {
+                header_if_range = iter_header_if_range->second.at(0);
             }
         }
 
         if constexpr (false)
         {
-            ctx.keep_alive = exist_keep_live;
+            ctx.keep_alive = header_exist_keep_live;
             const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
             ctx.send_buffer_append(response, strlen(response));
             ctx.set_response_end(true);
@@ -156,7 +237,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         }
         else
         {
-            ctx.keep_alive = exist_keep_live; // app not use keep_alive
+            ctx.keep_alive = header_exist_keep_live; // app not use keep_alive
         }
 
         std::string url;
@@ -204,8 +285,14 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
             std::string now_etag = generate_etag_for_regular_file(t_path);
 
+            // std::cout << "header_if_range: " << header_if_range << std::endl;
+            for (const auto &range_item : header_ranges)
+            {
+                // std::cout << "range_item: " << range_item.start << "-" << range_item.end << std::endl;
+            }
+
             // 命中缓存
-            if (now_etag.size() > 0 && etag.size() > 0 && now_etag == etag)
+            if (now_etag.size() > 0 && header_etag.size() > 0 && now_etag == header_etag)
             {
                 std::string response = "HTTP/1.1 304 Not Modified\r\nServer: avant\r\n";
                 response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
@@ -216,17 +303,17 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 return;
             }
 
-            auto response_ptr = new (std::nothrow) http_app_reponse;
+            auto response_ptr = new (std::nothrow) avant_http_app_reponse;
             if (!response_ptr)
             {
-                LOG_ERROR("new (std::nothrow) http_app_reponse failed");
+                LOG_ERROR("new (std::nothrow) avant_http_app_reponse failed");
                 return_404(ctx);
                 ctx.set_response_end(true);
                 return;
             }
 
             ctx.ptr = response_ptr;
-            response_ptr->ptr_type = http_app_reponse::FD;
+            response_ptr->ptr_type = avant_http_app_reponse::FD;
 
             std::string mime_type;
             try
@@ -247,9 +334,9 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 return;
             }
 
-            fseek((FILE *)response_ptr->ptr, 0, SEEK_END);
-            long size = ftell((FILE *)response_ptr->ptr);
-            rewind((FILE *)response_ptr->ptr);
+            ::fseek((FILE *)response_ptr->ptr, 0, SEEK_END);
+            long size = ::ftell((FILE *)response_ptr->ptr);
+            ::rewind((FILE *)response_ptr->ptr);
 
             std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
             response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
@@ -271,7 +358,10 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 constexpr int buffer_size = 1024000;
                 char buf[buffer_size] = {0};
                 int len = 0;
-                len = ::fread(buf, sizeof(char), buffer_size, (http_app_reponse::FD_TYPE *)((http_app_reponse *)ctx.ptr)->ptr);
+                len = ::fread(buf,
+                              sizeof(char),
+                              buffer_size,
+                              (avant_http_app_reponse::FD_TYPE *)((avant_http_app_reponse *)ctx.ptr)->ptr);
                 if (len > 0)
                 {
                     ctx.send_buffer_append(buf, len);
@@ -287,17 +377,17 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         }
         else if (fs::exists(t_path) && fs::is_directory(t_path))
         {
-            auto response_ptr = new (std::nothrow) http_app_reponse;
+            auto response_ptr = new (std::nothrow) avant_http_app_reponse;
             if (!response_ptr)
             {
-                LOG_ERROR("new (std::nothrow) http_app_reponse failed");
+                LOG_ERROR("new (std::nothrow) avant_http_app_reponse failed");
                 return_404(ctx);
                 ctx.set_response_end(true);
                 return;
             }
             ctx.ptr = response_ptr;
-            response_ptr->ptr_type = http_app_reponse::DIR;
-            response_ptr->ptr = new (std::nothrow) http_app_reponse::DIR_TYPE;
+            response_ptr->ptr_type = avant_http_app_reponse::DIR;
+            response_ptr->ptr = new (std::nothrow) avant_http_app_reponse::DIR_TYPE;
             if (!response_ptr->ptr)
             {
                 delete response_ptr;
@@ -305,7 +395,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 ctx.set_response_end(true);
                 return;
             }
-            auto dir_type_ptr = (http_app_reponse::DIR_TYPE *)response_ptr->ptr;
+            auto dir_type_ptr = (avant_http_app_reponse::DIR_TYPE *)response_ptr->ptr;
 
             //  generate dir list
             vector<string> a_tags;
@@ -314,7 +404,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 for (const auto &dir_entry : fs::directory_iterator(t_path))
                 {
                     std::string sub_path = dir_entry.path().string().substr(prefix.size());
-                    a_tags.push_back(html_loader::a_tag(sub_path, sub_path));
+                    a_tags.push_back(avant_html_loader::a_tag(sub_path, sub_path));
                 }
             }
             catch (const std::filesystem::filesystem_error &ex)
@@ -327,7 +417,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             {
                 body += a_tag;
             }
-            std::get<0>(*dir_type_ptr) = html_loader::load(body);
+            std::get<0>(*dir_type_ptr) = avant_html_loader::load(body);
             std::get<1>(*dir_type_ptr) = 0;
 
             std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
@@ -338,10 +428,10 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
             ctx.send_buffer_append(response_head.c_str(), response_head.size());
 
-            ctx.write_end_callback = [exist_keep_live](connection::http_ctx &ctx) -> void
+            ctx.write_end_callback = [header_exist_keep_live](connection::http_ctx &ctx) -> void
             {
-                http_app_reponse *response_ptr = (http_app_reponse *)ctx.ptr;
-                auto dir_type_ptr = (http_app_reponse::DIR_TYPE *)response_ptr->ptr;
+                avant_http_app_reponse *response_ptr = (avant_http_app_reponse *)ctx.ptr;
+                auto dir_type_ptr = (avant_http_app_reponse::DIR_TYPE *)response_ptr->ptr;
                 const char *buffer_ptr = std::get<0>(*dir_type_ptr).c_str();
                 const size_t buffer_size = std::get<0>(*dir_type_ptr).size();
                 size_t &already_size = std::get<1>(*dir_type_ptr);
