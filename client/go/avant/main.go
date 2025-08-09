@@ -42,7 +42,8 @@ func main() {
 	}
 
 	// 模拟多个客户端连接普通业务接口
-	for i := 0; i < 100; i++ {
+	clientCnt := 100
+	for i := 0; i < clientCnt; i++ {
 		// 每个连接都开一个协程去处理
 		go func(i int) {
 			var count uint64 = 0 // 计数器
@@ -61,7 +62,7 @@ func main() {
 					// log.Println("客户端 收到包 CMD =", pkg.Cmd)
 					count++
 					if count%1000 == 0 {
-						log.Println("客户端 ", i, " pingpong count ", count, " * 100")
+						log.Println("客户端 ", i, " pingpong count ", count, " * ", clientCnt)
 					}
 
 					if pkg.Cmd == proto_res.ProtoCmd_PROTO_CMD_CS_RES_EXAMPLE {
