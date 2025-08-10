@@ -209,6 +209,18 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 }
             }
         }
+        // Header: Cache-Control
+        std::string header_cache_control;
+        {
+            auto cache_control = ctx.headers.find("Cache-Control");
+            if (cache_control != ctx.headers.end())
+            {
+                if (cache_control->second.size() == 1)
+                {
+                    header_cache_control = cache_control->second.at(0);
+                }
+            }
+        }
         // Header: Range
         std::string header_range;
         std::vector<avant_http_range> header_ranges;
@@ -320,12 +332,12 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
 
             // 命中缓存
-            if ((now_etag.size() > 0 &&
-                 header_if_none_match.size() > 0 &&
-                 now_etag == header_if_none_match) ||
-                (now_last_modify_date.size() > 0 &&
-                 header_if_modified_since.size() > 0 &&
-                 now_last_modify_date == header_if_modified_since))
+            if (header_cache_control != "no-cache" && ((now_etag.size() > 0 &&
+                                                        header_if_none_match.size() > 0 &&
+                                                        now_etag == header_if_none_match) ||
+                                                       (now_last_modify_date.size() > 0 &&
+                                                        header_if_modified_since.size() > 0 &&
+                                                        now_last_modify_date == header_if_modified_since)))
             {
                 std::string response = "HTTP/1.1 304 Not Modified\r\nServer: avant\r\n";
                 response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
