@@ -186,14 +186,26 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
         }
         // Header: If-None-Match
-        std::string header_etag;
+        std::string header_if_none_match;
         {
             auto if_none_match = ctx.headers.find("If-None-Match");
             if (if_none_match != ctx.headers.end())
             {
                 if (if_none_match->second.size() == 1)
                 {
-                    header_etag = if_none_match->second.at(0);
+                    header_if_none_match = if_none_match->second.at(0);
+                }
+            }
+        }
+        // Header: If-Modified-Since
+        std::string header_if_modified_since;
+        {
+            auto if_modified_since = ctx.headers.find("If-Modified-Since");
+            if (if_modified_since != ctx.headers.end())
+            {
+                if (if_modified_since->second.size() == 1)
+                {
+                    header_if_modified_since = if_modified_since->second.at(0);
                 }
             }
         }
@@ -271,19 +283,35 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
         if (fs::exists(t_path) && fs::is_regular_file(t_path))
         {
-            auto generate_etag_for_regular_file = [](const fs::path &t_path) -> std::string
+            auto generate_etag_for_regular_file = [](const fs::path &t_path, std::string &out_etag, std::string &out_http_date) -> bool
             {
                 struct stat st;
                 if (stat(t_path.c_str(), &st) != 0)
                 {
-                    return ""; // 文件不存在或读取错误
+                    return false;
                 }
-                std::ostringstream oss;
-                oss << "\"" << std::hex << st.st_mtime << "-" << st.st_size << "\"";
-                return oss.str();
+                {
+                    std::ostringstream oss;
+                    oss << "\"" << std::hex << st.st_mtime << "-" << st.st_size << "\"";
+                    out_etag = oss.str();
+                }
+                {
+                    std::stringstream ss;
+                    ss << std::put_time(std::gmtime(&st.st_mtim.tv_sec), "%a, %d %b %Y %H:%M:%S GMT");
+                    out_http_date = ss.str();
+                }
+
+                return true;
             };
 
-            std::string now_etag = generate_etag_for_regular_file(t_path);
+            std::string now_etag, now_last_modify_date;
+            if (!generate_etag_for_regular_file(t_path, now_etag, now_last_modify_date))
+            {
+                LOG_ERROR("generate_etag_for_regular_file failed %s", t_path.c_str());
+            }
+
+            // std::cout << "now_etag: " << now_etag << std::endl;
+            // std::cout << "now_last_modify_date: " << now_last_modify_date << std::endl;
 
             // std::cout << "header_if_range: " << header_if_range << std::endl;
             for (const auto &range_item : header_ranges)
@@ -292,7 +320,12 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
 
             // 命中缓存
-            if (now_etag.size() > 0 && header_etag.size() > 0 && now_etag == header_etag)
+            if ((now_etag.size() > 0 &&
+                 header_if_none_match.size() > 0 &&
+                 now_etag == header_if_none_match) ||
+                (now_last_modify_date.size() > 0 &&
+                 header_if_modified_since.size() > 0 &&
+                 now_last_modify_date == header_if_modified_since))
             {
                 std::string response = "HTTP/1.1 304 Not Modified\r\nServer: avant\r\n";
                 response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
@@ -343,6 +376,10 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             if (now_etag.size() > 0)
             {
                 response_head += std::string("ETag: ") + now_etag + "\r\n";
+            }
+            if (now_last_modify_date.size() > 0)
+            {
+                response_head += std::string("Last-Modified: ") + now_last_modify_date + "\r\n";
             }
             response_head += "Content-Type: ";
             response_head += mime_type;
