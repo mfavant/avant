@@ -4,11 +4,11 @@
 
 Network Message Framework For Linux C++.
 
-C++ Version: `C++20`  
+C++ Version: `C++ 20`  
 OS: `Linux`  
 Protocol: `HTTP` `TCP Stream(protobuf)` `Websocket`  
 TLS/SSL: `OpenSSL`  
-Script Engin: `Lua 5.4.6`  
+Lua Script: `Lua 5.4.6`  
 
 ## Docker Image
 
