@@ -284,6 +284,19 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             return;
         }
 
+        try
+        {
+            utility::url url_obj(url);
+            url = url_obj.get_path();
+        }
+        catch (std::runtime_error &e)
+        {
+            LOG_ERROR("utility::url url_obj(url) error %s", e.what());
+            return_404(ctx);
+            ctx.set_response_end(true);
+            return;
+        }
+
         if (url == "" || url == "/")
         {
             url = "/index.html";
