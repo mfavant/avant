@@ -6,6 +6,7 @@
 #include "proto_res/proto_lua.pb.h"
 #include "utility/singleton.h"
 #include <stack>
+#include <chrono>
 
 using namespace avant::app;
 using namespace avant::utility;
@@ -425,6 +426,8 @@ void lua_plugin::main_mount()
     static luaL_Reg main_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
+        {"HighresTime", HighresTime},
+        {"Monotonic", Monotonic},
         {NULL, NULL}};
     {
         // mount main lua vm
@@ -442,6 +445,8 @@ void lua_plugin::worker_mount(int worker_idx)
     static luaL_Reg worker_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
+        {"HighresTime", HighresTime},
+        {"Monotonic", Monotonic},
         {NULL, NULL}};
     luaL_newlib(this->worker_lua_state[worker_idx], worker_lulibs);
 
@@ -456,6 +461,8 @@ void lua_plugin::other_mount()
     static luaL_Reg other_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
+        {"HighresTime", HighresTime},
+        {"Monotonic", Monotonic},
         {NULL, NULL}};
     {
         luaL_newlib(this->other_lua_state, other_lulibs);
@@ -465,6 +472,28 @@ void lua_plugin::other_mount()
 
         lua_setglobal(this->other_lua_state, "avant");
     }
+}
+
+// 返回两个值：1) seconds (double), 2) nanoseconds (integer)
+int lua_plugin::HighresTime(lua_State *lua_state)
+{
+    using namespace std::chrono;
+    auto now = system_clock::now();
+    auto ns = duration_cast<nanoseconds>(now.time_since_epoch()).count();
+    double seconds = static_cast<double>(ns) / 1e9;
+    lua_pushnumber(lua_state, seconds);                       // pushes double seconds
+    lua_pushinteger(lua_state, static_cast<lua_Integer>(ns)); // pushes integer nanoseconds
+    return 2;
+}
+
+// 返回单个值：monotonic seconds (integer)
+int lua_plugin::Monotonic(lua_State *lua_state)
+{
+    using namespace std::chrono;
+    auto now = steady_clock::now();
+    auto ns = duration_cast<nanoseconds>(now.time_since_epoch()).count();
+    lua_pushinteger(lua_state, static_cast<lua_Integer>(ns)); // pushes integer nanoseconds
+    return 1;
 }
 
 int lua_plugin::Logger(lua_State *lua_state)

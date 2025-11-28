@@ -57,6 +57,8 @@ namespace avant::app
     public:
         static int Logger(lua_State *lua_state);
         static int Lua2Protobuf(lua_State *lua_state);
+        static int HighresTime(lua_State *lua_state);
+        static int Monotonic(lua_State *lua_state);
 
     public:
         std::shared_ptr<google::protobuf::Message> protobuf_cmd2message(int cmd);
