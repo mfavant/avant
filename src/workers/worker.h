@@ -70,6 +70,8 @@ namespace avant::workers
         void close_client_fd(int fd);
         void mark_delete_timeout_timer(uint64_t timer_id);
 
+        int get_worker_id() { return this->worker_id; }
+
     private:
         void try_send_flush_tunnel();
 

@@ -66,6 +66,12 @@ namespace avant::connection
             return this->worker_ptr->tunnel_forward(std::forward<Args>(args)...);
         }
 
+        template <typename... Args>
+        int get_worker_id(Args &&...args)
+        {
+            return this->worker_ptr->get_worker_id(std::forward<Args>(args)...);
+        }
+
     public:
         std::string url{};
         std::string method{};

@@ -48,6 +48,12 @@ namespace avant::connection
             return this->worker_ptr->tunnel_forward(std::forward<Args>(args)...);
         }
 
+        template <typename... Args>
+        int get_worker_id(Args &&...args)
+        {
+            return this->worker_ptr->get_worker_id(std::forward<Args>(args)...);
+        }
+
     public:
         static std::shared_ptr<http_parser_settings> settings;
         static void init_http_settings();
