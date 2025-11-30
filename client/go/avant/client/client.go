@@ -41,6 +41,10 @@ func NewClient(addr string, appId string,
 	return client, nil
 }
 
+func (client *Client) GetAppId() string {
+	return client.appId
+}
+
 func (client *Client) connectLoop() {
 	for {
 		conn, err := net.Dial("tcp", client.addr)

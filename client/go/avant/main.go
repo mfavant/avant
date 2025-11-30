@@ -29,13 +29,34 @@ func main() {
 		func(client *client.Client, pkg *proto_res.ProtoPackage) error {
 			log.Println("RPC 收到包 CMD =", pkg.Cmd)
 
-			if pkg.Cmd == proto_res.ProtoCmd_PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE {
+			switch pkg.Cmd {
+
+			case proto_res.ProtoCmd_PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE:
 				var msg proto_res.ProtoIPCStreamAuthHandshake
 				if err := proto.Unmarshal(pkg.Protocol, &msg); err != nil {
 					log.Println("解析失败:", err)
 				} else {
 					log.Println("RPC握手成功 AppId:", string(msg.AppId))
 				}
+
+			case proto_res.ProtoCmd_PROTO_CMD_CS_RES_EXAMPLE:
+				var msg proto_res.ProtoCSResExample
+				if err := proto.Unmarshal(pkg.Protocol, &msg); err != nil {
+					log.Println("解析失败:", err)
+				} else {
+					log.Printf(
+						"RPC发来消息 AppId %s: ProtoCmd_PROTO_CMD_CS_RES_EXAMPLE %s",
+						client.GetAppId(),
+						string(msg.TestContext),
+					)
+					// msg := &proto_res.ProtoCSReqExample{
+					// 	TestContext: []byte("进程间通信测试"),
+					// }
+					// client.Send(proto_res.ProtoCmd_PROTO_CMD_CS_REQ_EXAMPLE, msg)
+				}
+
+			default:
+				log.Println("未知的指令 CMD =", pkg.Cmd)
 			}
 
 			return nil
