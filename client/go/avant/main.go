@@ -20,7 +20,11 @@ func main() {
 	_, err := client.NewClient(rpcAddr,
 		appId,
 		func(client *client.Client) error {
-			return client.SendHandshake()
+			client.SendHandshake() //发送握手
+			msg := &proto_res.ProtoCSReqExample{
+				TestContext: []byte("进程间通信测试"),
+			}
+			return client.Send(proto_res.ProtoCmd_PROTO_CMD_CS_REQ_EXAMPLE, msg)
 		},
 		func(client *client.Client, pkg *proto_res.ProtoPackage) error {
 			log.Println("RPC 收到包 CMD =", pkg.Cmd)
