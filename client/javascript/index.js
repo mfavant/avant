@@ -83,7 +83,7 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
 
                 let packageData = newAvantRPCObj.recvBuffer.subarray(8, 8 + uint64);
 
-                newAvantRPCObj.recvBuffer = newAvantRPCObj.recvBuffer.subarray(8 + uint64, -1)
+                newAvantRPCObj.recvBuffer = newAvantRPCObj.recvBuffer.subarray(8 + uint64);
 
                 try {
                     const recvPackageData = ProtoPackage.decode(packageData)
@@ -197,7 +197,7 @@ loadProtobuf().then(root => {
 
                 let packageData = clientRecvBuffer.subarray(8, 8 + uint64);
 
-                clientRecvBuffer = clientRecvBuffer.subarray(8 + uint64, -1)
+                clientRecvBuffer = clientRecvBuffer.subarray(8 + uint64);
 
                 try {
                     const recvPackageData = ProtoPackage.decode(packageData)
