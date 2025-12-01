@@ -567,8 +567,8 @@ void http_app::on_main_init(avant::server::server &server_obj)
 
 void http_app::on_worker_init(avant::workers::worker &worker_obj)
 {
-    LOG_ERROR("http_app::on_worker_init %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.worker_id);
+    LOG_ERROR("http_app::on_worker_init %d", worker_obj.get_worker_idx());
+    utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.get_worker_idx());
 }
 
 void http_app::on_main_stop(avant::server::server &server_obj)
@@ -579,8 +579,8 @@ void http_app::on_main_stop(avant::server::server &server_obj)
 
 void http_app::on_worker_stop(avant::workers::worker &worker_obj)
 {
-    LOG_ERROR("http_app::on_worker_stop %d", worker_obj.worker_id);
-    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.worker_id);
+    LOG_ERROR("http_app::on_worker_stop %d", worker_obj.get_worker_idx());
+    utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.get_worker_idx());
 }
 
 void http_app::on_main_tick(avant::server::server &server_obj)
@@ -590,7 +590,7 @@ void http_app::on_main_tick(avant::server::server &server_obj)
 
 void http_app::on_worker_tick(avant::workers::worker &worker_obj)
 {
-    utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.worker_id);
+    utility::singleton<lua_plugin>::instance()->on_worker_tick(worker_obj.get_worker_idx());
 }
 
 void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
@@ -604,7 +604,7 @@ void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoP
             LOG_ERROR("proto::parse(other2worker_test, package) failed");
             return;
         }
-        // LOG_ERROR("worker_id %d PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time %llu", worker_obj.worker_id, other2worker_test.time());
+        // LOG_ERROR("worker_id %d PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time %llu", worker_obj.get_worker_idx(), other2worker_test.time());
     }
     else
     {

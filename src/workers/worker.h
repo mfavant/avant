@@ -37,7 +37,7 @@ namespace avant::workers
         bool to_stop{false};
         bool is_stoped{false};
 
-        int worker_id{-1};
+        int worker_idx{-1};
         size_t max_client_num{0};
 
         // worker connection num
@@ -70,7 +70,8 @@ namespace avant::workers
         void close_client_fd(int fd);
         void mark_delete_timeout_timer(uint64_t timer_id);
 
-        int get_worker_id() { return this->worker_id; }
+        int get_worker_idx() { return this->worker_idx; }
+        void set_worker_idx(int worker_idx) { this->worker_idx = worker_idx; }
 
     private:
         void try_send_flush_tunnel();

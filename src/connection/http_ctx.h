@@ -49,9 +49,9 @@ namespace avant::connection
         }
 
         template <typename... Args>
-        int get_worker_id(Args &&...args)
+        int get_worker_idx(Args &&...args)
         {
-            return this->worker_ptr->get_worker_id(std::forward<Args>(args)...);
+            return this->worker_ptr->get_worker_idx(std::forward<Args>(args)...);
         }
 
     public:

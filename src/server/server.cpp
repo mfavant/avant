@@ -342,14 +342,14 @@ void server::on_start()
 
         uint64_t worker_max_client_cnt = std::ceil((double)this->m_config_mgr->get_max_client_cnt() / (double)this->m_config_mgr->get_worker_cnt()) + this->m_config_mgr->get_worker_cnt();
 
-        for (int i = 0; i < this->m_config_mgr->get_worker_cnt(); i++)
+        for (int worker_idx = 0; worker_idx < this->m_config_mgr->get_worker_cnt(); worker_idx++)
         {
-            m_workers[i].worker_id = i;
-            m_workers[i].curr_connection_num = m_curr_connection_num;
-            m_workers[i].worker_connection_num.store(0);
-            m_workers[i].main_worker_tunnel = &m_main_worker_tunnel[i];
-            m_workers[i].ssl_context = m_ssl_context;
-            m_workers[i].type = get_task_type();
+            m_workers[worker_idx].set_worker_idx(worker_idx);
+            m_workers[worker_idx].curr_connection_num = m_curr_connection_num;
+            m_workers[worker_idx].worker_connection_num.store(0);
+            m_workers[worker_idx].main_worker_tunnel = &m_main_worker_tunnel[worker_idx];
+            m_workers[worker_idx].ssl_context = m_ssl_context;
+            m_workers[worker_idx].type = get_task_type();
 
             connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
             if (!new_connection_mgr)
@@ -365,8 +365,8 @@ void server::on_start()
                 LOG_ERROR("new_connection_mgr->init(%d) failed", worker_max_client_cnt);
                 return;
             }
-            m_workers[i].worker_connection_mgr = new_connection_mgr_shared_ptr;
-            iret = m_workers[i].epoller.create(worker_max_client_cnt);
+            m_workers[worker_idx].worker_connection_mgr = new_connection_mgr_shared_ptr;
+            iret = m_workers[worker_idx].epoller.create(worker_max_client_cnt);
             if (iret != 0)
             {
                 LOG_ERROR("m_epoller.create(%d) iret[%d]", worker_max_client_cnt, iret);
@@ -374,19 +374,19 @@ void server::on_start()
             }
 
             // tunnel to worker_epoller
-            if (0 != m_workers[i].epoller.add(m_workers[i].main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
+            if (0 != m_workers[worker_idx].epoller.add(m_workers[worker_idx].main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
             {
                 LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
                 return;
             }
             // worker alloc connection for tunnel
-            iret = m_workers[i].worker_connection_mgr->alloc_connection(m_workers[i].main_worker_tunnel->get_other(), server_gen_gid());
+            iret = m_workers[worker_idx].worker_connection_mgr->alloc_connection(m_workers[worker_idx].main_worker_tunnel->get_other(), server_gen_gid());
             if (iret != 0)
             {
                 LOG_ERROR("worker_connection_mgr.alloc_connection return %d", iret);
                 return;
             }
-            connection::connection *tunnel_conn = m_workers[i].worker_connection_mgr->get_conn(m_workers[i].main_worker_tunnel->get_other());
+            connection::connection *tunnel_conn = m_workers[worker_idx].worker_connection_mgr->get_conn(m_workers[worker_idx].main_worker_tunnel->get_other());
             tunnel_conn->recv_buffer.reserve(10485760); // 10MB
             tunnel_conn->send_buffer.reserve(10485760); // 10MB
             tunnel_conn->is_ready = true;

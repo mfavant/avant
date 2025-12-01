@@ -36,14 +36,14 @@ worker::~worker()
 
 void worker::operator()()
 {
-    LOG_ERROR("worker::operator() start worker[%d]", this->worker_id);
+    LOG_ERROR("worker::operator() start worker[%d]", this->get_worker_idx());
 
     {
         sigset_t set;
         sigfillset(&set);
         if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0)
         {
-            LOG_ERROR("worker[%d] pthread_sigmask failed", this->worker_id);
+            LOG_ERROR("worker[%d] pthread_sigmask failed", this->get_worker_idx());
             exit(-1);
         }
     }
@@ -123,7 +123,7 @@ void worker::operator()()
             }
         }
     }
-    LOG_ERROR("worker::operator() end worker[%d]", this->worker_id);
+    LOG_ERROR("worker::operator() end worker[%d]", this->get_worker_idx());
     this->to_stop = true;
     this->is_stoped = true;
     hooks::stop::on_worker_stop(*this);
@@ -334,7 +334,7 @@ int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage 
     }
 
     ProtoTunnelPackage tunnelPackage;
-    tunnelPackage.set_sourcetunnelsid(tunnel_id::get().get_worker_tunnel_id(this->worker_id)); // this worker
+    tunnelPackage.set_sourcetunnelsid(tunnel_id::get().get_worker_tunnel_id(this->get_worker_idx())); // this worker
     for (const int &dest : dest_tunnel_id_set)
     {
         tunnelPackage.mutable_targettunnelsid()->Add(dest);
@@ -451,7 +451,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
             LOG_ERROR("parse ProtoTunnelClientForwardMessage err");
             return;
         }
-        int this_worker_tunnelid = avant::global::tunnel_id::get().get_worker_tunnel_id(this->worker_id);
+        int this_worker_tunnelid = avant::global::tunnel_id::get().get_worker_tunnel_id(this->get_worker_idx());
         // checking target Gid
         if (message.targetgid().empty()) // broadcase all client conn
         {
@@ -717,7 +717,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
 
 int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package)
 {
-    if (avant::global::tunnel_id::get().hash_gid_2_worker_tunnel_id(source_gid) != avant::global::tunnel_id::get().get_worker_tunnel_id(this->worker_id))
+    if (avant::global::tunnel_id::get().hash_gid_2_worker_tunnel_id(source_gid) != avant::global::tunnel_id::get().get_worker_tunnel_id(this->get_worker_idx()))
     {
         LOG_ERROR("source id %llu err", source_gid);
         return -1;
@@ -739,7 +739,7 @@ int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint
         std::vector<int> all_target_tunnel;
         for (int worker_id = avant::global::tunnel_id::get().get_worker_tunnel_id_min(); worker_id <= avant::global::tunnel_id::get().get_worker_tunnel_id_max(); worker_id++)
         {
-            if (worker_id == this->get_worker_id())
+            if (worker_id == avant::global::tunnel_id::get().get_worker_tunnel_id(this->get_worker_idx()))
             {
                 // inner this worker
                 ProtoTunnelPackage tunnel_package;
@@ -774,7 +774,7 @@ int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint
             }
 
             int worker_id = tunnel_id.first;
-            if (worker_id == this->get_worker_id())
+            if (worker_id == avant::global::tunnel_id::get().get_worker_tunnel_id(this->get_worker_idx()))
             {
                 // inner this worker
                 ProtoTunnelPackage tunnel_package;
