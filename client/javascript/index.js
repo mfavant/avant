@@ -1,5 +1,6 @@
 const protobuf = require("protobufjs")
 const net = require("net")
+const WebSocket = require("ws")
 
 const IP = "127.0.0.1"
 const PORT = 20025
@@ -8,6 +9,9 @@ const RPCIP = "127.0.0.1"
 const RPCPORT = 20026
 
 const APPID = "0.0.0.369"
+
+const IS_WEBSOCKET = true;
+const IS_TESTRPC = true;
 
 function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
     let newAvantRPCObj = {
@@ -230,13 +234,84 @@ loadProtobuf().then(root => {
         });
     }
 
-    doConnect(); // mock client
+    if (!IS_WEBSOCKET) {
+        doConnect(); // mock client
+    }
 
-    // mock rpc
-    const RPCConn = CreateAvantRPC(RPCIP, RPCPORT, root, (rpcObj, package) => {
-        console.log("RPC OnRecvPackage", `CMD = ${package.cmd} FROM APPID=${rpcObj.appId}`)
-    });
-    RPCConn.SendPackage();
+    // WebSocket 版本：每一个 WebSocket frame 就是一个 ProtoPackage
+    let doConnectWebSocket = () => {
+        const wsUrl = `ws://${IP}:${PORT}`
+        console.log(`doConnectWebSocket Client ${wsUrl}`)
+
+        try {
+            const ws = new WebSocket(wsUrl);
+            let pingPongCounterWs = 0;
+
+            ws.on('open', () => {
+                console.log("WebSocket Connected to server")
+                for (let i = 0; i < 100; i++) {
+                    const packageBuffer = ProtoPackage.encode(reqPackage).finish()
+                    ws.send(packageBuffer, (err) => {
+                        if (err) {
+                            console.error("Send error:", err.message)
+                        }
+                    });
+                }
+            });
+
+            ws.on('message', (data) => {
+                try {
+                    // WebSocket frame 直接就是 ProtoPackage
+                    const recvPackageData = ProtoPackage.decode(new Uint8Array(data));
+
+                    if (recvPackageData.cmd == PROTO_CMD_CS_RES_EXAMPLE) {
+                        const csResExample = ProtoCSResExample.decode(recvPackageData.protocol)
+                        pingPongCounterWs++
+                        if (pingPongCounterWs % 1000 == 0) {
+                            console.log("[WebSocket]", pingPongCounterWs.toString(), csResExample.testContext.toString('utf8'))
+                        }
+
+                        // 立即回复
+                        const packageBuffer = ProtoPackage.encode(reqPackage).finish()
+                        ws.send(packageBuffer, (err) => {
+                            if (err) {
+                                console.error("Send error:", err.message)
+                            }
+                        });
+                    } else {
+                        console.log("[WebSocket] unknow cmd", recvPackageData.cmd)
+                    }
+                } catch (err) {
+                    console.log("[WebSocket] Decode error:", err.message)
+                }
+            });
+
+            ws.on('close', () => {
+                console.log("WebSocket closed");
+                setTimeout(doConnectWebSocket, 1000)
+            });
+
+            ws.on('error', (err) => {
+                console.log("[WebSocket] error:", err.message)
+                setTimeout(doConnectWebSocket, 1000)
+            });
+        } catch (err) {
+            console.log("[WebSocket] Connection error:", err.message)
+            setTimeout(doConnectWebSocket, 1000)
+        }
+    }
+
+    if (IS_WEBSOCKET) {
+        doConnectWebSocket(); // mock websocket client
+    }
+
+    if (IS_TESTRPC) {
+        // mock rpc
+        const RPCConn = CreateAvantRPC(RPCIP, RPCPORT, root, (rpcObj, package) => {
+            console.log("RPC OnRecvPackage", `CMD = ${package.cmd} FROM APPID=${rpcObj.appId}`)
+        });
+        RPCConn.SendPackage();
+    }
 
 }).catch(err => {
     console.log("LoadProtobuf Err", err);
