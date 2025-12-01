@@ -480,7 +480,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
                 auto conn_ptr = this->worker_connection_mgr->get_conn_by_gid(target_gid);
                 if (!conn_ptr)
                 {
-                    LOG_ERROR("process ProtoTunnelClientForwardMessage can not find targetgid %llu conn_ptr", target_gid);
+                    // LOG_ERROR("process ProtoTunnelClientForwardMessage can not find targetgid %llu conn_ptr", target_gid);
                     continue;
                 }
                 this->handle_tunnel_client_forward_message(conn_ptr, message, tunnelPackage);
@@ -719,7 +719,7 @@ int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint
 {
     if (avant::global::tunnel_id::get().hash_gid_2_worker_tunnel_id(source_gid) != avant::global::tunnel_id::get().get_worker_tunnel_id(this->worker_id))
     {
-        LOG_ERROR("source id err");
+        LOG_ERROR("source id %llu err", source_gid);
         return -1;
     }
 
@@ -737,12 +737,29 @@ int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint
     {
         // send to all worker
         std::vector<int> all_target_tunnel;
-        for (int i = avant::global::tunnel_id::get().get_worker_tunnel_id_min(); i <= avant::global::tunnel_id::get().get_worker_tunnel_id_max(); i++)
+        for (int worker_id = avant::global::tunnel_id::get().get_worker_tunnel_id_min(); worker_id <= avant::global::tunnel_id::get().get_worker_tunnel_id_max(); worker_id++)
         {
-            all_target_tunnel.push_back(i);
+            if (worker_id == this->get_worker_id())
+            {
+                // inner this worker
+                ProtoTunnelPackage tunnel_package;
+                tunnel_package.set_sourcetunnelsid(worker_id);
+                tunnel_package.set_targetallworker(false);
+                tunnel_package.mutable_targettunnelsid()->Add(worker_id);
+                avant::proto::pack_package(*tunnel_package.mutable_innerprotopackage(), forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE);
+                ProtoPackage final_package;
+                this->on_tunnel_process(avant::proto::pack_package(final_package, tunnel_package, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE));
+            }
+            else
+            {
+                all_target_tunnel.push_back(worker_id);
+            }
         }
-        ProtoPackage willBeForward;
-        tunnel_forward(all_target_tunnel, avant::proto::pack_package(willBeForward, forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE));
+        if (!all_target_tunnel.empty())
+        {
+            ProtoPackage willBeForward;
+            tunnel_forward(all_target_tunnel, avant::proto::pack_package(willBeForward, forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE));
+        }
     }
     else
     {
@@ -755,9 +772,25 @@ int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint
             {
                 forwardMessage.mutable_targetgid()->Add(conn_gid);
             }
-            all_target_tunnel.clear();
-            all_target_tunnel.push_back(tunnel_id.first);
-            tunnel_forward(all_target_tunnel, avant::proto::pack_package(willBeForward, forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE));
+
+            int worker_id = tunnel_id.first;
+            if (worker_id == this->get_worker_id())
+            {
+                // inner this worker
+                ProtoTunnelPackage tunnel_package;
+                tunnel_package.set_sourcetunnelsid(worker_id);
+                tunnel_package.set_targetallworker(false);
+                tunnel_package.mutable_targettunnelsid()->Add(worker_id);
+                avant::proto::pack_package(*tunnel_package.mutable_innerprotopackage(), forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE);
+                ProtoPackage final_package;
+                this->on_tunnel_process(avant::proto::pack_package(final_package, tunnel_package, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE));
+            }
+            else
+            {
+                all_target_tunnel.clear();
+                all_target_tunnel.push_back(tunnel_id.first);
+                tunnel_forward(all_target_tunnel, avant::proto::pack_package(willBeForward, forwardMessage, ProtoCmd::PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE));
+            }
         }
     }
 
