@@ -2,10 +2,10 @@ const protobuf = require("protobufjs")
 const net = require("net")
 
 const IP = "127.0.0.1"
-const PORT = 20023
+const PORT = 20025
 
 const RPCIP = "127.0.0.1"
-const RPCPORT = 20024
+const RPCPORT = 20026
 
 const APPID = "0.0.0.369"
 
@@ -49,13 +49,13 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
         const client = net.createConnection({ port: RPCPORT, host: RPCIP }, () => {
             console.log("RPC Connected to server")
 
-            const ProtoIPCStreamAuthHandshake = ProtoIPCStreamAuthHandshake.create({
+            const protoIPCStreamAuthHandshake = ProtoIPCStreamAuthHandshake.create({
                 appId: Buffer.from(APPID, "utf8")
             });
 
             const reqPackage = ProtoPackage.create({
                 cmd: PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE,
-                protocol: ProtoIPCStreamAuthHandshake.encode(ProtoIPCStreamAuthHandshake).finish()
+                protocol: ProtoIPCStreamAuthHandshake.encode(protoIPCStreamAuthHandshake).finish()
             });
 
             newAvantRPCObj.SendPackage(reqPackage);
@@ -176,7 +176,9 @@ loadProtobuf().then(root => {
         console.log(`doConnect Client ${IP}:${PORT}`)
         const client = net.createConnection({ port: PORT, host: IP }, () => {
             console.log("Connected to server")
-            sendCSReqExample(client)
+            for (let i = 0; i < 100; i++) {
+                sendCSReqExample(client)
+            }
         });
         let clientRecvBuffer = Buffer.alloc(0)
         let pingPongCounter = 0;
@@ -204,7 +206,9 @@ loadProtobuf().then(root => {
                     if (recvPackageData.cmd == PROTO_CMD_CS_RES_EXAMPLE) {
                         const csResExample = ProtoCSResExample.decode(recvPackageData.protocol)
                         pingPongCounter++
-                        console.log(pingPongCounter.toString(), csResExample.testContext.toString('utf8'))
+                        if (pingPongCounter % 1000 == 0) {
+                            console.log(pingPongCounter.toString(), csResExample.testContext.toString('utf8'))
+                        }
                     } else {
                         console.log("unknow cmd", recvPackageData.cmd)
                     }
