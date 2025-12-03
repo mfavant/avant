@@ -3,20 +3,20 @@ const net = require("net")
 const WebSocket = require("ws")
 const dgram = require("dgram") // 引入 UDP 模块
 
-const IP = "127.0.0.1"
+const IP = "www.mfavant.xyz"
 const PORT = 20025
-const UDP_IP = "127.0.0.1"
+const UDP_IP = "www.mfavant.xyz"
 const UDP_PORT = 20027
 
-const RPCIP = "127.0.0.1"
+const RPCIP = "www.mfavant.xyz"
 const RPCPORT = 20026
 
 const APPID = "0.0.0.369"
 
-const IS_WEBSOCKET = false;
+const IS_WEBSOCKET = true;
 const IS_TCP = false;        // 为了测试清晰，我加了个开关控制 TCP
-const IS_UDP = false;         // 开启 UDP 测试
-const IS_TESTRPC = false;
+const IS_UDP = true;         // 开启 UDP 测试
+const IS_TESTRPC = true;
 
 function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
     let newAvantRPCObj = {
@@ -47,8 +47,14 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
 
     const ProtoPackage = newAvantRPCObj.protoRoot.lookupType("ProtoPackage")
     const ProtoCmd = newAvantRPCObj.protoRoot.lookupEnum("ProtoCmd")
+
     const PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE = ProtoCmd.values['PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE']
     const ProtoIPCStreamAuthHandshake = newAvantRPCObj.protoRoot.lookupType("ProtoIPCStreamAuthHandshake")
+
+    const PROTO_CMD_CS_REQ_EXAMPLE = ProtoCmd.values['PROTO_CMD_CS_REQ_EXAMPLE']
+    const ProtoCSReqExample = newAvantRPCObj.protoRoot.lookupType("ProtoCSReqExample")
+    const PROTO_CMD_CS_RES_EXAMPLE = ProtoCmd.values['PROTO_CMD_CS_RES_EXAMPLE']
+    const ProtoCSResExample = newAvantRPCObj.protoRoot.lookupType("ProtoCSResExample")
 
     let tryConnect = () => {
         console.log(`tryConnect RPC ${RPCIP}:${RPCPORT}`)
@@ -65,6 +71,16 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
             });
 
             newAvantRPCObj.SendPackage(reqPackage);
+
+            const protoCSReqExample = ProtoCSReqExample.create({
+                testContext: Buffer.from("hello world", "utf8")
+            });
+
+            const reqCSExample = ProtoPackage.create({
+                cmd: PROTO_CMD_CS_REQ_EXAMPLE,
+                protocol: ProtoCSReqExample.encode(protoCSReqExample).finish()
+            });
+            newAvantRPCObj.SendPackage(reqCSExample);
         });
 
         newAvantRPCObj.client = client;
@@ -93,6 +109,10 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
                         const appIdString = ptotoIPCStreamAuthhandshake.appId.toString('utf8')
                         console.log("appIdString ", appIdString)
                         newAvantRPCObj.appId = appIdString
+                    }
+                    else if (recvPackageData.cmd == PROTO_CMD_CS_RES_EXAMPLE) {
+                        const protoCSResExample = ProtoCSResExample.decode(recvPackageData.protocol);
+                        console.log(`protoCSResExample from ${newAvantRPCObj.appId} protoCSResExample.testContext${protoCSResExample.testContext.toString('utf8')}`);
                     }
 
                     if (newAvantRPCObj.OnRecvPackage) {
