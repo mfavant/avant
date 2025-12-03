@@ -260,3 +260,42 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
         LOG_ERROR("unknow cmd %d", package.cmd());
     }
 }
+
+void other_app::on_udp_server_recvfrom(avant::workers::other &other_obj, const char *buffer,
+                                       ssize_t len,
+                                       const struct sockaddr_storage &addr,
+                                       socklen_t addr_len)
+{
+    if (!other_obj.udp_svr_component.get())
+    {
+        LOG_ERROR("other udp_svr_component message_callback recv udp_svr_component is nullptr len %zd", len);
+        return;
+    }
+    ProtoPackage package;
+    if (!package.ParseFromArray(buffer, len))
+    {
+        LOG_ERROR("other udp_svr_component message_callback recv ParseFromArray failed len %zd", len);
+        return;
+    }
+
+    if (package.cmd() != ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
+    {
+        LOG_ERROR("other udp_svr_component message_callback recv unknown cmd %d len %zd", package.cmd(), len);
+        return;
+    }
+
+    ProtoCSReqExample req;
+    if (avant::proto::parse(req, package))
+    {
+        ProtoPackage resPackage;
+        ProtoCSResExample res;
+        res.set_testcontext(req.testcontext());
+        std::string data;
+        avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
+        int int_ret = other_obj.udp_svr_component.get()->udp_component_client("", 0, data.data(), data.size(), (struct sockaddr *)&addr, addr_len);
+        if (int_ret != 0)
+        {
+            LOG_ERROR("other udp_svr_component message_callback recv len %zd udp_component_client %d", len, int_ret);
+        }
+    }
+}

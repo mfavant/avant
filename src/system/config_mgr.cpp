@@ -69,6 +69,15 @@ int config_mgr::init(const std::string &file_path)
     const int const_log_level = (*this->m_ini)["server"]["log_level"];
     this->m_log_level = const_log_level;
 
+    const std::string other_udp_svr_ip = (*this->m_ini)["server"]["other_udp_svr_ip"];
+    this->m_other_udp_svr_ip = other_udp_svr_ip;
+
+    const int other_udp_svr_port = (*this->m_ini)["server"]["other_udp_svr_port"];
+    this->m_other_udp_svr_port = other_udp_svr_port;
+
+    const int other_udp_svr_max_loop = (*this->m_ini)["server"]["other_udp_svr_max_loop"];
+    this->m_other_udp_svr_max_loop = other_udp_svr_max_loop;
+
     const int const_max_ipc_conn_num = (*this->m_ini)["ipc"]["max_ipc_conn_num"];
     this->m_max_ipc_conn_num = const_max_ipc_conn_num;
 

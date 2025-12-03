@@ -162,6 +162,13 @@ void server::start()
         LOG_ERROR("m_use_ssl %d", this->m_config_mgr->get_use_ssl());
         LOG_ERROR("m_crt_pem %s", this->m_config_mgr->get_crt_pem().c_str());
         LOG_ERROR("m_key_pem %s", this->m_config_mgr->get_key_pem().c_str());
+        LOG_ERROR("m_daemon %d", this->m_config_mgr->get_daemon());
+        LOG_ERROR("m_log_level %d", this->m_config_mgr->get_log_level());
+        LOG_ERROR("m_other_udp_svr_ip %s", this->m_config_mgr->get_other_udp_svr_ip().c_str());
+        LOG_ERROR("m_other_udp_svr_port %d", this->m_config_mgr->get_other_udp_svr_port());
+        LOG_ERROR("m_other_udp_svr_max_loop %d", this->m_config_mgr->get_other_udp_svr_max_loop());
+        LOG_ERROR("m_max_ipc_conn_num %d", this->m_config_mgr->get_max_ipc_conn_num());
+        LOG_ERROR("m_ipc_json_path %s", this->m_config_mgr->get_ipc_json_path().c_str());
     }
 
     on_start();

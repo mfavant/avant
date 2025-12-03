@@ -5,7 +5,7 @@ namespace avant
 {
     namespace ipc
     {
-        static int udp_component_setnonblocking(int fd)
+        int udp_component_setnonblocking(int fd)
         {
             int flags = fcntl(fd, F_GETFL, 0);
             if (flags == -1)
@@ -125,7 +125,8 @@ namespace avant
         }
 
         int udp_component::udp_component_server(const std::string &IP,
-                                                const int PORT)
+                                                const int PORT,
+                                                bool start_event_loop /*= true*/)
         {
             const int int_port = PORT;
 
@@ -209,7 +210,11 @@ namespace avant
                 }
             }
 
-            return event_loop();
+            if (start_event_loop)
+            {
+                return event_loop();
+            }
+            return 0;
         }
 
         int udp_component::udp_component_client(
@@ -308,7 +313,7 @@ namespace avant
             }
 
             // set nonblocking
-            if (udp_component_setnonblocking(m_socket_fd) == -1)
+            if (udp_component_setnonblocking(m_socket_fd) != 0)
             {
                 perror("event_loop: udp_component_setnonblocking err");
                 to_close();
@@ -342,9 +347,6 @@ namespace avant
             constexpr int MAX_EVENTS_NUM = 8;
             epoll_event events[MAX_EVENTS_NUM];
             memset(events, 0, sizeof(events));
-
-            constexpr int buffer_size = 65507;
-            std::unique_ptr<char[]> buffer(new char[buffer_size]);
 
             // event loop
             while (true)
@@ -384,50 +386,76 @@ namespace avant
                 {
                     if (events[i].data.fd == m_socket_fd)
                     {
+                        server_recvfrom(10000);
                         // 可能有多个消息（edge-triggered），循环读尽
-                        while (true)
-                        {
-                            struct sockaddr_storage client_addr;
-                            socklen_t addr_len = sizeof(client_addr);
-                            memset(&client_addr, 0, sizeof(client_addr));
-
-                            ssize_t bytes = recvfrom(m_socket_fd, buffer.get(), buffer_size, 0,
-                                                     (struct sockaddr *)&client_addr, &addr_len);
-                            if (bytes < 0)
-                            {
-                                if (errno == EAGAIN || errno == EWOULDBLOCK)
-                                {
-                                    // 已读尽
-                                    break;
-                                }
-                                else if (errno == EINTR)
-                                {
-                                    continue;
-                                }
-                                else
-                                {
-                                    perror("event_loop: recvfrom error");
-                                    // 不立即关闭，跳出当前 socket 读循环
-                                    break;
-                                }
-                            }
-                            else if (bytes == 0)
-                            {
-                                // UDP 不会正常返回 0，忽略
-                                continue;
-                            }
-                            else
-                            {
-                                // 调用回调（传入 const sockaddr_storage &）
-                                if (message_callback)
-                                {
-                                    message_callback(buffer.get(), bytes, client_addr, addr_len);
-                                }
-                            }
-                        } // end inner read loop
                     }
                 } // end for events
             } // end while
+            return 0;
+        }
+
+        int udp_component::server_recvfrom(unsigned int max_loop)
+        {
+            if (m_socket_fd < 0)
+            {
+                return -1;
+            }
+            if (max_loop == 0)
+            {
+                max_loop = UINT32_MAX;
+            }
+
+            constexpr int buffer_size = 65507;
+            std::unique_ptr<char[]> buffer(new char[buffer_size]);
+
+            unsigned int loop_count = 0;
+            while (true)
+            {
+                if (loop_count >= max_loop)
+                {
+                    break;
+                }
+                loop_count++;
+
+                struct sockaddr_storage client_addr;
+                socklen_t addr_len = sizeof(client_addr);
+                memset(&client_addr, 0, sizeof(client_addr));
+
+                ssize_t bytes = recvfrom(m_socket_fd, buffer.get(), buffer_size, 0,
+                                         (struct sockaddr *)&client_addr, &addr_len);
+                if (bytes < 0)
+                {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK)
+                    {
+                        // 已读尽
+                        break;
+                    }
+                    else if (errno == EINTR)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        perror("event_loop: recvfrom error");
+                        // 不立即关闭，跳出当前 socket 读循环
+                        break;
+                    }
+                }
+                else if (bytes == 0)
+                {
+                    // UDP 不会正常返回 0，忽略
+                    break;
+                }
+                else
+                {
+                    // 调用回调（传入 const sockaddr_storage &）
+                    if (message_callback)
+                    {
+                        message_callback(buffer.get(), bytes, client_addr, addr_len);
+                    }
+                }
+            } // end inner read loop
+
             return 0;
         }
 
@@ -449,6 +477,11 @@ namespace avant
             }
             // 如果既不是合法 IPv4 也不是合法 IPv6，则保守判断为 IPv6（上层会在 bind/pton 报错）
             return true;
+        }
+
+        int udp_component::get_socket_fd()
+        {
+            return this->m_socket_fd;
         }
 
     } // namespace ipc

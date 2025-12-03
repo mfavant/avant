@@ -30,6 +30,9 @@ namespace avant::system
         const int get_log_level() const { return m_log_level; }
         const int get_max_ipc_conn_num() const { return m_max_ipc_conn_num; }
         const std::string get_ipc_json_path() const { return m_ipc_json_path; }
+        const std::string get_other_udp_svr_ip() const { return m_other_udp_svr_ip; }
+        const int get_other_udp_svr_port() const { return m_other_udp_svr_port; }
+        const int get_other_udp_svr_max_loop() const { return m_other_udp_svr_max_loop; }
 
         void set_root_path(std::string val)
         {
@@ -55,6 +58,9 @@ namespace avant::system
         int m_log_level;
         int m_max_ipc_conn_num;
         std::string m_ipc_json_path;
+        std::string m_other_udp_svr_ip;
+        int m_other_udp_svr_port;
+        int m_other_udp_svr_max_loop;
 
         avant::inifile::inifile *m_ini;
         std::string m_root_path;

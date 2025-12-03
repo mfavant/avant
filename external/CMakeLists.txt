@@ -8,6 +8,9 @@ add_library(avant-inifile SHARED ${SOURCE_INIFILE})
 file(GLOB_RECURSE SOURCE_LOG "./avant-log/*.cpp")
 add_library(avant-log SHARED ${SOURCE_LOG})
 
+file(GLOB_RECURSE SOURCE_IPC_UDP "./avant-ipc/udp_component.cpp")
+add_library(avant-ipc-udp SHARED ${SOURCE_IPC_UDP})
+
 file(GLOB_RECURSE SOURCE_TIMER "./avant-timer/*.cpp")
 add_library(avant-timer SHARED ${SOURCE_TIMER})
 

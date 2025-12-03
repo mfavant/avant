@@ -16,6 +16,8 @@ namespace avant
 {
     namespace ipc
     {
+        int udp_component_setnonblocking(int fd);
+
         class udp_component
         {
         public:
@@ -27,7 +29,8 @@ namespace avant
 
             // 如果 IP 为空字符串 "" 表示绑定到 any (:: or 0.0.0.0 取决于 socket 类型)
             int udp_component_server(const std::string &IP,
-                                     const int PORT);
+                                     const int PORT,
+                                     bool start_event_loop = true);
 
             // client：如果 addr != nullptr 则向指定地址发送并返回，否则向 IP:PORT 发送并在发送完后进入 event_loop()，前者用于服务器向客户端反包 后者用于客户端向服务器发送消息
             int udp_component_client(
@@ -41,6 +44,9 @@ namespace avant
             static bool is_ipv6(const std::string &ip);
 
             int event_loop();
+            int server_recvfrom(unsigned int max_loop);
+
+            int get_socket_fd();
 
         private:
             int init_sock(const std::string &ip);

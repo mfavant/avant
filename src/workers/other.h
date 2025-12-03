@@ -13,6 +13,7 @@
 #include "utility/time.h"
 #include <unordered_map>
 #include <unordered_set>
+#include <avant-ipc/udp_component.h>
 
 namespace avant
 {
@@ -63,6 +64,8 @@ namespace avant::workers
         avant::json::json ipc_self_json;
 
         std::shared_ptr<avant::socket::server_socket> ipc_listen_socket{nullptr};
+
+        std::shared_ptr<avant::ipc::udp_component> udp_svr_component{nullptr};
 
         avant::event::event_poller epoller;
         std::shared_ptr<avant::connection::connection_mgr> ipc_connection_mgr{nullptr};

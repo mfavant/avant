@@ -74,6 +74,63 @@ int other::init_call_by_server()
         return -4;
     }
 
+    // Create UDP listen socket
+    if (!this->get_server()->get_config()->get_other_udp_svr_ip().empty() &&
+        this->get_server()->get_config()->get_other_udp_svr_port() > 0)
+    {
+        avant::ipc::udp_component *udp_svr_component = new (std::nothrow) avant::ipc::udp_component;
+        if (!udp_svr_component)
+        {
+            LOG_ERROR("new udp_svr_component failed");
+            return -5;
+        }
+        this->udp_svr_component.reset(udp_svr_component);
+        int int_ret = this->udp_svr_component->udp_component_server(
+            this->get_server()->get_config()->get_other_udp_svr_ip(),
+            this->get_server()->get_config()->get_other_udp_svr_port(),
+            false);
+        if (int_ret != 0)
+        {
+            LOG_ERROR("udp_component_server failed ret %d", int_ret);
+            return -6;
+        }
+        if (0 > this->udp_svr_component->get_socket_fd())
+        {
+            LOG_ERROR("udp_svr_component fd less 0");
+            return -7;
+        }
+        int_ret = avant::ipc::udp_component_setnonblocking(this->udp_svr_component->get_socket_fd());
+        if (int_ret != 0)
+        {
+            LOG_ERROR("udp_component_setnonblocking failed ret %d", int_ret);
+            return -8;
+        }
+
+        // udp_svr_component绑定消息回调函数，接收到消息后直接发向 other_app 上层处理
+        this->udp_svr_component->message_callback =
+            [this](const char *buffer,
+                   ssize_t len,
+                   const struct sockaddr_storage &addr,
+                   socklen_t addr_len)
+        {
+            try
+            {
+                app::other_app::on_udp_server_recvfrom(*this, buffer, len, addr, addr_len);
+            }
+            catch (const std::exception &e)
+            {
+                LOG_ERROR("app on_udp_server_recvfrom throw exception %s", e.what());
+            }
+        };
+
+        // 将udp_svr_component的fd加入到other的epoller中
+        if (0 != this->epoller.add(this->udp_svr_component->get_socket_fd(), nullptr, event::event_poller::RE, false))
+        {
+            LOG_ERROR("udp_svr_component socketfd epoller add failed");
+            return -9;
+        }
+    }
+
     return 0;
 }
 
@@ -146,6 +203,11 @@ void other::operator()()
             else if (this->ipc_connection_mgr->get_conn(evented_fd))
             {
                 on_ipc_client_event(evented_fd, this->epoller.m_events[i].events);
+            }
+            else if (this->udp_svr_component && evented_fd == this->udp_svr_component->get_socket_fd())
+            {
+                // UDP 事件处理
+                this->udp_svr_component->server_recvfrom(this->get_server()->get_config()->get_other_udp_svr_max_loop());
             }
             // default unknow fd
             else
