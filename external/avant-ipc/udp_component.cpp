@@ -1,4 +1,5 @@
 #include "udp_component.h"
+#include <memory>
 
 namespace avant
 {
@@ -9,12 +10,12 @@ namespace avant
             int flags = fcntl(fd, F_GETFL, 0);
             if (flags == -1)
             {
-                perror("error getting fd flags");
+                perror("udp_component_setnonblocking: error getting fd flags");
                 return -1;
             }
             if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
             {
-                perror("error setting non-bloking mode");
+                perror("udp_component_setnonblocking: error setting non-blocking mode");
                 return -1;
             }
             return 0;
@@ -27,13 +28,15 @@ namespace avant
 
         void udp_component::to_close()
         {
-            if (m_socket_fd > 0)
+            if (m_socket_fd != -1)
             {
                 close(m_socket_fd);
+                m_socket_fd = -1;
             }
-            if (m_epoll_fd > 0)
+            if (m_epoll_fd != -1)
             {
                 close(m_epoll_fd);
+                m_epoll_fd = -1;
             }
             if (close_callback)
             {
@@ -41,54 +44,84 @@ namespace avant
             }
         }
 
-        int udp_component::init_sock(std::string ip)
+        int udp_component::init_sock(const std::string &ip)
         {
-            int &server_socket_fd = m_socket_fd;
-            if (server_socket_fd <= 0)
+            if (m_socket_fd != -1)
             {
-                int INET = is_ipv6(ip) ? AF_INET6 : AF_INET;
-                server_socket_fd = ::socket(INET, SOCK_DGRAM, 0);
-                if (server_socket_fd == -1)
+                return 0; // 已初始化
+            }
+
+            bool want_ipv6 = false;
+            if (ip.empty())
+            {
+                // 默认使用 IPv6 socket（dual-stack），以便支持 IPv4 + IPv6
+                want_ipv6 = true;
+            }
+            else
+            {
+                want_ipv6 = is_ipv6(ip);
+            }
+
+            if (want_ipv6)
+            {
+                m_socket_fd = ::socket(AF_INET6, SOCK_DGRAM, 0);
+                if (m_socket_fd == -1)
                 {
-                    perror("error creating socket");
+                    perror("init_sock: error creating AF_INET6 socket");
+                    return -1;
+                }
+                // 允许接收 IPv4-mapped 地址（dual-stack）
+                int off = 0;
+                if (setsockopt(m_socket_fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof(off)) == -1)
+                {
+                    // 非致命：记录但不强制失败（有的平台可能不允许修改）
+                    perror("init_sock: warning setsockopt(IPV6_V6ONLY) failed");
+                }
+            }
+            else
+            {
+                m_socket_fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+                if (m_socket_fd == -1)
+                {
+                    perror("init_sock: error creating AF_INET socket");
                     return -1;
                 }
             }
+
             return 0;
         }
 
-        std::string udp_component::udp_component_get_ip(struct sockaddr &addr)
+        std::string udp_component::udp_component_get_ip(const struct sockaddr_storage &addr)
         {
-            if (addr.sa_family == AF_INET)
+            char ipbuf[INET6_ADDRSTRLEN + 1] = {0};
+            if (addr.ss_family == AF_INET)
             {
-                char ip[INET_ADDRSTRLEN + 1]{0};
-                struct sockaddr_in *addr_ptr = (struct sockaddr_in *)&addr;
-                inet_ntop(AF_INET, &(addr_ptr->sin_addr), ip, INET_ADDRSTRLEN);
-                return std::string(ip, INET_ADDRSTRLEN);
+                struct sockaddr_in *a = (struct sockaddr_in *)&addr;
+                inet_ntop(AF_INET, &a->sin_addr, ipbuf, INET_ADDRSTRLEN);
+                return std::string(ipbuf);
             }
-            else
+            else if (addr.ss_family == AF_INET6)
             {
-                char ip[INET6_ADDRSTRLEN + 1]{0};
-                struct sockaddr_in6 *addr_ptr = (struct sockaddr_in6 *)&addr;
-                inet_ntop(AF_INET6, &(addr_ptr->sin6_addr), ip, INET6_ADDRSTRLEN);
-                return std::string(ip, INET6_ADDRSTRLEN);
+                struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&addr;
+                inet_ntop(AF_INET6, &a6->sin6_addr, ipbuf, INET6_ADDRSTRLEN);
+                return std::string(ipbuf);
             }
+            return std::string();
         }
 
-        int udp_component::udp_component_get_port(struct sockaddr &addr)
+        int udp_component::udp_component_get_port(const struct sockaddr_storage &addr)
         {
-            if (addr.sa_family == AF_INET)
+            if (addr.ss_family == AF_INET)
             {
-                struct sockaddr_in *addr_ptr = (struct sockaddr_in *)&addr;
-                unsigned short port = ntohs(addr_ptr->sin_port);
-                return port;
+                struct sockaddr_in *a = (struct sockaddr_in *)&addr;
+                return ntohs(a->sin_port);
             }
-            else
+            else if (addr.ss_family == AF_INET6)
             {
-                struct sockaddr_in6 *addr_ptr = (struct sockaddr_in6 *)&addr;
-                unsigned short port = ntohs(addr_ptr->sin6_port);
-                return port;
+                struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&addr;
+                return ntohs(a6->sin6_port);
             }
+            return -1;
         }
 
         int udp_component::udp_component_server(const std::string &IP,
@@ -96,149 +129,171 @@ namespace avant
         {
             const int int_port = PORT;
 
-            // create udp socket
-            int &server_socket_fd = m_socket_fd;
-            if (server_socket_fd <= 0)
+            // create udp socket (可能是 AF_INET6 dual-stack)
+            if (m_socket_fd == -1)
             {
                 if (0 != init_sock(IP))
                 {
-                    perror("Error creating socket");
+                    perror("udp_component_server: Error creating socket");
                     return -1;
                 }
             }
 
-            // setting server addr
-            struct sockaddr_in server_addr;
-            bzero(&server_addr, sizeof(server_addr));
-
-            struct sockaddr_in6 server_addr6;
-            bzero(&server_addr6, sizeof(server_addr6));
-
-            if (is_ipv6(IP))
+            // 设置 socket 选项：在 bind 之前设置
+            int reuse = 1;
+            if (setsockopt(m_socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)) == -1)
             {
+                perror("udp_component_server: warning setsockopt(SO_REUSEADDR) failed");
+            }
+#ifdef SO_REUSEPORT
+            if (setsockopt(m_socket_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse)) == -1)
+            {
+                // 非致命
+                perror("udp_component_server: warning setsockopt(SO_REUSEPORT) failed");
+            }
+#endif
+
+            // bind
+            if (is_ipv6(IP) || IP.empty())
+            {
+                struct sockaddr_in6 server_addr6;
+                memset(&server_addr6, 0, sizeof(server_addr6));
                 server_addr6.sin6_family = AF_INET6;
-                if (inet_pton(AF_INET6, IP.c_str(), &server_addr6.sin6_addr) <= 0)
-                {
-                    perror("Invalid IPV6 address");
-                    to_close();
-                    return -1;
-                }
                 server_addr6.sin6_port = htons(int_port);
-                // server bind addr
-                if (-1 == bind(server_socket_fd, (struct sockaddr *)&server_addr6, sizeof(server_addr6)))
+                if (!IP.empty())
                 {
-                    perror("error binding socket");
+                    if (inet_pton(AF_INET6, IP.c_str(), &server_addr6.sin6_addr) != 1)
+                    {
+                        perror("udp_component_server: Invalid IPV6 address");
+                        to_close();
+                        return -1;
+                    }
+                }
+                else
+                {
+                    server_addr6.sin6_addr = in6addr_any;
+                }
+
+                if (-1 == bind(m_socket_fd, (struct sockaddr *)&server_addr6, sizeof(server_addr6)))
+                {
+                    perror("udp_component_server: error binding AF_INET6 socket");
                     to_close();
                     return -1;
                 }
             }
             else
             {
+                struct sockaddr_in server_addr;
+                memset(&server_addr, 0, sizeof(server_addr));
                 server_addr.sin_family = AF_INET;
-                server_addr.sin_addr.s_addr = inet_addr(IP.c_str());
                 server_addr.sin_port = htons(int_port);
-                // server bind addr
-                if (-1 == bind(server_socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)))
+                if (!IP.empty())
                 {
-                    perror("error binding socket");
+                    if (inet_pton(AF_INET, IP.c_str(), &server_addr.sin_addr) != 1)
+                    {
+                        perror("udp_component_server: Invalid IPV4 address");
+                        to_close();
+                        return -1;
+                    }
+                }
+                else
+                {
+                    server_addr.sin_addr.s_addr = INADDR_ANY;
+                }
+
+                if (-1 == bind(m_socket_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)))
+                {
+                    perror("udp_component_server: error binding AF_INET socket");
                     to_close();
                     return -1;
                 }
             }
 
-            // port reuse
-            int reuse = 1;
-            if (-1 == setsockopt(server_socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)))
-            {
-                perror("Error setting socket options");
-                to_close();
-                return -1;
-            }
             return event_loop();
         }
 
-        int udp_component::udp_component_client(const std::string &IP,
-                                                const int PORT,
-                                                const char *buffer,
-                                                ssize_t len,
-                                                struct sockaddr *addr /*=nullptr*/,
-                                                socklen_t addr_len /*=0*/)
+        int udp_component::udp_component_client(
+            const std::string &TARGET_IP,
+            const int TARGET_PORT,
+            const char *buffer,
+            ssize_t len,
+            struct sockaddr *addr /*=nullptr*/,
+            socklen_t addr_len /*=0*/)
         {
-            int &client_socket = m_socket_fd;
-            if (client_socket <= 0)
+            // ensure socket exists
+            if (m_socket_fd == -1 && addr == nullptr)
             {
-                if (0 != init_sock(IP))
+                if (0 != init_sock("")) // client udp socket
                 {
-                    perror("Error creating socket");
+                    perror("udp_component_client: Error creating client udp socket");
                     return -1;
                 }
             }
 
-            sockaddr_in server_addr;
-            std::memset(&server_addr, 0, sizeof(server_addr));
-            sockaddr_in6 server_addr6;
-            std::memset(&server_addr6, 0, sizeof(server_addr6));
+            sockaddr_in parse_target_addr;
+            memset(&parse_target_addr, 0, sizeof(parse_target_addr));
+            sockaddr_in6 parse_target_addr6;
+            memset(&parse_target_addr6, 0, sizeof(parse_target_addr6));
 
-            // server addr
-            if (IP != "" && PORT != 0)
+            // call by client
+            if (TARGET_IP != "" && TARGET_PORT != 0)
             {
-                if (is_ipv6(IP))
+                if (is_ipv6(TARGET_IP))
                 {
-                    server_addr6.sin6_family = AF_INET6;
-                    if (inet_pton(AF_INET6, IP.c_str(), &server_addr6.sin6_addr) <= 0)
+                    parse_target_addr6.sin6_family = AF_INET6;
+                    if (inet_pton(AF_INET6, TARGET_IP.c_str(), &parse_target_addr6.sin6_addr) <= 0)
                     {
-                        perror("Invalid IPV6 address");
+                        perror("udp_component_client: Invalid IPV6 address");
                         to_close();
                         return -1;
                     }
-                    server_addr6.sin6_port = htons(PORT);
+                    parse_target_addr6.sin6_port = htons(TARGET_PORT);
                 }
                 else
                 {
-                    server_addr.sin_family = AF_INET;
-                    server_addr.sin_addr.s_addr = inet_addr(IP.c_str());
-                    server_addr.sin_port = htons(PORT);
+                    parse_target_addr.sin_family = AF_INET;
+                    if (inet_pton(AF_INET, TARGET_IP.c_str(), &parse_target_addr.sin_addr) != 1)
+                    {
+                        perror("udp_component_client: Invalid IPV4 address");
+                        to_close();
+                        return -1;
+                    }
+                    parse_target_addr.sin_port = htons(TARGET_PORT);
                 }
             }
             else if (addr && addr_len > 0)
             {
+                // 直接使用传入的 addr
             }
             else
             {
-                perror("IP PORT and addr addr_len");
+                perror("udp_component_client: IP PORT and addr addr_len cannot both be empty/zero");
                 return -1;
             }
 
             ssize_t bytesSent = 0;
 
-            if (addr)
+            if (addr) // 服务端调用向客户端反包
             {
-                bytesSent = sendto(client_socket, buffer, len, 0,
-                                   addr, addr_len);
+                bytesSent = sendto(m_socket_fd, buffer, len, 0, addr, addr_len);
             }
             else
             {
-                sockaddr *target_addr = (sockaddr *)&server_addr;
-                size_t target_len = sizeof(sockaddr_in);
-                if (is_ipv6(IP))
+                sockaddr *target_addr = (sockaddr *)&parse_target_addr;
+                socklen_t target_len = sizeof(sockaddr_in);
+                if (is_ipv6(TARGET_IP))
                 {
-                    target_addr = (sockaddr *)&server_addr6;
+                    target_addr = (sockaddr *)&parse_target_addr6;
                     target_len = sizeof(sockaddr_in6);
                 }
-                bytesSent = sendto(client_socket, buffer, len, 0,
-                                   target_addr, target_len);
+                bytesSent = sendto(m_socket_fd, buffer, len, 0, target_addr, target_len);
             }
 
             if (bytesSent != len)
             {
-                perror("Error sending message bytesSent != len");
-                to_close();
+                perror("udp_component_client: Error sending message (bytesSent != len)");
+                // 不立即 close，返回错误以便上层处理
                 return -1;
-            }
-
-            if (addr == nullptr)
-            {
-                return event_loop();
             }
 
             return 0;
@@ -246,116 +301,155 @@ namespace avant
 
         int udp_component::event_loop()
         {
-            int &server_socket_fd = m_socket_fd;
-            if (server_socket_fd <= 0)
+            if (m_socket_fd == -1)
             {
-                perror("eventloop err server_socket_fd <= 0");
+                perror("event_loop: err m_socket_fd == -1");
                 return -1;
             }
 
             // set nonblocking
-            if (udp_component_setnonblocking(server_socket_fd) == -1)
+            if (udp_component_setnonblocking(m_socket_fd) == -1)
             {
+                perror("event_loop: udp_component_setnonblocking err");
                 to_close();
-                perror("udp_component_setnonblocking err");
                 return -1;
             }
 
-            // create epoll instance
-            m_epoll_fd = epoll_create(1);
-            int &epoll_fd = m_epoll_fd;
-            if (epoll_fd == -1)
+            // create epoll instance if not created
+            if (m_epoll_fd == -1)
             {
-                perror("error creating epoll");
+                m_epoll_fd = epoll_create1(0);
+            }
+            if (m_epoll_fd == -1)
+            {
+                perror("event_loop: error creating epoll");
                 to_close();
                 return -1;
             }
 
             // add server fd to epoll's listen list
             epoll_event event;
-            bzero(&event, sizeof(event));
-            event.data.fd = server_socket_fd;
-            event.events = EPOLLIN;
-            if (-1 == epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_socket_fd, &event))
+            memset(&event, 0, sizeof(event));
+            event.data.fd = m_socket_fd;
+            event.events = EPOLLIN | EPOLLET; // edge-triggered 更高效（注意：非阻塞）
+            if (-1 == epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_socket_fd, &event))
             {
-                perror("error adding server socket to epoll");
+                perror("event_loop: error adding server socket to epoll");
                 to_close();
                 return -1;
             }
 
-            // event loop
-            constexpr int MAX_EVENTS_NUM = 1;
-
-            sockaddr client_addr;
-            socklen_t addr_len = sizeof(client_addr);
-            bzero(&client_addr, sizeof(client_addr));
-
+            constexpr int MAX_EVENTS_NUM = 8;
             epoll_event events[MAX_EVENTS_NUM];
-            bzero(&events[0], sizeof(events));
-            int events_num = 0;
+            memset(events, 0, sizeof(events));
 
             constexpr int buffer_size = 65507;
-            char buffer[buffer_size];
-            bzero(buffer, sizeof(buffer));
+            std::unique_ptr<char[]> buffer(new char[buffer_size]);
 
-            do
+            // event loop
+            while (true)
             {
-                events_num = epoll_wait(epoll_fd, events, MAX_EVENTS_NUM, 10); // 10ms
-
-                // tick
+                int timeout_ms = 1000; // 1s；避免 10ms 的 busy-loop
+                int events_num = epoll_wait(m_epoll_fd, events, MAX_EVENTS_NUM, timeout_ms);
+                if (events_num < 0)
                 {
-                    if (tick_callback)
+                    if (errno == EINTR)
                     {
-                        bool to_stop = false;
-                        tick_callback(to_stop);
-                        if (to_stop)
-                        {
-                            to_close();
-                            return 0;
-                        }
+                        continue;
                     }
-                }
-
-                if (0 == events_num)
-                {
-                    continue;
-                }
-                else if (0 > events_num)
-                {
-                    perror("0 > events_num");
+                    perror("event_loop: epoll_wait error");
                     to_close();
                     return -1;
                 }
 
-                for (int i = 0; i < events_num; ++i)
+                // tick
+                if (tick_callback)
                 {
-                    if (events[i].data.fd == server_socket_fd)
+                    bool to_stop = false;
+                    tick_callback(to_stop);
+                    if (to_stop)
                     {
-                        // have new message
-                        ssize_t bytes = recvfrom(server_socket_fd, buffer, buffer_size, 0, &client_addr, (socklen_t *)&addr_len);
-
-                        // process recved data
-                        if (bytes > 0)
-                        {
-                            if (message_callback)
-                            {
-                                message_callback(buffer, bytes, client_addr, addr_len);
-                            }
-                        }
+                        to_close();
+                        return 0;
                     }
                 }
-            } while (true);
+
+                if (events_num == 0)
+                {
+                    // timeout，无事件，继续循环（tick 已经执行）
+                    continue;
+                }
+
+                for (int i = 0; i < events_num; ++i)
+                {
+                    if (events[i].data.fd == m_socket_fd)
+                    {
+                        // 可能有多个消息（edge-triggered），循环读尽
+                        while (true)
+                        {
+                            struct sockaddr_storage client_addr;
+                            socklen_t addr_len = sizeof(client_addr);
+                            memset(&client_addr, 0, sizeof(client_addr));
+
+                            ssize_t bytes = recvfrom(m_socket_fd, buffer.get(), buffer_size, 0,
+                                                     (struct sockaddr *)&client_addr, &addr_len);
+                            if (bytes < 0)
+                            {
+                                if (errno == EAGAIN || errno == EWOULDBLOCK)
+                                {
+                                    // 已读尽
+                                    break;
+                                }
+                                else if (errno == EINTR)
+                                {
+                                    continue;
+                                }
+                                else
+                                {
+                                    perror("event_loop: recvfrom error");
+                                    // 不立即关闭，跳出当前 socket 读循环
+                                    break;
+                                }
+                            }
+                            else if (bytes == 0)
+                            {
+                                // UDP 不会正常返回 0，忽略
+                                continue;
+                            }
+                            else
+                            {
+                                // 调用回调（传入 const sockaddr_storage &）
+                                if (message_callback)
+                                {
+                                    message_callback(buffer.get(), bytes, client_addr, addr_len);
+                                }
+                            }
+                        } // end inner read loop
+                    }
+                } // end for events
+            } // end while
             return 0;
         }
 
-        bool udp_component::is_ipv6(std::string ip)
+        bool udp_component::is_ipv6(const std::string &ip)
         {
-            if (std::string::npos != ip.find_first_of('.'))
+            if (ip.empty())
+            {
+                return true; // 默认使用 IPv6 socket（dual-stack）
+            }
+            struct in6_addr addr6;
+            if (inet_pton(AF_INET6, ip.c_str(), &addr6) == 1)
+            {
+                return true;
+            }
+            struct in_addr addr4;
+            if (inet_pton(AF_INET, ip.c_str(), &addr4) == 1)
             {
                 return false;
             }
+            // 如果既不是合法 IPv4 也不是合法 IPv6，则保守判断为 IPv6（上层会在 bind/pton 报错）
             return true;
         }
 
-    }
-}
+    } // namespace ipc
+} // namespace avant
