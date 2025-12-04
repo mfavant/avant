@@ -73,7 +73,7 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
             newAvantRPCObj.SendPackage(reqPackage);
 
             const protoCSReqExample = ProtoCSReqExample.create({
-                testContext: Buffer.from("hello world", "utf8")
+                testContext: Buffer.from(Date.now().toString(), "utf8")
             });
 
             const reqCSExample = ProtoPackage.create({
@@ -112,7 +112,10 @@ function CreateAvantRPC(RPCIP, RPCPORT, protoRoot, OnRecvPackage) {
                     }
                     else if (recvPackageData.cmd == PROTO_CMD_CS_RES_EXAMPLE) {
                         const protoCSResExample = ProtoCSResExample.decode(recvPackageData.protocol);
-                        console.log(`protoCSResExample from ${newAvantRPCObj.appId} protoCSResExample.testContext${protoCSResExample.testContext.toString('utf8')}`);
+                        const testContextStr = protoCSResExample.testContext.toString('utf8');
+                        const sendTime = parseInt(testContextStr);
+                        const rttMs = !isNaN(sendTime) ? Date.now() - sendTime : 'N/A';
+                        console.log(`[RPC] protoCSResExample from ${newAvantRPCObj.appId} testContext "${testContextStr}" RTT: ${rttMs}ms`);
                     }
 
                     if (newAvantRPCObj.OnRecvPackage) {
@@ -166,39 +169,53 @@ loadProtobuf().then(root => {
     const ProtoCSResExample = root.lookupType("ProtoCSResExample")
     const PROTO_CMD_CS_RES_EXAMPLE = ProtoCmd.values['PROTO_CMD_CS_RES_EXAMPLE']
 
-    const csReqExample = ProtoCSReqExample.create({
-        testContext: Buffer.from("hello world 你好 中文", "utf8")
-    });
+    // 创建一个辅助函数，每次调用都生成新的 ProtoCSReqExample 和对应的字节数据
+    const createCSReqExamplePackage = () => {
+        const csReqExample = ProtoCSReqExample.create({
+            testContext: Buffer.from(Date.now().toString(), "utf8")
+        });
 
-    const reqPackage = ProtoPackage.create({
-        cmd: PROTO_CMD_CS_REQ_EXAMPLE,
-        protocol: ProtoCSReqExample.encode(csReqExample).finish()
-    });
+        const reqPackage = ProtoPackage.create({
+            cmd: PROTO_CMD_CS_REQ_EXAMPLE,
+            protocol: ProtoCSReqExample.encode(csReqExample).finish()
+        });
 
-    // 1. 生成纯 Protobuf 数据 (用于 WebSocket 和 UDP)
-    const needSendBytes = ProtoPackage.encode(reqPackage).finish()
+        const needSendBytes = ProtoPackage.encode(reqPackage).finish();
 
-    // 2. 生成带长度头的数据 (用于 TCP)
-    const headLen = Buffer.alloc(8)
-    {
-        const uint64Value = BigInt(needSendBytes.length)
-        const high = Number(uint64Value >> BigInt(32))
-        const low = Number(uint64Value & BigInt(0xFFFFFFFF))
-        headLen.writeUint32BE(high, 0)
-        headLen.writeUint32BE(low, 4)
-    }
+        return needSendBytes;
+    };
+
+    // TCP 专用：创建带长度头的包
+    const createTCPPackage = () => {
+        const needSendBytes = createCSReqExamplePackage();
+
+        const headLen = Buffer.alloc(8);
+        const uint64Value = BigInt(needSendBytes.length);
+        const high = Number(uint64Value >> BigInt(32));
+        const low = Number(uint64Value & BigInt(0xFFFFFFFF));
+        headLen.writeUint32BE(high, 0);
+        headLen.writeUint32BE(low, 4);
+
+        return { needSendBytes, headLen };
+    };
 
     // ==========================================
     // =============== TCP 逻辑 =================
     // ==========================================
     if (IS_TCP) {
         let tcpQpsCounter = 0
+        let tcpRttSum = 0
+        let tcpRttCount = 0
         setInterval(() => {
-            console.log("TCP QPS =", tcpQpsCounter)
+            const avgRtt = tcpRttCount > 0 ? (tcpRttSum / tcpRttCount).toFixed(2) : 'N/A'
+            console.log(`TCP QPS = ${tcpQpsCounter}, Avg RTT = ${avgRtt}ms`)
             tcpQpsCounter = 0
+            tcpRttSum = 0
+            tcpRttCount = 0
         }, 1000)
 
         const sendCSReqExample = (client) => {
+            const { needSendBytes, headLen } = createTCPPackage();
             client.write(headLen)
             client.write(needSendBytes)
         };
@@ -232,6 +249,16 @@ loadProtobuf().then(root => {
                         const recvPackageData = ProtoPackage.decode(packageData)
                         if (recvPackageData.cmd == PROTO_CMD_CS_RES_EXAMPLE) {
                             tcpQpsCounter++
+
+                            const protoCSResExample = ProtoCSResExample.decode(recvPackageData.protocol);
+                            const testContextStr = protoCSResExample.testContext.toString('utf8');
+                            const sendTime = parseInt(testContextStr);
+                            const rttMs = !isNaN(sendTime) ? Date.now() - sendTime : 0;
+                            if (rttMs > 0) {
+                                tcpRttSum += rttMs
+                                tcpRttCount++
+                            }
+
                             sendCSReqExample(client)
                         } else {
                             console.log("unknow cmd", recvPackageData.cmd)
@@ -260,9 +287,14 @@ loadProtobuf().then(root => {
     // ==========================================
     if (IS_WEBSOCKET) {
         let wsQpsCounter = 0;
+        let wsRttSum = 0;
+        let wsRttCount = 0;
         setInterval(() => {
-            console.log("WebSocket QPS =", wsQpsCounter)
+            const avgRtt = wsRttCount > 0 ? (wsRttSum / wsRttCount).toFixed(2) : 'N/A'
+            console.log(`WebSocket QPS = ${wsQpsCounter}, Avg RTT = ${avgRtt}ms`)
             wsQpsCounter = 0
+            wsRttSum = 0
+            wsRttCount = 0
         }, 1000);
 
         let doConnectWebSocket = () => {
@@ -276,16 +308,30 @@ loadProtobuf().then(root => {
                     console.log("WebSocket Connected to server")
                     for (let i = 0; i < 100; i++) {
                         // WS 通常直接发送 payload，不需要 8字节头部
+                        const needSendBytes = createCSReqExamplePackage();
                         ws.send(needSendBytes)
                     }
                 });
 
                 ws.on('message', (data) => {
+                    // console.log(`[WebSocket] Received data length: ${data.length} bytes, hex: ${Buffer.from(data).toString('hex')}`);
                     try {
                         const recvPackageData = ProtoPackage.decode(new Uint8Array(data));
 
                         if (recvPackageData.cmd == PROTO_CMD_CS_RES_EXAMPLE) {
                             wsQpsCounter++;
+
+                            const protoCSResExample = ProtoCSResExample.decode(recvPackageData.protocol);
+
+                            const testContextStr = Buffer.from(protoCSResExample.testContext).toString('utf-8');
+                            const sendTime = parseInt(testContextStr);
+                            const rttMs = Date.now() - sendTime;
+                            if (!isNaN(rttMs) && rttMs > 0) {
+                                wsRttSum += rttMs
+                                wsRttCount++
+                            }
+
+                            const needSendBytes = createCSReqExamplePackage();
                             ws.send(needSendBytes)
                         } else {
                             console.log("[WebSocket] unknow cmd", recvPackageData.cmd)
@@ -318,9 +364,14 @@ loadProtobuf().then(root => {
     // ==========================================
     if (IS_UDP) {
         let udpQpsCounter = 0;
+        let udpRttSum = 0;
+        let udpRttCount = 0;
         setInterval(() => {
-            console.log("UDP QPS =", udpQpsCounter)
+            const avgRtt = udpRttCount > 0 ? (udpRttSum / udpRttCount).toFixed(2) : 'N/A'
+            console.log(`UDP QPS = ${udpQpsCounter}, Avg RTT = ${avgRtt}ms`)
             udpQpsCounter = 0
+            udpRttSum = 0
+            udpRttCount = 0
         }, 1000);
 
         let doConnectUDP = () => {
@@ -337,6 +388,7 @@ loadProtobuf().then(root => {
 
             // 消息监听 (UDP 是基于包的，收到就是完整的一包，不需要像 TCP 那样处理粘包)
             udpClient.on('message', (msg, rinfo) => {
+                // console.log(`[UDP] Received data length: ${msg.length} bytes, hex: ${Buffer.from(msg).toString('hex')}`);
                 try {
                     // 注意：这里默认假设 UDP 像 WebSocket 一样，只传输 Protobuf Payload。
                     // 如果你的服务器 UDP 协议和 TCP 完全一致（也需要 8字节 长度头），
@@ -347,12 +399,19 @@ loadProtobuf().then(root => {
                     if (recvPackageData.cmd == PROTO_CMD_CS_RES_EXAMPLE) {
                         udpQpsCounter++;
 
+                        const protoCSResExample = ProtoCSResExample.decode(recvPackageData.protocol);
+                        const testContextStr = protoCSResExample.testContext.toString('utf8');
+                        const sendTime = parseInt(testContextStr);
+                        const rttMs = !isNaN(sendTime) ? Date.now() - sendTime : 0;
+                        if (rttMs > 0) {
+                            udpRttSum += rttMs
+                            udpRttCount++
+                        }
+
                         // 收到回包后继续发送 (Ping-Pong)
                         // 1. 标准 UDP 发送 (不带 8字节 TCP 长度头)
+                        const needSendBytes = createCSReqExamplePackage();
                         udpClient.send(needSendBytes, UDP_PORT, UDP_IP);
-
-                        // 2. 如果服务端强制要求 UDP 也要带 8字节头，使用下面这行代替上面那行:
-                        // udpClient.send([headLen, needSendBytes], UDP_PORT, UDP_IP);
                     } else {
                         console.log("[UDP] unknown cmd", recvPackageData.cmd);
                     }
@@ -365,12 +424,10 @@ loadProtobuf().then(root => {
             console.log("UDP Start sending...");
             for (let i = 0; i < 100; i++) {
                 // 1. 标准 UDP 发送
+                const needSendBytes = createCSReqExamplePackage();
                 udpClient.send(needSendBytes, UDP_PORT, UDP_IP, (err) => {
                     if (err) console.log("[UDP] Send error", err);
                 });
-
-                // 2. 如果服务端强制要求 UDP 也要带 8字节头，使用下面这行:
-                // udpClient.send([headLen, needSendBytes], UDP_PORT, UDP_IP);
             }
         };
 

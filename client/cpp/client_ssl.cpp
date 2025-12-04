@@ -25,7 +25,7 @@
 //             google::protobuf::io::CodedOutputStream coded_output_1(&output_stream_1);
 //             exampleReq.SerializeToCodedStream(&coded_output_1);
 //             message.set_protocol(body_str);
-//             std::string data = message.SerializePartialAsString();
+//             std::string data = message.SerializeAsString();
 
 //             uint64_t packageLen = data.size();
 
