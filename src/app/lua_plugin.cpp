@@ -541,7 +541,7 @@ int lua_plugin::Lua2Protobuf(lua_State *lua_state)
         int new_lua_stack_size = lua_gettop(lua_state);
         ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 
-        LOG_LUA_PLUGIN_RUNTIME("ProtoLuaTest\n%s", proto_lua_test.DebugString().c_str());
+        LOG_LUA_PLUGIN_RUNTIME("ProtoLuaTest\n%s", msg_ptr->DebugString().c_str());
 
         // 模拟向lua发包
         exe_OnLuaVMRecvMessage(lua_state, cmd, *msg_ptr);
@@ -709,7 +709,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                         lua_rawgeti(L, -1, arr_idx);
                         if (lua_isinteger(L, -1))
                         {
-                            LOG_LUA_PLUGIN_RUNTIME("%d", lua_tointeger(L, -1));
+                            LOG_LUA_PLUGIN_RUNTIME("%lld", lua_tointeger(L, -1));
                             reflection->AddInt64(frame.package_ptr, field, lua_tointeger(L, -1));
                         }
                         lua_pop(L, 1);
@@ -719,7 +719,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                 {
                     if (lua_isinteger(L, -1))
                     {
-                        LOG_LUA_PLUGIN_RUNTIME("%d", lua_tointeger(L, -1));
+                        LOG_LUA_PLUGIN_RUNTIME("%lld", lua_tointeger(L, -1));
                         reflection->SetInt64(frame.package_ptr, field, lua_tointeger(L, -1));
                     }
                 }
@@ -742,7 +742,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                         lua_rawgeti(L, -1, arr_idx);
                         if (lua_isinteger(L, -1))
                         {
-                            LOG_LUA_PLUGIN_RUNTIME("%d", lua_tointeger(L, -1));
+                            LOG_LUA_PLUGIN_RUNTIME("%u", lua_tointeger(L, -1));
                             reflection->AddUInt32(frame.package_ptr, field, lua_tointeger(L, -1));
                         }
                         lua_pop(L, 1);
@@ -752,7 +752,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                 {
                     if (lua_isinteger(L, -1))
                     {
-                        LOG_LUA_PLUGIN_RUNTIME("%d", lua_tointeger(L, -1));
+                        LOG_LUA_PLUGIN_RUNTIME("%u", lua_tointeger(L, -1));
                         reflection->SetUInt32(frame.package_ptr, field, lua_tointeger(L, -1));
                     }
                 }
@@ -775,7 +775,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                         lua_rawgeti(L, -1, arr_idx);
                         if (lua_isinteger(L, -1))
                         {
-                            LOG_LUA_PLUGIN_RUNTIME("%d", lua_tointeger(L, -1));
+                            LOG_LUA_PLUGIN_RUNTIME("%llu", lua_tointeger(L, -1));
                             reflection->AddUInt64(frame.package_ptr, field, lua_tointeger(L, -1));
                         }
                         lua_pop(L, 1);
@@ -785,7 +785,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                 {
                     if (lua_isinteger(L, -1))
                     {
-                        LOG_LUA_PLUGIN_RUNTIME("%d", lua_tointeger(L, -1));
+                        LOG_LUA_PLUGIN_RUNTIME("%llu", lua_tointeger(L, -1));
                         reflection->SetUInt64(frame.package_ptr, field, lua_tointeger(L, -1));
                     }
                 }
@@ -952,6 +952,11 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                     LOG_LUA_PLUGIN_RUNTIME("MESSAGE field->is_repeated()");
                     const int n_in_array = lua_rawlen(L, -1);   // 数组现在放在lua栈顶 读一下数组多少个元素
                     int array_val_in_lua_stack = lua_gettop(L); // 数组就在栈顶
+
+                    if (n_in_array == 0)
+                    {
+                        lua_pop(L, 1); // 数组长度为0直接把栈顶的table弹出也就是this_loop_key的value
+                    }
 
                     for (int arr_idx = 1; arr_idx <= n_in_array; ++arr_idx)
                     {
