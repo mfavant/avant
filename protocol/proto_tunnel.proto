@@ -45,16 +45,16 @@ message ProtoTunnelMain2WorkerNewClient
 message ProtoTunnelWebsocketBroadcast
 {
     bytes data = 1;
-};
+}
 
 // PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION
 message ProtoTunnelWorker2OtherEventNewClientConnection
 {
     uint64 gid = 3;
-};
+}
 
 // PROTO_CMD_TUNNEL_OTHER2WORKER_TEST
 message ProtoTunnelOther2WorkerTest
 {
     uint64 time = 1;
-};
+}
