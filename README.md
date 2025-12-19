@@ -8,7 +8,7 @@ C++ Version: `C++ 20`
 OS: `Linux`  
 Protocol: `HTTP` `TCP Stream(protobuf)` `Websocket`  
 TLS/SSL: `OpenSSL`  
-Lua Script: `Lua 5.4.6`  
+Lua Script: `Lua 5.4.8`  
 
 ## Docker Image
 
