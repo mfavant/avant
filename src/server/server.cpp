@@ -73,8 +73,8 @@ void server::start()
     // init OpenSSL CTX
     if (this->m_config_mgr->get_use_ssl())
     {
-        LOG_ERROR("OpenSSL_version %s", OpenSSL_version(OPENSSL_VERSION));
-        LOG_ERROR("SSLeay_version %s", SSLeay_version(SSLEAY_VERSION));
+        LOG_ERROR("OpenSSL_version {}", OpenSSL_version(OPENSSL_VERSION));
+        LOG_ERROR("SSLeay_version {}", SSLeay_version(SSLEAY_VERSION));
         SSL_library_init();
         SSL_load_error_strings();
 
@@ -109,7 +109,7 @@ void server::start()
         int i_ret = SSL_CTX_use_certificate_chain_file(m_ssl_context, crt_pem_path.c_str());
         if (1 != i_ret)
         {
-            LOG_ERROR("SSL_CTX_use_certificate_chain_file error: %s", ERR_error_string(ERR_get_error(), nullptr));
+            LOG_ERROR("SSL_CTX_use_certificate_chain_file error: {}", ERR_error_string(ERR_get_error(), nullptr));
             return;
         }
         // 加载私钥
@@ -117,14 +117,14 @@ void server::start()
         i_ret = SSL_CTX_use_PrivateKey_file(m_ssl_context, key_pem_path.c_str(), SSL_FILETYPE_PEM);
         if (1 != i_ret)
         {
-            LOG_ERROR("SSL_CTX_use_PrivateKey_file error: %s", ERR_error_string(ERR_get_error(), nullptr));
+            LOG_ERROR("SSL_CTX_use_PrivateKey_file error: {}", ERR_error_string(ERR_get_error(), nullptr));
             return;
         }
         // 验证私钥和证书匹配
         i_ret = SSL_CTX_check_private_key(m_ssl_context);
         if (1 != i_ret)
         {
-            LOG_ERROR("SSL_CTX_check_private_key error: %s", ERR_error_string(ERR_get_error(), nullptr));
+            LOG_ERROR("SSL_CTX_check_private_key error: {}", ERR_error_string(ERR_get_error(), nullptr));
             return;
         }
     }
@@ -132,43 +132,43 @@ void server::start()
     int i_ret = tunnel_id::init(this->m_config_mgr->get_worker_cnt());
     if (0 != i_ret)
     {
-        LOG_ERROR("avant::global::tunnel_id::init(%zu) failed return %d", this->m_config_mgr->get_worker_cnt(), i_ret);
+        LOG_ERROR("avant::global::tunnel_id::init({}) failed return {}", this->m_config_mgr->get_worker_cnt(), i_ret);
         return;
     }
 
     if (this->m_config_mgr->get_max_client_cnt() <= 0 || this->m_config_mgr->get_max_client_cnt() > 8388607)
     {
-        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > 8388607 %d", this->m_config_mgr->get_max_client_cnt());
+        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > 8388607 {}", this->m_config_mgr->get_max_client_cnt());
         return;
     }
 
     if (this->m_config_mgr->get_worker_cnt() <= 0 || this->m_config_mgr->get_worker_cnt() > 511)
     {
-        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > 511 %d", this->m_config_mgr->get_worker_cnt());
+        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > 511 {}", this->m_config_mgr->get_worker_cnt());
         return;
     }
 
     {
-        LOG_ERROR("m_app_id %s", this->m_config_mgr->get_app_id().c_str());
-        LOG_ERROR("m_ip %s", this->m_config_mgr->get_ip().c_str());
-        LOG_ERROR("m_port %d", this->m_config_mgr->get_port());
-        LOG_ERROR("m_worker_cnt %d", this->m_config_mgr->get_worker_cnt());
-        LOG_ERROR("m_max_client_cnt %d", this->m_config_mgr->get_max_client_cnt());
-        LOG_ERROR("m_epoll_wait_time %d", this->m_config_mgr->get_epoll_wait_time());
-        LOG_ERROR("m_accept_per_tick %d", this->m_config_mgr->get_accept_per_tick());
-        LOG_ERROR("m_http_static_dir %s", this->m_config_mgr->get_http_static_dir());
-        LOG_ERROR("m_lua_dir %s", this->m_config_mgr->get_lua_dir());
-        LOG_ERROR("m_task_type %s", this->m_config_mgr->get_task_type().c_str());
-        LOG_ERROR("m_use_ssl %d", this->m_config_mgr->get_use_ssl());
-        LOG_ERROR("m_crt_pem %s", this->m_config_mgr->get_crt_pem().c_str());
-        LOG_ERROR("m_key_pem %s", this->m_config_mgr->get_key_pem().c_str());
-        LOG_ERROR("m_daemon %d", this->m_config_mgr->get_daemon());
-        LOG_ERROR("m_log_level %d", this->m_config_mgr->get_log_level());
-        LOG_ERROR("m_other_udp_svr_ip %s", this->m_config_mgr->get_other_udp_svr_ip().c_str());
-        LOG_ERROR("m_other_udp_svr_port %d", this->m_config_mgr->get_other_udp_svr_port());
-        LOG_ERROR("m_other_udp_svr_max_loop %d", this->m_config_mgr->get_other_udp_svr_max_loop());
-        LOG_ERROR("m_max_ipc_conn_num %d", this->m_config_mgr->get_max_ipc_conn_num());
-        LOG_ERROR("m_ipc_json_path %s", this->m_config_mgr->get_ipc_json_path().c_str());
+        LOG_ERROR("m_app_id {}", this->m_config_mgr->get_app_id().c_str());
+        LOG_ERROR("m_ip {}", this->m_config_mgr->get_ip().c_str());
+        LOG_ERROR("m_port {}", this->m_config_mgr->get_port());
+        LOG_ERROR("m_worker_cnt {}", this->m_config_mgr->get_worker_cnt());
+        LOG_ERROR("m_max_client_cnt {}", this->m_config_mgr->get_max_client_cnt());
+        LOG_ERROR("m_epoll_wait_time {}", this->m_config_mgr->get_epoll_wait_time());
+        LOG_ERROR("m_accept_per_tick {}", this->m_config_mgr->get_accept_per_tick());
+        LOG_ERROR("m_http_static_dir {}", this->m_config_mgr->get_http_static_dir());
+        LOG_ERROR("m_lua_dir {}", this->m_config_mgr->get_lua_dir());
+        LOG_ERROR("m_task_type {}", this->m_config_mgr->get_task_type().c_str());
+        LOG_ERROR("m_use_ssl {}", this->m_config_mgr->get_use_ssl());
+        LOG_ERROR("m_crt_pem {}", this->m_config_mgr->get_crt_pem().c_str());
+        LOG_ERROR("m_key_pem {}", this->m_config_mgr->get_key_pem().c_str());
+        LOG_ERROR("m_daemon {}", this->m_config_mgr->get_daemon());
+        LOG_ERROR("m_log_level {}", this->m_config_mgr->get_log_level());
+        LOG_ERROR("m_other_udp_svr_ip {}", this->m_config_mgr->get_other_udp_svr_ip().c_str());
+        LOG_ERROR("m_other_udp_svr_port {}", this->m_config_mgr->get_other_udp_svr_port());
+        LOG_ERROR("m_other_udp_svr_max_loop {}", this->m_config_mgr->get_other_udp_svr_max_loop());
+        LOG_ERROR("m_max_ipc_conn_num {}", this->m_config_mgr->get_max_ipc_conn_num());
+        LOG_ERROR("m_ipc_json_path {}", this->m_config_mgr->get_ipc_json_path().c_str());
     }
 
     on_start();
@@ -226,7 +226,7 @@ void server::on_start_load_ipc_json_file()
         std::ifstream file_stream(file_path);
         if (!file_stream)
         {
-            LOG_ERROR("could not open file %d", this->m_config_mgr->get_ipc_json_path().c_str());
+            LOG_ERROR("could not open file {}", this->m_config_mgr->get_ipc_json_path().c_str());
             throw std::runtime_error(std::string("could not open file ") + this->m_config_mgr->get_ipc_json_path());
         }
         std::stringstream buffer;
@@ -244,7 +244,7 @@ void server::on_start_load_ipc_json_file()
         std::string app_id = json_item["app_id"].as_string();
         std::string ip = json_item["ip"].as_string();
         int port = json_item["port"].as_integer();
-        LOG_ERROR("IPC JSON %d app_id[%s] ip[%s] port[%d]", counter++, app_id.c_str(), ip.c_str(), port);
+        LOG_ERROR("IPC JSON {} app_id[{}] ip[{}] port[{}]", counter++, app_id.c_str(), ip.c_str(), port);
     }
 }
 
@@ -264,7 +264,7 @@ void server::on_start()
         iret = m_epoller.create(this->m_config_mgr->get_max_client_cnt() + 10);
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create(%d) iret[%d]", (this->m_config_mgr->get_max_client_cnt() + 10), iret);
+            LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_config_mgr->get_max_client_cnt() + 10), iret);
             return;
         }
     }
@@ -274,7 +274,7 @@ void server::on_start()
         iret = m_main_connection_mgr.init(this->m_config_mgr->get_worker_cnt() * 4);
         if (iret != 0)
         {
-            LOG_ERROR("m_main_connection_mgr.init(%d) failed[%d]", (this->m_config_mgr->get_worker_cnt() * 4), iret);
+            LOG_ERROR("m_main_connection_mgr.init({}) failed[{}]", (this->m_config_mgr->get_worker_cnt() * 4), iret);
             return;
         }
     }
@@ -303,7 +303,7 @@ void server::on_start()
             iret = m_main_worker_tunnel[i].init();
             if (iret != 0)
             {
-                LOG_ERROR("m_main_worker_tunnel[%d] init failed", i);
+                LOG_ERROR("m_main_worker_tunnel[{}] init failed", i);
                 return;
             }
         }
@@ -311,7 +311,7 @@ void server::on_start()
         {
             if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, event::event_poller::RWE, false))
             {
-                LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed %d", errno);
+                LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed {}", errno);
                 return;
             }
             // main alloc connection for tunnel
@@ -319,7 +319,7 @@ void server::on_start()
                 iret = m_main_connection_mgr.alloc_connection(m_main_worker_tunnel[i].get_me(), server_gen_gid());
                 if (iret != 0)
                 {
-                    LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_worker_tunnel return %d", iret);
+                    LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_worker_tunnel return {}", iret);
                     return;
                 }
                 connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_worker_tunnel[i].get_me());
@@ -369,14 +369,14 @@ void server::on_start()
             iret = new_connection_mgr->init(worker_max_client_cnt);
             if (iret != 0)
             {
-                LOG_ERROR("new_connection_mgr->init(%d) failed", worker_max_client_cnt);
+                LOG_ERROR("new_connection_mgr->init({}) failed", worker_max_client_cnt);
                 return;
             }
             m_workers[worker_idx].worker_connection_mgr = new_connection_mgr_shared_ptr;
             iret = m_workers[worker_idx].epoller.create(worker_max_client_cnt);
             if (iret != 0)
             {
-                LOG_ERROR("m_epoller.create(%d) iret[%d]", worker_max_client_cnt, iret);
+                LOG_ERROR("m_epoller.create(%d) iret[{}]", worker_max_client_cnt, iret);
                 return;
             }
 
@@ -390,7 +390,7 @@ void server::on_start()
             iret = m_workers[worker_idx].worker_connection_mgr->alloc_connection(m_workers[worker_idx].main_worker_tunnel->get_other(), server_gen_gid());
             if (iret != 0)
             {
-                LOG_ERROR("worker_connection_mgr.alloc_connection return %d", iret);
+                LOG_ERROR("worker_connection_mgr.alloc_connection return {}", iret);
                 return;
             }
             connection::connection *tunnel_conn = m_workers[worker_idx].worker_connection_mgr->get_conn(m_workers[worker_idx].main_worker_tunnel->get_other());
@@ -405,12 +405,12 @@ void server::on_start()
         iret = m_main_other_tunnel.init();
         if (iret != 0)
         {
-            LOG_ERROR("main m_main_other_tunnel failed iret=%d", iret);
+            LOG_ERROR("main m_main_other_tunnel failed iret={}", iret);
             return;
         }
         if (0 != m_epoller.add(m_main_other_tunnel.get_me(), nullptr, event::event_poller::RWE, false))
         {
-            LOG_ERROR("main_epoller.add m_main_other_tunnel.get_me() failed %d", errno);
+            LOG_ERROR("main_epoller.add m_main_other_tunnel.get_me() failed {}", errno);
             return;
         }
         // main alloc connection for tunnel
@@ -418,7 +418,7 @@ void server::on_start()
             iret = m_main_connection_mgr.alloc_connection(m_main_other_tunnel.get_me(), server_gen_gid());
             if (iret != 0)
             {
-                LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_other_tunnel return %d", iret);
+                LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_other_tunnel return {}", iret);
                 return;
             }
             connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_other_tunnel.get_me());
@@ -459,7 +459,7 @@ void server::on_start()
         iret = m_other->epoller.create(this->m_config_mgr->get_max_ipc_conn_num());
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create(%d) iret[%d]", (this->m_config_mgr->get_max_ipc_conn_num()), iret);
+            LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_config_mgr->get_max_ipc_conn_num()), iret);
             return;
         }
 
@@ -474,7 +474,7 @@ void server::on_start()
         iret = m_other->ipc_connection_mgr->alloc_connection(m_other->main_other_tunnel->get_other(), 0);
         if (iret != 0)
         {
-            LOG_ERROR("ipc_connection_mgr->alloc_connection return %d", iret);
+            LOG_ERROR("ipc_connection_mgr->alloc_connection return {}", iret);
             return;
         }
         connection::connection *tunnel_conn = m_other->ipc_connection_mgr->get_conn(m_other->main_other_tunnel->get_other());
@@ -485,7 +485,7 @@ void server::on_start()
         iret = m_other->init_call_by_server();
         if (iret != 0)
         {
-            LOG_ERROR("m_other->init_call_by_server() return %d", iret);
+            LOG_ERROR("m_other->init_call_by_server() return {}", iret);
             return;
         }
     }
@@ -502,7 +502,7 @@ void server::on_start()
         }
         this->m_server_listen_socket.reset(listen_socket);
 
-        LOG_ERROR("IP %s PORT %d", this->m_config_mgr->get_ip().c_str(), this->m_config_mgr->get_port());
+        LOG_ERROR("IP {} PORT {}", this->m_config_mgr->get_ip().c_str(), this->m_config_mgr->get_port());
         if (0 > this->m_server_listen_socket->get_fd())
         {
             LOG_ERROR("listen_socket failed get_fd() < 0");
@@ -556,7 +556,7 @@ void server::on_start()
                 }
                 else
                 {
-                    LOG_ERROR("main epoller.wait return %d errno %d %s", num, errno, strerror(errno));
+                    LOG_ERROR("main epoller.wait return {} errno {} {}", num, errno, strerror(errno));
                     to_stop();
                     continue;
                 }
@@ -570,7 +570,7 @@ void server::on_start()
                 if (this->m_latest_tick_time != now_tick_time)
                 {
                     // int curr_connection_num = m_curr_connection_num->load();
-                    // LOG_ERROR("curr_connection_num %d", curr_connection_num);
+                    // LOG_ERROR("curr_connection_num {}", curr_connection_num);
 
                     if (stop_flag)
                     {
@@ -711,13 +711,13 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
 
         ProtoPackage need_forward_package;
         proto::pack_package(need_forward_package, main2worker_new_client, ProtoCmd::PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT);
-        // LOG_ERROR("need_forward_package %d", need_forward_package.cmd());
+        // LOG_ERROR("need_forward_package {}", need_forward_package.cmd());
 
         int forward_ret = tunnel_forward(tunnel_id::get().get_main_tunnel_id(), target_worker_tunnel_id, need_forward_package);
 
         if (0 != forward_ret)
         {
-            LOG_ERROR("tunnel_forward err %d target_worker_tunnel_id %d", forward_ret, target_worker_tunnel_id);
+            LOG_ERROR("tunnel_forward err {} target_worker_tunnel_id {}", forward_ret, target_worker_tunnel_id);
             ::close(new_client_fd);
             m_curr_connection_num->fetch_sub(1);
         }
@@ -730,7 +730,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(tunnel.get_me());
     if (!tunnel_conn)
     {
-        LOG_ERROR("on_tunnel_event tunnel_conn is null, fd[%d]", tunnel.get_me());
+        LOG_ERROR("on_tunnel_event tunnel_conn is null, fd[{}]", tunnel.get_me());
         return;
     }
 
@@ -756,7 +756,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
             {
                 if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
-                    LOG_ERROR("on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                    LOG_ERROR("on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     to_stop();
                 }
                 break;
@@ -795,7 +795,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
             ProtoPackage protoPackage;
             if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
-                LOG_ERROR("server parseFromArray err %llu", data_size);
+                LOG_ERROR("server parseFromArray err {}", data_size);
                 tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
                 break;
             }
@@ -818,7 +818,7 @@ void server::on_tunnel_process(ProtoPackage &message)
     auto cmd = message.cmd();
     if (cmd != ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE)
     {
-        LOG_ERROR("cmd %d != ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE", cmd);
+        LOG_ERROR("cmd {} != ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE", (int)cmd);
         return;
     }
 
@@ -912,12 +912,12 @@ void server::on_tunnel_process(ProtoPackage &message)
 
 void server::try_send_flush_tunnel(avant::socket::socket_pair &tunnel)
 {
-    // LOG_ERROR("try_send_flush_tunnel %d", tunnel.get_me());
+    // LOG_ERROR("try_send_flush_tunnel {}", tunnel.get_me());
     // find conn
     connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(tunnel.get_me());
     if (!tunnel_conn)
     {
-        LOG_ERROR("try_send_flush_tunnel tunnel_conn is null, fd[%d]", tunnel.get_me());
+        LOG_ERROR("try_send_flush_tunnel tunnel_conn is null, fd[{}]", tunnel.get_me());
         return;
     }
 
@@ -935,7 +935,7 @@ void server::try_send_flush_tunnel(avant::socket::socket_pair &tunnel)
         int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
         if (len > 0)
         {
-            // LOG_ERROR("flush bytes %d", len);
+            // LOG_ERROR("flush bytes {}", len);
             tunnel_conn->record_sent_bytes(len);
             tunnel_conn->send_buffer.move_read_ptr_n(len);
         }
@@ -943,7 +943,7 @@ void server::try_send_flush_tunnel(avant::socket::socket_pair &tunnel)
         {
             if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
             {
-                LOG_ERROR("try_send_flush_tunnel tunnel_conn oper_errno %d", oper_errno);
+                LOG_ERROR("try_send_flush_tunnel tunnel_conn oper_errno {}", oper_errno);
                 to_stop();
             }
             else
@@ -959,12 +959,12 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
 {
     if (!tunnel_id::get().is_tunnel_id(source_tunnelid))
     {
-        LOG_ERROR("source_tunnel_id %d is not tunnel_id message cmd %d", source_tunnelid, message.cmd());
+        LOG_ERROR("source_tunnel_id {} is not tunnel_id message cmd {}", source_tunnelid, (int)message.cmd());
         return -1;
     }
     if (!tunnel_id::get().is_tunnel_id(dest_tunnel_id))
     {
-        LOG_ERROR("dest_tunnel_id %d is not tunnel_id message cmd %d", dest_tunnel_id, message.cmd());
+        LOG_ERROR("dest_tunnel_id {} is not tunnel_id message cmd {}", dest_tunnel_id, (int)message.cmd());
         return -2;
     }
 
@@ -982,7 +982,7 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
 
     if (!dest_tunnel_conn_ptr)
     {
-        LOG_ERROR("dest_tunnel_id %d connection not be found", dest_tunnel_id);
+        LOG_ERROR("dest_tunnel_id {} connection not be found", dest_tunnel_id);
         return -3;
     }
 
@@ -993,7 +993,7 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
 
     std::string data;
     proto::pack_package(data, package, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE);
-    // LOG_ERROR("forward datasize %zu cmd %d", data.size(), package.innerprotopackage().cmd());
+    // LOG_ERROR("forward datasize {} cmd {}", data.size(), package.innerprotopackage().cmd());
 
     dest_tunnel_conn_ptr->send_buffer.append(data.c_str(), data.size());
     if (flush)
@@ -1012,7 +1012,7 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
         }
         else
         {
-            LOG_ERROR("flush error know fd %d, it's not worker and other tunnel fd", dest_tunnel_conn_ptr->fd);
+            LOG_ERROR("flush error know fd {}, it's not worker and other tunnel fd", dest_tunnel_conn_ptr->fd);
             return -4;
         }
     }

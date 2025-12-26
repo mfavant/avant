@@ -92,7 +92,7 @@ bool socket::bind(const string &ip, int port)
         sockaddr6.sin6_port = htons(port);
         if (::bind(m_sockfd, (struct sockaddr *)&sockaddr6, sizeof(sockaddr6)) < 0)
         {
-            LOG_ERROR("ipv6 socket bind error: errno=%d errstr=%s", errno, strerror(errno));
+            LOG_ERROR("ipv6 socket bind error: errno={} errstr={}", errno, strerror(errno));
             return false;
         }
     }
@@ -107,7 +107,7 @@ bool socket::bind(const string &ip, int port)
         // bind
         if (::bind(m_sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
         {
-            LOG_ERROR("ipv4 socket bind error: errno=%d errstr=%s", errno, strerror(errno));
+            LOG_ERROR("ipv4 socket bind error: errno={} errstr={}", errno, strerror(errno));
             return false;
         }
     }
@@ -120,7 +120,7 @@ bool socket::listen(int backlog)
     // backlog: queue of pending connections
     if (::listen(m_sockfd, backlog) < 0)
     {
-        LOG_ERROR("socket listen error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket listen error: errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -169,7 +169,7 @@ bool socket::connect(const string &ip, int port)
         {
             if (errno != EINPROGRESS)
             {
-                LOG_ERROR("isIPV6 %d socket connect error: errno=%d errstr=%s", int_isIPV6, errno, strerror(errno));
+                LOG_ERROR("isIPV6 {} socket connect error: errno={} errstr={}", int_isIPV6, errno, strerror(errno));
                 return false;
             }
         }
@@ -313,13 +313,13 @@ bool socket::set_non_blocking()
     int flags = fcntl(m_sockfd, F_GETFL, 0);
     if (flags < 0)
     {
-        LOG_ERROR("socket::set_non_blocking(F_GETFL,O_NONBLOCK) errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket::set_non_blocking(F_GETFL,O_NONBLOCK) errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     flags |= O_NONBLOCK; // setting nonblock
     if (fcntl(m_sockfd, F_SETFL, flags) < 0)
     {
-        LOG_ERROR("socket::set_non_blocking(F_SETFL,O_NONBLOCK) errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket::set_non_blocking(F_SETFL,O_NONBLOCK) errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -330,13 +330,13 @@ bool socket::set_blocking()
     int flags = fcntl(m_sockfd, F_GETFL, 0);
     if (flags < 0)
     {
-        LOG_ERROR("socket::set_blocking() errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket::set_blocking() errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     flags &= ~O_NONBLOCK; // setting nonblock
     if (fcntl(m_sockfd, F_SETFL, flags) < 0)
     {
-        LOG_ERROR("socket::set_blocking() errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket::set_blocking() errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -347,7 +347,7 @@ bool socket::set_send_buffer(size_t size)
     size_t buffer_size = size;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_SNDBUF, &buffer_size, sizeof(buffer_size)) < 0)
     {
-        LOG_ERROR("socket set send buffer error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket set send buffer error: errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -358,7 +358,7 @@ bool socket::set_recv_buffer(size_t size)
     int buffer_size = size;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof(buffer_size)) < 0)
     {
-        LOG_ERROR("socket set recv buffer errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket set recv buffer errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -385,7 +385,7 @@ bool socket::set_linger(bool active, size_t seconds)
     l.l_linger = seconds;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_LINGER, &l, sizeof(l)) < 0)
     {
-        LOG_ERROR("socket set linger error errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket set linger error errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -396,7 +396,7 @@ bool socket::set_nodelay(bool active)
     int flag = active ? 1 : 0;
     if (setsockopt(m_sockfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) < 0)
     {
-        LOG_ERROR("set TCP_NODELAY errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("set TCP_NODELAY errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -407,7 +407,7 @@ bool socket::set_keep_alive()
     int flag = 1;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_KEEPALIVE, &flag, sizeof(flag)) < 0)
     {
-        LOG_ERROR("socket set sock keep alive error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket set sock keep alive error: errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -418,7 +418,7 @@ bool socket::set_reuse_addr()
     int flag = 1;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) < 0)
     {
-        LOG_ERROR("socket set sock reuser addr error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket set sock reuser addr error: errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -429,7 +429,7 @@ bool socket::set_reuse_port()
     int flag = 1;
     if (setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEPORT, &flag, sizeof(flag)) < 0)
     {
-        LOG_ERROR("socket set sock reuser port error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("socket set sock reuser port error: errno={} errstr={}", errno, strerror(errno));
         return false;
     }
     return true;
@@ -450,7 +450,7 @@ int socket::create_tcp_socket(std::string ip)
 
     if (fd <= 0)
     {
-        LOG_ERROR("create tcp socket error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("create tcp socket error: errno={} errstr={}", errno, strerror(errno));
         return fd;
     }
     return fd;

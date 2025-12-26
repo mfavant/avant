@@ -29,6 +29,6 @@ void reload::on_cmd_reload(avant::server::server &server_obj)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }

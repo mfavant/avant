@@ -7,6 +7,7 @@
 #include <cstring>
 #include <chrono>
 #include <mutex>
+#include <format>
 
 namespace avant
 {
@@ -50,63 +51,90 @@ namespace avant
              */
             void close();
 
-            /**
-             * @brief out log in debug
-             *
-             * @param file content
-             * @param line line number
-             * @param func
-             * @param format
-             * @param ... param
-             */
-            void debug(const char *file, int line, const char *func, const char *format, ...);
+            template <typename... Args>
+            void debug(const char *file, int line, const char *func, std::format_string<Args...> fmt, Args &&...args)
+            {
+                if (m_log_level > DEBUG)
+                {
+                    return;
+                }
+                log(DEBUG, file, line, func, fmt, std::forward<Args>(args)...);
+            }
 
-            /**
-             * @brief out log in info
-             *
-             * @param file content
-             * @param line line number
-             * @param func
-             * @param format
-             * @param ... param
-             */
-            void info(const char *file, int line, const char *func, const char *format, ...);
+            template <typename... Args>
+            void info(const char *file, int line, const char *func, std::format_string<Args...> fmt, Args &&...args)
+            {
+                if (m_log_level > INFO)
+                {
+                    return;
+                }
+                log(INFO, file, line, func, fmt, std::forward<Args>(args)...);
+            }
 
-            /**
-             * @brief out log in warn
-             *
-             * @param file content
-             * @param line line number
-             * @param func
-             * @param format
-             * @param ... param
-             */
-            void warn(const char *file, int line, const char *func, const char *format, ...);
+            template <typename... Args>
+            void warn(const char *file, int line, const char *func, std::format_string<Args...> fmt, Args &&...args)
+            {
+                if (m_log_level > WARN)
+                {
+                    return;
+                }
+                log(WARN, file, line, func, fmt, std::forward<Args>(args)...);
+            }
 
-            /**
-             * @brief out log in error
-             *
-             * @param file content
-             * @param line line number
-             * @param func
-             * @param format
-             * @param ... param
-             */
-            void error(const char *file, int line, const char *func, const char *format, ...);
+            template <typename... Args>
+            void error(const char *file, int line, const char *func, std::format_string<Args...> fmt, Args &&...args)
+            {
+                if (m_log_level > ERROR)
+                {
+                    return;
+                }
+                log(ERROR, file, line, func, fmt, std::forward<Args>(args)...);
+            }
 
-            /**
-             * @brief out log in fatlal
-             *
-             * @param file content
-             * @param line line number
-             * @param func
-             * @param format
-             * @param ... param
-             */
-            void fatal(const char *file, int line, const char *func, const char *format, ...);
+            template <typename... Args>
+            void fatal(const char *file, int line, const char *func, std::format_string<Args...> fmt, Args &&...args)
+            {
+                if (m_log_level > FATAL)
+                {
+                    return;
+                }
+                log(FATAL, file, line, func, fmt, std::forward<Args>(args)...);
+            }
 
         protected:
-            void log(flag f, const char *file, int line, const char *func, const char *format, va_list arg_ptr);
+            template <typename... Args>
+            void log(flag f, const char *file, int line, const char *func, std::format_string<Args...> fmt, Args &&...args)
+            {
+                std::lock_guard<std::mutex> lock(m_log_mutex);
+
+                if (m_fp == nullptr)
+                {
+                    printf("open log file failed: m_fp==nullptr\n");
+                    exit(1);
+                }
+
+                std::time_t ticks = chrono::system_clock::to_time_t(chrono::system_clock::now());
+
+                // Check if log file needs rotation
+                rotate_log_file(ticks);
+
+                // Get time for log enrty
+                struct tm *ptm = std::localtime(&ticks);
+                char buf[32];
+                memset(buf, 0, sizeof(buf));
+                strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ptm);
+
+                // using log file
+                fprintf(m_fp, "%s  ", buf);
+                fprintf(m_fp, "%s  ", s_flag[f]); // print flag
+                fprintf(m_fp, "%s:%d %s  ", file, line, func);
+                auto msg = std::format(fmt, std::forward<Args>(args)...);
+                fprintf(m_fp, "%s\r\n", msg.c_str());
+
+                // free lock
+                fflush(m_fp);
+            }
+
             void rotate_log_file(std::time_t ticks);
 
         protected:

@@ -42,7 +42,7 @@ int other::init_call_by_server()
 
     if (false == found)
     {
-        LOG_ERROR("this process json app_id %s not be found", this->get_server()->get_config()->get_app_id().c_str());
+        LOG_ERROR("this process json app_id {} not be found", this->get_server()->get_config()->get_app_id().c_str());
         return -1;
     }
 
@@ -50,7 +50,7 @@ int other::init_call_by_server()
     std::string ip = this->ipc_self_json["ip"].as_string();
     int port = this->ipc_self_json["port"].as_integer();
 
-    LOG_ERROR("ipc self json app_id[%s] ip[%s] port[%d]", app_id.c_str(), ip.c_str(), port);
+    LOG_ERROR("ipc self json app_id[{}] ip[{}] port[{}]", app_id.c_str(), ip.c_str(), port);
 
     // Create IPC listen socket
     avant::socket::server_socket *ipc_listen_socket = new (std::nothrow) avant::socket::server_socket(ip, port, this->get_server()->get_config()->get_max_ipc_conn_num());
@@ -91,7 +91,7 @@ int other::init_call_by_server()
             false);
         if (int_ret != 0)
         {
-            LOG_ERROR("udp_component_server failed ret %d", int_ret);
+            LOG_ERROR("udp_component_server failed ret {}", int_ret);
             return -6;
         }
         if (0 > this->udp_svr_component->get_socket_fd())
@@ -102,7 +102,7 @@ int other::init_call_by_server()
         int_ret = avant::ipc::udp_component_setnonblocking(this->udp_svr_component->get_socket_fd());
         if (int_ret != 0)
         {
-            LOG_ERROR("udp_component_setnonblocking failed ret %d", int_ret);
+            LOG_ERROR("udp_component_setnonblocking failed ret {}", int_ret);
             return -8;
         }
 
@@ -119,7 +119,7 @@ int other::init_call_by_server()
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR("app on_udp_server_recvfrom throw exception %s", e.what());
+                LOG_ERROR("app on_udp_server_recvfrom throw exception {}", e.what());
             }
         };
 
@@ -167,7 +167,7 @@ void other::operator()()
             }
             else
             {
-                LOG_ERROR("other epoller.wait return [%d] errno %d", num, errno);
+                LOG_ERROR("other epoller.wait return [{}] errno {}", num, errno);
                 break;
             }
         }
@@ -315,7 +315,7 @@ void other::try_send_flush_tunnel()
         {
             if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
             {
-                LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                 this->to_stop = true;
             }
             else
@@ -359,7 +359,7 @@ void other::on_tunnel_event(uint32_t event)
             {
                 if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
-                    LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                    LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     this->to_stop = true;
                 }
                 break;
@@ -398,12 +398,12 @@ void other::on_tunnel_event(uint32_t event)
             ProtoPackage protoPackage;
             if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
-                LOG_ERROR("other parseFromArray err %llu", data_size);
+                LOG_ERROR("other parseFromArray err {}", data_size);
                 tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
                 break;
             }
 
-            // LOG_ERROR("other recv datasize %llu", sizeof(data_size) + data_size);
+            // LOG_ERROR("other recv datasize {}", sizeof(data_size) + data_size);
 
             on_tunnel_process(protoPackage);
             tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
@@ -424,7 +424,7 @@ void other::on_tunnel_process(ProtoPackage &message)
 
     if (cmd != ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE)
     {
-        LOG_ERROR("cmd %d != PROTO_CMD_TUNNEL_PACKAGE", cmd);
+        LOG_ERROR("cmd {} != PROTO_CMD_TUNNEL_PACKAGE", cmd);
         return;
     }
 
@@ -441,7 +441,7 @@ void other::on_tunnel_process(ProtoPackage &message)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR("app on_other_tunnel throw exception cmd %d", tunnelPackage.innerprotopackage().cmd());
+        LOG_ERROR("app on_other_tunnel throw exception cmd {}", (int)tunnelPackage.innerprotopackage().cmd());
     }
 }
 
@@ -473,7 +473,7 @@ void other::close_ipc_client_fd(int fd)
         int iret = this->ipc_connection_mgr->release_connection(fd);
         if (iret != 0)
         {
-            LOG_ERROR("ipc_connection_mgr->release_connection(%d) failed", fd);
+            LOG_ERROR("ipc_connection_mgr->release_connection({}) failed", fd);
         }
 
         auto this2remote_gid2appid_iter = this->m_this2remote_gid2appid.find(gid);
@@ -484,7 +484,7 @@ void other::close_ipc_client_fd(int fd)
             {
                 this->m_this2remote_appid2gid.erase(appid2gid_iter);
             }
-            LOG_ERROR("appid %s and %s connect failed", this->get_server()->get_config()->get_app_id().c_str(),
+            LOG_ERROR("appid {} and {} connect failed", this->get_server()->get_config()->get_app_id().c_str(),
                       this2remote_gid2appid_iter->second.c_str());
 
             this->m_this2remote_gid2appid.erase(this2remote_gid2appid_iter);
@@ -503,7 +503,7 @@ void other::close_ipc_client_fd(int fd)
     }
     else
     {
-        LOG_ERROR("worker close_client_fd conn_ptr is null, ::close %d", fd);
+        LOG_ERROR("worker close_client_fd conn_ptr is null, ::close {}", fd);
         ::close(fd);
     }
 }
@@ -512,14 +512,14 @@ void other::on_new_ipc_client_fd(int fd, uint64_t gid)
 {
     if (fd < 0)
     {
-        LOG_ERROR("other::on_new_ipc_client_fd fd %d < 0", fd);
+        LOG_ERROR("other::on_new_ipc_client_fd fd {} < 0", fd);
         return;
     }
 
     int iret = this->ipc_connection_mgr->alloc_connection(fd, gid);
     if (iret != 0)
     {
-        LOG_ERROR("ipc_connection_mgr alloc_connection(%d,%llu) failed, iret %d", fd, gid, iret);
+        LOG_ERROR("ipc_connection_mgr alloc_connection({},{}) failed, iret {}", fd, gid, iret);
         close_ipc_client_fd(fd);
         return;
     }
@@ -527,7 +527,7 @@ void other::on_new_ipc_client_fd(int fd, uint64_t gid)
     avant::connection::connection *ipc_conn = this->ipc_connection_mgr->get_conn(fd);
     if (!ipc_conn)
     {
-        LOG_ERROR("ipc_connection_mgr->get_conn(%d) failed", fd);
+        LOG_ERROR("ipc_connection_mgr->get_conn({}) failed", fd);
         close_ipc_client_fd(fd);
         return;
     }
@@ -578,7 +578,7 @@ void other::on_ipc_client_event(int fd, uint32_t event)
     auto conn = this->ipc_connection_mgr->get_conn(fd);
     if (!conn)
     {
-        LOG_ERROR("ipc_connection_mgr->get_conn failed fd %d", fd);
+        LOG_ERROR("ipc_connection_mgr->get_conn failed fd {}", fd);
         close_ipc_client_fd(fd);
         return;
     }
@@ -612,7 +612,7 @@ void other::ipc_client_to_connect()
         int iret = this->ipc_connection_mgr->alloc_connection(new_client_socket.get_fd(), this->other_gen_gid());
         if (iret != 0)
         {
-            LOG_ERROR("this->ipc_connection_mgr->alloc_connection failed iret %d", iret);
+            LOG_ERROR("this->ipc_connection_mgr->alloc_connection failed iret {}", iret);
             continue;
         }
 
@@ -620,7 +620,7 @@ void other::ipc_client_to_connect()
 
         if (!conn)
         {
-            LOG_ERROR("this->ipc_connection_mgr->get_conn failed %d", new_client_socket.get_fd());
+            LOG_ERROR("this->ipc_connection_mgr->get_conn failed {}", new_client_socket.get_fd());
             continue;
         }
 

@@ -102,8 +102,8 @@ void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPac
 
         int targetallworker = tunnel_package.targetallworker();
 
-        LOG_ERROR("other_app::on_other_tunnel() CMD %d sourcetunnelsid %d targettunnelsid %s targetallworker %d",
-                  package.cmd(),
+        LOG_ERROR("other_app::on_other_tunnel() CMD {} sourcetunnelsid {} targettunnelsid {} targetallworker {}",
+                  (int)package.cmd(),
                   sourcetunnelsid,
                   targettunnelsid.c_str(),
                   targetallworker);
@@ -123,7 +123,7 @@ void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx 
         std::string data;
         ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)));
     }
-    // LOG_ERROR("other_app on_new_connection %llu", ctx.get_conn_gid());
+    // LOG_ERROR("other_app on_new_connection {}", ctx.get_conn_gid());
 }
 
 void other_app::on_close_connection(avant::connection::ipc_stream_ctx &ctx)
@@ -133,7 +133,7 @@ void other_app::on_close_connection(avant::connection::ipc_stream_ctx &ctx)
     // is ipc conn
     if (authenticated_ipc_pair.gid2appid.find(gid) != authenticated_ipc_pair.gid2appid.end())
     {
-        // LOG_ERROR("close ipc_client gid %llu", gid);
+        // LOG_ERROR("close ipc_client gid {}", gid);
         std::string app_id = authenticated_ipc_pair.gid2appid[gid];
         authenticated_ipc_pair.gid2appid.erase(gid);
         authenticated_ipc_pair.appid2gid.erase(app_id);
@@ -179,7 +179,7 @@ void other_app::on_process_connection(avant::connection::ipc_stream_ctx &ctx)
         ProtoPackage protoPackage;
         if (!protoPackage.ParseFromArray(ctx.get_recv_buffer_read_ptr() + sizeof(data_size), data_size))
         {
-            LOG_ERROR("ipc_stream_ctx protoPackage.ParseFromArra failed %llu", data_size);
+            LOG_ERROR("ipc_stream_ctx protoPackage.ParseFromArra failed {}", data_size);
             ctx.recv_buffer_move_read_ptr_n(sizeof(data_size) + data_size);
             break;
         }
@@ -193,7 +193,7 @@ void other_app::on_process_connection(avant::connection::ipc_stream_ctx &ctx)
 
 void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const ProtoPackage &package)
 {
-    // LOG_ERROR("ipc_stream_ctx gid %llu cmd %d", ctx.get_conn_gid(), package.cmd());
+    // LOG_ERROR("ipc_stream_ctx gid {} cmd {}", ctx.get_conn_gid(), package.cmd());
     if (package.cmd() == ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
     {
         ProtoCSReqExample req;
@@ -247,17 +247,17 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
 
             if (succ)
             {
-                LOG_ERROR("{appId %s, auth_gid %llu} insert to authenticated_ipc_pair succ", auth_appId.c_str(), auth_gid);
+                LOG_ERROR("appId {}, auth_gid {} insert to authenticated_ipc_pair succ", auth_appId.c_str(), auth_gid);
             }
             else
             {
-                LOG_ERROR("{appId %s, auth_gid %llu} insert to authenticated_ipc_pair failed", auth_appId.c_str(), auth_gid);
+                LOG_ERROR("appId {}, auth_gid {} insert to authenticated_ipc_pair failed", auth_appId.c_str(), auth_gid);
             }
         }
     }
     else
     {
-        LOG_ERROR("unknow cmd %d", package.cmd());
+        LOG_ERROR("unknow cmd {}", (int)package.cmd());
     }
 }
 
@@ -268,19 +268,19 @@ void other_app::on_udp_server_recvfrom(avant::workers::other &other_obj, const c
 {
     if (!other_obj.udp_svr_component.get())
     {
-        LOG_ERROR("other udp_svr_component message_callback recv udp_svr_component is nullptr len %zd", len);
+        LOG_ERROR("other udp_svr_component message_callback recv udp_svr_component is nullptr len {}", len);
         return;
     }
     ProtoPackage package;
     if (!package.ParseFromArray(buffer, len))
     {
-        LOG_ERROR("other udp_svr_component message_callback recv ParseFromArray failed len %zd", len);
+        LOG_ERROR("other udp_svr_component message_callback recv ParseFromArray failed len {}", len);
         return;
     }
 
     if (package.cmd() != ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
     {
-        LOG_ERROR("other udp_svr_component message_callback recv unknown cmd %d len %zd", package.cmd(), len);
+        LOG_ERROR("other udp_svr_component message_callback recv unknown cmd {} len {}", (int)package.cmd(), len);
         return;
     }
 
@@ -295,7 +295,7 @@ void other_app::on_udp_server_recvfrom(avant::workers::other &other_obj, const c
         int int_ret = other_obj.udp_svr_component.get()->udp_component_client("", 0, data.data(), data.size(), (struct sockaddr *)&addr, addr_len);
         if (int_ret != 0)
         {
-            LOG_ERROR("other udp_svr_component message_callback recv len %zd udp_component_client %d", len, int_ret);
+            LOG_ERROR("other udp_svr_component message_callback recv len {} udp_component_client {}", len, int_ret);
         }
     }
 }

@@ -32,7 +32,7 @@ void ipc_stream_ctx::on_create(connection &conn_obj, workers::other &other_obj)
     catch (const std::exception &e)
     {
         err = true;
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 
     if (err)
@@ -125,7 +125,7 @@ void ipc_stream_ctx::try_send_flush()
         {
             if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
             {
-                // LOG_ERROR("ipc_stream_ctx client sock send data oper_errno %d", oper_errno);
+                // LOG_ERROR("ipc_stream_ctx client sock send data oper_errno {}", oper_errno);
                 conn_ptr->is_close = true;
             }
             event_mod(nullptr, event::event_poller::RWE, false);
@@ -144,7 +144,7 @@ void ipc_stream_ctx::on_event(uint32_t event)
         {
             if (socket_ptr)
             {
-                // LOG_DEBUG("ipc_stream_ctx socket close_callback fd %d", socket_ptr->get_fd());
+                // LOG_DEBUG("ipc_stream_ctx socket close_callback fd {}", socket_ptr->get_fd());
             }
         };
     }
@@ -164,7 +164,7 @@ void ipc_stream_ctx::on_event(uint32_t event)
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
         }
 
@@ -220,7 +220,7 @@ void ipc_stream_ctx::on_event(uint32_t event)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR("avant::app::other_app::on_process_connection %s", e.what());
+        LOG_ERROR("avant::app::other_app::on_process_connection {}", e.what());
         err = true;
     }
     if (err)

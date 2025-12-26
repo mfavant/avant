@@ -18,7 +18,7 @@ client_socket::client_socket(const string &ip, int port) : socket(ip, port)
     m_sockfd = socket::create_tcp_socket(ip);
     if (m_sockfd < 0)
     {
-        LOG_ERROR("create client socket error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("create client socket error: errno={} errstr={}", errno, strerror(errno));
         return;
     }
     set_non_blocking();
@@ -31,7 +31,7 @@ client_socket::client_socket(const string &ip, int port) : socket(ip, port)
     set_reuse_port();
     if (!connect(ip, port))
     {
-        LOG_ERROR("client socket connect ip %s port %d failed", ip.c_str(), port);
+        LOG_ERROR("client socket connect ip {} port {} failed", ip.c_str(), port);
         return;
     }
 }

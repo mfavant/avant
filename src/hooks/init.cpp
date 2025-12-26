@@ -30,7 +30,7 @@ void init::on_main_init(avant::server::server &server_obj)
     catch (const std::exception &e)
     {
         exit(EXIT_FAILURE);
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }
 
@@ -56,7 +56,7 @@ void init::on_worker_init(avant::workers::worker &worker_obj)
     catch (const std::exception &e)
     {
         exit(EXIT_FAILURE);
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }
 
@@ -69,6 +69,6 @@ void init::on_other_init(avant::workers::other &other_obj)
     catch (const std::exception &e)
     {
         exit(EXIT_FAILURE);
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }

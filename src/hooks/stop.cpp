@@ -29,7 +29,7 @@ void stop::on_main_stop(avant::server::server &server_obj)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }
 
@@ -54,7 +54,7 @@ void stop::on_worker_stop(avant::workers::worker &worker_obj)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }
 
@@ -66,6 +66,6 @@ void stop::on_other_stop(avant::workers::other &other_obj)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }

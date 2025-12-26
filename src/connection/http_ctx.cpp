@@ -71,7 +71,7 @@ void http_ctx::init_http_settings()
         catch (const std::exception &e)
         {
             iret = -1;
-            LOG_ERROR(e.what());
+            LOG_ERROR("{}", e.what());
         }
 
         if (iret == 0)
@@ -85,7 +85,7 @@ void http_ctx::init_http_settings()
             catch (const std::exception &e)
             {
                 iret = -1;
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
         }
 
@@ -162,7 +162,7 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
         catch (const std::exception &e)
         {
             err = true;
-            LOG_ERROR(e.what());
+            LOG_ERROR("{}", e.what());
         }
     }
 
@@ -190,7 +190,7 @@ void http_ctx::on_event(uint32_t event)
         {
             if (socket_ptr)
             {
-                // LOG_DEBUG("http_ctx socket close_callback fd %d", socket_ptr->get_fd());
+                // LOG_DEBUG("http_ctx socket close_callback fd {}", socket_ptr->get_fd());
             }
         };
     }
@@ -210,7 +210,7 @@ void http_ctx::on_event(uint32_t event)
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
         }
         this->worker_ptr->close_client_fd(socket_ptr->get_fd());
@@ -236,7 +236,7 @@ void http_ctx::on_event(uint32_t event)
             catch (const std::exception &e)
             {
                 err = true;
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
             if (err)
             {
@@ -267,7 +267,7 @@ void http_ctx::on_event(uint32_t event)
             }
             else
             {
-                LOG_DEBUG("SSL_accept ssl_status[%d] error: %s", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
+                LOG_DEBUG("SSL_accept ssl_status[{}] error: {}", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
                 conn_ptr->is_close = true;
                 this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
                 return;
@@ -339,7 +339,7 @@ void http_ctx::on_event(uint32_t event)
         }
         catch (const std::exception &e)
         {
-            LOG_ERROR(e.what());
+            LOG_ERROR("{}", e.what());
             this->set_everything_end(true);
         }
     }
@@ -395,7 +395,7 @@ void http_ctx::on_event(uint32_t event)
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
                 this->set_everything_end(true);
             }
             if (conn_ptr->send_buffer.empty() && this->get_response_end())
@@ -416,7 +416,7 @@ void http_ctx::on_event(uint32_t event)
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
             this->destory_callback = nullptr;
         }

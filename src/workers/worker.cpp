@@ -36,14 +36,14 @@ worker::~worker()
 
 void worker::operator()()
 {
-    LOG_ERROR("worker::operator() start worker[%d]", this->get_worker_idx());
+    LOG_ERROR("worker::operator() start worker[{}]", this->get_worker_idx());
 
     {
         sigset_t set;
         sigfillset(&set);
         if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0)
         {
-            LOG_ERROR("worker[%d] pthread_sigmask failed", this->get_worker_idx());
+            LOG_ERROR("worker[{}] pthread_sigmask failed", this->get_worker_idx());
             exit(-1);
         }
     }
@@ -67,7 +67,7 @@ void worker::operator()()
             }
             else
             {
-                LOG_ERROR("worker epoller.wait return [%d] errno %d", num, errno);
+                LOG_ERROR("worker epoller.wait return [{}] errno {}", num, errno);
                 break;
             }
         }
@@ -107,7 +107,7 @@ void worker::operator()()
 
             if (timeout_fd_copy.find(evented_fd) != timeout_fd_copy.end())
             {
-                LOG_DEBUG("fd %d already timeout, alreay closed", evented_fd);
+                LOG_DEBUG("fd {} already timeout, alreay closed", evented_fd);
                 continue;
             }
 
@@ -123,7 +123,7 @@ void worker::operator()()
             }
         }
     }
-    LOG_ERROR("worker::operator() end worker[%d]", this->get_worker_idx());
+    LOG_ERROR("worker::operator() end worker[{}]", this->get_worker_idx());
     this->to_stop = true;
     this->is_stoped = true;
     hooks::stop::on_worker_stop(*this);
@@ -161,7 +161,7 @@ void worker::on_tunnel_event(uint32_t event)
             {
                 if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
                 {
-                    LOG_ERROR("worker::on_tunnel_event tunnel_conn oper_errno %d", oper_errno);
+                    LOG_ERROR("worker::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     this->to_stop = true;
                 }
                 break;
@@ -200,12 +200,12 @@ void worker::on_tunnel_event(uint32_t event)
             ProtoPackage protoPackage;
             if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
-                LOG_ERROR("worker parseFromArray err %llu", data_size);
+                LOG_ERROR("worker parseFromArray err {}", data_size);
                 tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
                 break;
             }
 
-            // LOG_ERROR("worker recv datasize %llu", sizeof(data_size) + data_size);
+            // LOG_ERROR("worker recv datasize {}", sizeof(data_size) + data_size);
 
             on_tunnel_process(protoPackage);
             tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
@@ -239,12 +239,12 @@ void worker::close_client_fd(int fd)
         int iret = this->worker_connection_mgr->release_connection(fd);
         if (iret != 0)
         {
-            LOG_ERROR("worker_connection_mgr->release_connection(%d) failed", fd);
+            LOG_ERROR("worker_connection_mgr->release_connection({}) failed", fd);
         }
     }
     else
     {
-        LOG_ERROR("worker close_client_fd conn_ptr is null, ::close %d", fd);
+        LOG_ERROR("worker close_client_fd conn_ptr is null, ::close {}", fd);
         ::close(fd);
     }
 
@@ -257,7 +257,7 @@ void worker::on_client_event(int fd, uint32_t event)
     auto conn = this->worker_connection_mgr->get_conn(fd);
     if (!conn)
     {
-        LOG_ERROR("worker_connection_mgr->get_conn failed type %d", this->type);
+        LOG_ERROR("worker_connection_mgr->get_conn failed type {}", (int)this->type);
         close_client_fd(fd);
         return;
     }
@@ -296,7 +296,7 @@ void worker::try_send_flush_tunnel()
         {
             if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
             {
-                LOG_ERROR("worker::try_send_flush_tunnel tunnel_conn oper_errno %d", oper_errno);
+                LOG_ERROR("worker::try_send_flush_tunnel tunnel_conn oper_errno {}", oper_errno);
                 this->to_stop = true;
             }
             else
@@ -420,7 +420,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
 
     if (cmd != ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE)
     {
-        LOG_ERROR("cmd %d != PROTO_CMD_TUNNEL_PACKAGE", cmd);
+        LOG_ERROR("cmd {} != PROTO_CMD_TUNNEL_PACKAGE", cmd);
         return;
     }
 
@@ -438,7 +438,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
         ProtoTunnelMain2WorkerNewClient package;
         if (!avant::proto::parse(package, tunnelPackage.innerprotopackage()))
         {
-            LOG_ERROR("ProtoTunnelMain2WorkerNewClient.ParseFromString failed cmd %d", inner_cmd);
+            LOG_ERROR("ProtoTunnelMain2WorkerNewClient.ParseFromString failed cmd {}", inner_cmd);
             return;
         }
         on_new_client_fd(package.fd(), package.gid());
@@ -480,7 +480,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
                 auto conn_ptr = this->worker_connection_mgr->get_conn_by_gid(target_gid);
                 if (!conn_ptr)
                 {
-                    // LOG_ERROR("process ProtoTunnelClientForwardMessage can not find targetgid %llu conn_ptr", target_gid);
+                    // LOG_ERROR("process ProtoTunnelClientForwardMessage can not find targetgid {} conn_ptr", target_gid);
                     continue;
                 }
                 this->handle_tunnel_client_forward_message(conn_ptr, message, tunnelPackage);
@@ -509,7 +509,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
         }
         catch (const std::exception &e)
         {
-            LOG_ERROR("app on_worker_tunnel throw exception cmd %d", tunnelPackage.innerprotopackage().cmd());
+            LOG_ERROR("app on_worker_tunnel throw exception cmd {}", (int)tunnelPackage.innerprotopackage().cmd());
         }
     }
 }
@@ -518,7 +518,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
 {
     if (fd < 0)
     {
-        LOG_ERROR("worker::on_new_client_fd fd %d < 0", fd);
+        LOG_ERROR("worker::on_new_client_fd fd {} < 0", fd);
         return;
     }
 
@@ -526,7 +526,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
     int iret = this->worker_connection_mgr->alloc_connection(fd, gid);
     if (iret != 0)
     {
-        LOG_ERROR("worker_connection_mgr alloc_connection(%d,%llu) failed iret %d", fd, gid, iret);
+        LOG_ERROR("worker_connection_mgr alloc_connection({},{}) failed iret {}", fd, gid, iret);
         close_client_fd(fd);
         return;
     }
@@ -647,7 +647,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
             if (!ssl_err && 1 != SSL_set_fd(ssl_instance, fd))
             {
                 ssl_err = true;
-                LOG_ERROR("SSL_set_fd error %s", ERR_error_string(ERR_get_error(), nullptr));
+                LOG_ERROR("SSL_set_fd error {}", ERR_error_string(ERR_get_error(), nullptr));
             }
 
             if (!ssl_err && ssl_instance)
@@ -674,26 +674,26 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                                                                                                                auto conn = this->worker_connection_mgr->get_conn_by_gid(timer_instance.get_id());
                                                                                                                if (!conn)
                                                                                                                {
-                                                                                                                   LOG_DEBUG("timer exe can not found conn fd %d gid %llu", fd, timer_instance.get_id());
+                                                                                                                   LOG_DEBUG("timer exe can not found conn fd {} gid {}", fd, timer_instance.get_id());
                                                                                                                    return;
                                                                                                                }
                                                                                                                if (conn->ctx_ptr->get_app_layer_notified())
                                                                                                                {
-                                                                                                                   LOG_DEBUG("timer get_app_layer_notified true, fd %d timer gid %llu", fd, timer_instance.get_id());
+                                                                                                                   LOG_DEBUG("timer get_app_layer_notified true, fd {} timer gid {}", fd, timer_instance.get_id());
                                                                                                                    return;
                                                                                                                }
                                                                                                                this->m_timeout_fd.insert(fd);
-                                                                                                               LOG_ERROR("timeout fd %d timer gid %llu", fd, timer_instance.get_id());
+                                                                                                               LOG_ERROR("timeout fd {} timer gid {}", fd, timer_instance.get_id());
                                                                                                            });
             if (new_timeout_timer == nullptr)
             {
-                LOG_ERROR("create new_timeout_timer failed conn gid %llu", conn->get_gid());
+                LOG_ERROR("create new_timeout_timer failed conn gid {}", conn->get_gid());
                 close_client_fd(fd);
                 return;
             }
             if (nullptr == this->m_conn_timeout_timer_manager.add(new_timeout_timer))
             {
-                LOG_ERROR("conn_timeout_timer_manager.add(new_timeout_timer) failed conn gid %llu", conn->get_gid());
+                LOG_ERROR("conn_timeout_timer_manager.add(new_timeout_timer) failed conn gid {}", conn->get_gid());
                 close_client_fd(fd);
                 return;
             }
@@ -719,7 +719,7 @@ int worker::send_client_forward_message(uint64_t source_gid, const std::set<uint
 {
     if (avant::global::tunnel_id::get().hash_gid_2_worker_tunnel_id(source_gid) != avant::global::tunnel_id::get().get_worker_tunnel_id(this->get_worker_idx()))
     {
-        LOG_ERROR("source id %llu err", source_gid);
+        LOG_ERROR("source id {} err", source_gid);
         return -1;
     }
 

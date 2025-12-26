@@ -137,7 +137,7 @@ void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_
         ctx.tunnel_forward(std::vector<int>{avant::global::tunnel_id::get().get_other_tunnel_id()},
                            avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION));
     }
-    // LOG_DEBUG("http_app new socket gid %llu", ctx.get_conn_gid());
+    // LOG_DEBUG("http_app new socket gid {}", ctx.get_conn_gid());
 }
 
 void http_app::process_connection(avant::connection::http_ctx &ctx)
@@ -150,7 +150,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             avant_http_app_reponse *reponse_ptr = (avant_http_app_reponse *)ctx.ptr;
             reponse_ptr->destory();
 
-            // LOG_DEBUG("reponse_ptr->destory() conngid %llu", ctx.get_conn_gid());
+            // LOG_DEBUG("reponse_ptr->destory() conngid {}", ctx.get_conn_gid());
             delete reponse_ptr;
             ctx.ptr = nullptr;
         }
@@ -267,13 +267,13 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         std::string url;
         if (!utility::url::unescape_path(ctx.url, url))
         {
-            LOG_ERROR("url::unescape_path false %s", ctx.url.c_str());
+            LOG_ERROR("url::unescape_path false {}", ctx.url.c_str());
             return_404(ctx);
             ctx.set_response_end(true);
             return;
         }
 
-        // LOG_DEBUG("HttpUrl %s", url.c_str());
+        LOG_DEBUG("HttpUrl {}", url.c_str());
 
         auto find_res = url.find("..");
         if (std::string::npos != find_res)
@@ -291,7 +291,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         }
         catch (std::runtime_error &e)
         {
-            LOG_ERROR("utility::url url_obj(url) error %s", e.what());
+            LOG_ERROR("utility::url url_obj(url) error {}", e.what());
             return_404(ctx);
             ctx.set_response_end(true);
             return;
@@ -332,7 +332,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             std::string now_etag, now_last_modify_date;
             if (!generate_etag_for_regular_file(t_path, now_etag, now_last_modify_date))
             {
-                LOG_ERROR("generate_etag_for_regular_file failed %s", t_path.c_str());
+                LOG_ERROR("generate_etag_for_regular_file failed {}", t_path.c_str());
             }
 
             // std::cout << "now_etag: " << now_etag << std::endl;
@@ -386,7 +386,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             response_ptr->ptr = ::fopen(t_path.c_str(), "r");
             if (response_ptr->ptr == NULL)
             {
-                LOG_ERROR("fopen(%s, r) failed", t_path.c_str());
+                LOG_ERROR("fopen({}, r) failed", t_path.c_str());
                 return_404(ctx);
                 ctx.set_response_end(true);
                 return;
@@ -471,7 +471,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
             catch (const std::filesystem::filesystem_error &ex)
             {
-                LOG_ERROR("%s", ex.what());
+                LOG_ERROR("{}", ex.what());
             }
 
             string body;
@@ -530,7 +530,7 @@ int http_app::on_body_before(avant::connection::http_ctx &ctx, const char *at, s
 
     if (body_size + length > max_body_size)
     {
-        LOG_ERROR("body_size[%zu] + length[%zu] > max_body_size[%zu]", body_size, length, max_body_size);
+        LOG_ERROR("body_size[{}] + length[{}] > max_body_size[{}]", body_size, length, max_body_size);
         return -1;
     }
 
@@ -551,8 +551,8 @@ int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
 
     if (body_size > max_body_size)
     {
-        LOG_ERROR("recv_buffer_size %zu length %zu body_size %zu", recv_buffer_size, length, body_size);
-        LOG_ERROR("http_app::on_body body_size > %zu", max_body_size);
+        LOG_ERROR("recv_buffer_size {} length {} body_size {}", recv_buffer_size, length, body_size);
+        LOG_ERROR("http_app::on_body body_size > {}", max_body_size);
         return -1;
     }
 
@@ -567,7 +567,7 @@ void http_app::on_main_init(avant::server::server &server_obj)
 
 void http_app::on_worker_init(avant::workers::worker &worker_obj)
 {
-    LOG_ERROR("http_app::on_worker_init %d", worker_obj.get_worker_idx());
+    LOG_ERROR("http_app::on_worker_init {}", worker_obj.get_worker_idx());
     utility::singleton<lua_plugin>::instance()->on_worker_init(worker_obj.get_worker_idx());
 }
 
@@ -579,7 +579,7 @@ void http_app::on_main_stop(avant::server::server &server_obj)
 
 void http_app::on_worker_stop(avant::workers::worker &worker_obj)
 {
-    LOG_ERROR("http_app::on_worker_stop %d", worker_obj.get_worker_idx());
+    LOG_ERROR("http_app::on_worker_stop {}", worker_obj.get_worker_idx());
     utility::singleton<lua_plugin>::instance()->on_worker_stop(worker_obj.get_worker_idx());
 }
 
@@ -604,11 +604,11 @@ void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoP
             LOG_ERROR("proto::parse(other2worker_test, package) failed");
             return;
         }
-        // LOG_ERROR("worker_id %d PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time %llu", worker_obj.get_worker_idx(), other2worker_test.time());
+        // LOG_ERROR("worker_id {} PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time {}", worker_obj.get_worker_idx(), other2worker_test.time());
     }
     else
     {
-        LOG_ERROR("not exist handler %d", cmd);
+        LOG_ERROR("not exist handler {}", cmd);
     }
 }
 

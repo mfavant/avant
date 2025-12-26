@@ -141,7 +141,7 @@ void websocket_ctx::on_event(uint32_t event)
         {
             if (socket_ptr)
             {
-                // LOG_DEBUG("websocket_ctx socket close_callback fd %d", socket_ptr->get_fd());
+                // LOG_DEBUG("websocket_ctx socket close_callback fd {}", socket_ptr->get_fd());
             }
         };
     }
@@ -160,7 +160,7 @@ void websocket_ctx::on_event(uint32_t event)
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
         }
         this->worker_ptr->close_client_fd(socket_ptr->get_fd());
@@ -197,7 +197,7 @@ void websocket_ctx::on_event(uint32_t event)
             }
             else
             {
-                LOG_ERROR("SSL_accept ssl_status[%d] error: %s", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
+                LOG_ERROR("SSL_accept ssl_status[{}] error: {}", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
                 conn_ptr->is_close = true;
                 event_mod(nullptr, event::event_poller::RWE, false);
                 return;
@@ -331,7 +331,7 @@ void websocket_ctx::on_event(uint32_t event)
                 }
                 catch (const std::exception &e)
                 {
-                    LOG_ERROR("websocket_app::on_new_connection err %s", e.what());
+                    LOG_ERROR("websocket_app::on_new_connection err {}", e.what());
                     err = true;
                 }
                 if (err)
@@ -406,7 +406,7 @@ void websocket_ctx::on_event(uint32_t event)
         }
         catch (const std::exception &e)
         {
-            LOG_ERROR("avant::app::websocket_app::on_process_connection %s", e.what());
+            LOG_ERROR("avant::app::websocket_app::on_process_connection {}", e.what());
             err = true;
         }
         if (err)
@@ -460,7 +460,7 @@ void websocket_ctx::try_send_flush()
         {
             if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
             {
-                // LOG_ERROR("socket_ptr->send len %d oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK", len);
+                // LOG_ERROR("socket_ptr->send len {} oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK", len);
                 conn_ptr->is_close = true;
             }
             event_mod(nullptr, event::event_poller::RWE, false);
@@ -473,14 +473,14 @@ int websocket_ctx::send_data(const std::string &data, bool flush /*= true*/)
 {
     if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
     {
-        // LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data %llu", this->conn_ptr->gid);
+        // LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data {}", this->conn_ptr->gid);
         return -1;
     }
 
     // need conn ready, forbiden to send_data
     if (!this->conn_ptr->is_ready)
     {
-        // LOG_ERROR("!this->conn_ptr->is_ready %llu", this->conn_ptr->gid);
+        // LOG_ERROR("!this->conn_ptr->is_ready {}", this->conn_ptr->gid);
         return -2;
     }
 

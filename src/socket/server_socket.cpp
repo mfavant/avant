@@ -19,7 +19,7 @@ server_socket::server_socket(const string &ip, int port, int max_connections) : 
     m_sockfd = socket::create_tcp_socket(ip);
     if (m_sockfd < 0)
     {
-        LOG_ERROR("create server socket error: errno=%d errstr=%s", errno, strerror(errno));
+        LOG_ERROR("create server socket error: errno={} errstr={}", errno, strerror(errno));
         return;
     }
     set_non_blocking();

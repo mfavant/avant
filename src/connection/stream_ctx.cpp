@@ -36,7 +36,7 @@ void stream_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_
         catch (const std::exception &e)
         {
             err = true;
-            LOG_ERROR(e.what());
+            LOG_ERROR("{}", e.what());
         }
     }
 
@@ -64,7 +64,7 @@ void stream_ctx::on_event(uint32_t event)
         {
             if (socket_ptr)
             {
-                // LOG_DEBUG("stream_ctx socket close_callback fd %d", socket_ptr->get_fd());
+                // LOG_DEBUG("stream_ctx socket close_callback fd {}", socket_ptr->get_fd());
             }
         };
     }
@@ -84,7 +84,7 @@ void stream_ctx::on_event(uint32_t event)
             }
             catch (const std::exception &e)
             {
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
         }
 
@@ -112,7 +112,7 @@ void stream_ctx::on_event(uint32_t event)
             catch (const std::exception &e)
             {
                 err = true;
-                LOG_ERROR(e.what());
+                LOG_ERROR("{}", e.what());
             }
             if (err)
             {
@@ -143,7 +143,7 @@ void stream_ctx::on_event(uint32_t event)
             }
             else
             {
-                LOG_ERROR("SSL_accept ssl_status[%d] error: %s", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
+                LOG_ERROR("SSL_accept ssl_status[{}] error: {}", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
                 conn_ptr->is_close = true;
                 event_mod(nullptr, event::event_poller::RWE, false);
                 return;
@@ -199,7 +199,7 @@ void stream_ctx::on_event(uint32_t event)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR("avant::app::stream_app::on_process_connection %s", e.what());
+        LOG_ERROR("avant::app::stream_app::on_process_connection {}", e.what());
         err = true;
     }
     if (err)
@@ -241,7 +241,7 @@ void stream_ctx::try_send_flush()
         {
             if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
             {
-                // LOG_ERROR("stream ctx client sock send data oper_errno %d", oper_errno);
+                // LOG_ERROR("stream ctx client sock send data oper_errno {}", oper_errno);
                 conn_ptr->is_close = true;
             }
             event_mod(nullptr, event::event_poller::RWE, false);
@@ -254,14 +254,14 @@ int stream_ctx::send_data(const std::string &data, bool flush /*= true*/)
 {
     if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
     {
-        // LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data %llu", this->conn_ptr->gid);
+        // LOG_ERROR("this->conn_ptr->is_close || this->conn_ptr->closed_flag forbiden send_data {}", this->conn_ptr->gid);
         return -1;
     }
 
     // need conn ready, forbiden to send_data
     if (!this->conn_ptr->is_ready)
     {
-        // LOG_ERROR("!this->conn_ptr->is_ready %llu", this->conn_ptr->gid);
+        // LOG_ERROR("!this->conn_ptr->is_ready {}", this->conn_ptr->gid);
         return -2;
     }
 

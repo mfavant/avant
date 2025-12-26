@@ -29,7 +29,7 @@ void tick::on_main_tick(avant::server::server &server_obj)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }
 
@@ -54,7 +54,7 @@ void tick::on_worker_tick(avant::workers::worker &worker_obj)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }
 
@@ -66,6 +66,6 @@ void tick::on_other_tick(avant::workers::other &other_obj)
     }
     catch (const std::exception &e)
     {
-        LOG_ERROR(e.what());
+        LOG_ERROR("{}", e.what());
     }
 }
