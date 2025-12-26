@@ -104,7 +104,7 @@ void logger::rotate_log_file(std::time_t ticks)
     m_has_valid_tm = true;
 }
 
-void logger::debug(const char *file, int line, const char *format, ...)
+void logger::debug(const char *file, int line, const char *func, const char *format, ...)
 {
     if (m_log_level > DEBUG)
     {
@@ -112,11 +112,11 @@ void logger::debug(const char *file, int line, const char *format, ...)
     }
     va_list arg_ptr;
     va_start(arg_ptr, format);
-    log(DEBUG, file, line, format, arg_ptr);
+    log(DEBUG, file, line, func, format, arg_ptr);
     va_end(arg_ptr);
 }
 
-void logger::info(const char *file, int line, const char *format, ...)
+void logger::info(const char *file, int line, const char *func, const char *format, ...)
 {
     if (m_log_level > INFO)
     {
@@ -124,11 +124,11 @@ void logger::info(const char *file, int line, const char *format, ...)
     }
     va_list arg_ptr;
     va_start(arg_ptr, format);
-    log(INFO, file, line, format, arg_ptr);
+    log(INFO, file, line, func, format, arg_ptr);
     va_end(arg_ptr);
 }
 
-void logger::warn(const char *file, int line, const char *format, ...)
+void logger::warn(const char *file, int line, const char *func, const char *format, ...)
 {
     if (m_log_level > WARN)
     {
@@ -136,11 +136,11 @@ void logger::warn(const char *file, int line, const char *format, ...)
     }
     va_list arg_ptr;
     va_start(arg_ptr, format);
-    log(WARN, file, line, format, arg_ptr);
+    log(WARN, file, line, func, format, arg_ptr);
     va_end(arg_ptr);
 }
 
-void logger::error(const char *file, int line, const char *format, ...)
+void logger::error(const char *file, int line, const char *func, const char *format, ...)
 {
     if (m_log_level > ERROR)
     {
@@ -148,11 +148,11 @@ void logger::error(const char *file, int line, const char *format, ...)
     }
     va_list arg_ptr;
     va_start(arg_ptr, format);
-    log(ERROR, file, line, format, arg_ptr);
+    log(ERROR, file, line, func, format, arg_ptr);
     va_end(arg_ptr);
 }
 
-void logger::fatal(const char *file, int line, const char *format, ...)
+void logger::fatal(const char *file, int line, const char *func, const char *format, ...)
 {
     if (m_log_level > FATAL)
     {
@@ -160,11 +160,11 @@ void logger::fatal(const char *file, int line, const char *format, ...)
     }
     va_list arg_ptr;
     va_start(arg_ptr, format);
-    log(FATAL, file, line, format, arg_ptr);
+    log(FATAL, file, line, func, format, arg_ptr);
     va_end(arg_ptr);
 }
 
-void logger::log(flag f, const char *file, int line, const char *format, va_list arg_ptr)
+void logger::log(flag f, const char *file, int line, const char *func, const char *format, va_list arg_ptr)
 {
     std::lock_guard<std::mutex> lock(m_log_mutex);
 
@@ -188,7 +188,7 @@ void logger::log(flag f, const char *file, int line, const char *format, va_list
     // using log file
     fprintf(m_fp, "%s  ", buf);
     fprintf(m_fp, "%s  ", s_flag[f]); // print flag
-    fprintf(m_fp, "%s:%d  ", file, line);
+    fprintf(m_fp, "%s:%d %s  ", file, line, func);
     vfprintf(m_fp, format, arg_ptr); // formating print
     fprintf(m_fp, "\r\n");
     // free lock

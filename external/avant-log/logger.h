@@ -55,53 +55,58 @@ namespace avant
              *
              * @param file content
              * @param line line number
+             * @param func
              * @param format
              * @param ... param
              */
-            void debug(const char *file, int line, const char *format, ...);
+            void debug(const char *file, int line, const char *func, const char *format, ...);
 
             /**
              * @brief out log in info
              *
              * @param file content
              * @param line line number
+             * @param func
              * @param format
              * @param ... param
              */
-            void info(const char *file, int line, const char *format, ...);
+            void info(const char *file, int line, const char *func, const char *format, ...);
 
             /**
              * @brief out log in warn
              *
              * @param file content
              * @param line line number
+             * @param func
              * @param format
              * @param ... param
              */
-            void warn(const char *file, int line, const char *format, ...);
+            void warn(const char *file, int line, const char *func, const char *format, ...);
 
             /**
              * @brief out log in error
              *
              * @param file content
              * @param line line number
+             * @param func
              * @param format
              * @param ... param
              */
-            void error(const char *file, int line, const char *format, ...);
+            void error(const char *file, int line, const char *func, const char *format, ...);
 
             /**
              * @brief out log in fatlal
              *
              * @param file content
              * @param line line number
+             * @param func
              * @param format
              * @param ... param
              */
-            void fatal(const char *file, int line, const char *format, ...);
+            void fatal(const char *file, int line, const char *func, const char *format, ...);
 
         protected:
-            void log(flag f, const char *file, int line, const char *format, va_list arg_ptr);
+            void log(flag f, const char *file, int line, const char *func, const char *format, va_list arg_ptr);
             void rotate_log_file(std::time_t ticks);
 
         protected:
@@ -121,11 +126,11 @@ namespace avant
     }
 }
 
-#define LOG_DEBUG(...) avant::log::logger::instance().debug(__FILE__, __LINE__, __VA_ARGS__)
-#define LOG_INFO(...) avant::log::logger::instance().info(__FILE__, __LINE__, __VA_ARGS__)
-#define LOG_WARN(...) avant::log::logger::instance().warn(__FILE__, __LINE__, __VA_ARGS__)
-#define LOG_ERROR(...) avant::log::logger::instance().error(__FILE__, __LINE__, __VA_ARGS__)
-#define LOG_FATAL(...) avant::log::logger::instance().fatal(__FILE__, __LINE__, __VA_ARGS__)
+#define LOG_DEBUG(...) avant::log::logger::instance().debug(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#define LOG_INFO(...) avant::log::logger::instance().info(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#define LOG_WARN(...) avant::log::logger::instance().warn(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#define LOG_ERROR(...) avant::log::logger::instance().error(__FILE__, __LINE__, __func__, __VA_ARGS__)
+#define LOG_FATAL(...) avant::log::logger::instance().fatal(__FILE__, __LINE__, __func__, __VA_ARGS__)
 
 #define ASSERT_LOG_EXIT(EXPR) \
     if (!(EXPR))              \
