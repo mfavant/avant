@@ -2,7 +2,7 @@
 
 #include "workers/worker.h"
 #include "connection/connection.h"
-#include <http-parser/http_parser.h>
+#include <llhttp/llhttp.h>
 #include <memory>
 #include <string>
 #include <map>
@@ -55,7 +55,7 @@ namespace avant::connection
         }
 
     public:
-        static std::shared_ptr<http_parser_settings> settings;
+        static std::shared_ptr<llhttp_settings_t> settings;
         static void init_http_settings();
 
     protected:
@@ -74,7 +74,7 @@ namespace avant::connection
         bool keep_alive{false};
 
     private:
-        http_parser http_parser_obj;
+        llhttp_t http_parser_obj;
         bool recv_end{false};
         bool process_end{false};
         bool response_end{false};

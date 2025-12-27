@@ -1,5 +1,7 @@
 message("external start")
-add_library(avant-http-parser SHARED "./http-parser/http_parser.c")
+
+file(GLOB_RECURSE SOURCE_LLHTTP "./llhttp/*.c")
+add_library(avant-llhttp SHARED ${SOURCE_LLHTTP})
 
 file(GLOB_RECURSE SOURCE_INIFILE "./avant-inifile/*.cpp")
 add_library(avant-inifile SHARED ${SOURCE_INIFILE})

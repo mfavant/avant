@@ -3,7 +3,7 @@
 #include "workers/worker.h"
 #include "connection/connection.h"
 #include <memory>
-#include <http-parser/http_parser.h>
+#include <llhttp/llhttp.h>
 #include <memory>
 #include <string>
 #include <map>
@@ -31,7 +31,7 @@ namespace avant::connection
         void try_send_flush();
 
     public:
-        static std::shared_ptr<http_parser_settings> settings;
+        static std::shared_ptr<llhttp_settings_t> settings;
         static void init_ws_http_settings();
 
     protected:
@@ -90,6 +90,6 @@ namespace avant::connection
         void *ptr{nullptr};
 
     private:
-        http_parser http_parser_obj;
+        llhttp_t http_parser_obj;
     };
 }

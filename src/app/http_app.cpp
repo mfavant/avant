@@ -273,7 +273,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             return;
         }
 
-        LOG_DEBUG("HttpUrl {}", url.c_str());
+        // LOG_DEBUG("HttpUrl {}", url.c_str());
 
         auto find_res = url.find("..");
         if (std::string::npos != find_res)

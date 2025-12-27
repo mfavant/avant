@@ -11,7 +11,7 @@
 
 using namespace avant::connection;
 
-std::shared_ptr<http_parser_settings> websocket_ctx::settings;
+std::shared_ptr<llhttp_settings_t> websocket_ctx::settings;
 
 void websocket_ctx::init_ws_http_settings()
 {
@@ -19,40 +19,41 @@ void websocket_ctx::init_ws_http_settings()
     {
         return;
     }
-    websocket_ctx::settings.reset(new http_parser_settings);
 
-    settings->on_message_begin = [](http_parser *parser) -> auto
+    llhttp_settings_t *settings_ptr = new llhttp_settings_t;
+
+    llhttp_settings_init(settings_ptr);
+
+    websocket_ctx::settings.reset(settings_ptr);
+
+    websocket_ctx::settings->on_message_begin = [](llhttp_t *parser) -> auto
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
-        http_method method = (http_method)parser->method;
-        ctx->method = http_method_str(method);
-        if (ctx->method != "GET")
-        {
-            return -1;
-        }
+        llhttp_method_t method = (llhttp_method_t)parser->method;
+        ctx->method = llhttp_method_name(method);
         return 0;
     };
 
-    settings->on_url = [](http_parser *parser, const char *at, size_t length) -> auto
+    websocket_ctx::settings->on_url = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         ctx->url = std::string(at, length);
         return 0;
     };
 
-    settings->on_status = [](http_parser *parser, const char *at, size_t length) -> auto
+    websocket_ctx::settings->on_status = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         return 0;
     };
 
-    settings->on_header_field = [](http_parser *parser, const char *at, size_t length) -> auto
+    websocket_ctx::settings->on_header_field = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         ctx->head_field_tmp = std::string(at, length);
         return 0;
     };
 
-    settings->on_header_value = [](http_parser *parser, const char *at, size_t length) -> auto
+    websocket_ctx::settings->on_header_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         std::string value(at, length);
@@ -60,13 +61,13 @@ void websocket_ctx::init_ws_http_settings()
         return 0;
     };
 
-    settings->on_headers_complete = [](http_parser *parser) -> auto
+    websocket_ctx::settings->on_headers_complete = [](llhttp_t *parser) -> auto
     {
         // websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         return 0;
     };
 
-    settings->on_body = [](http_parser *parser, const char *at, size_t length) -> auto
+    websocket_ctx::settings->on_body = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         if (length > 0)
         {
@@ -75,19 +76,19 @@ void websocket_ctx::init_ws_http_settings()
         return 0;
     };
 
-    settings->on_message_complete = [](http_parser *parser) -> auto
+    websocket_ctx::settings->on_message_complete = [](llhttp_t *parser) -> auto
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         ctx->http_processed = true;
         return 0;
     };
 
-    settings->on_chunk_header = [](http_parser *parser) -> auto
+    websocket_ctx::settings->on_chunk_header = [](llhttp_t *parser) -> auto
     {
         return -1;
     };
 
-    settings->on_chunk_complete = [](http_parser *parser) -> auto
+    websocket_ctx::settings->on_chunk_complete = [](llhttp_t *parser) -> auto
     {
         return -1;
     };
@@ -120,7 +121,7 @@ void websocket_ctx::on_create(connection &conn_obj, avant::workers::worker &work
     this->frame_first_opcode = 0;
     this->frame_payload_data.clear();
     this->ptr = nullptr;
-    http_parser_init(&this->http_parser_obj, HTTP_REQUEST);
+    llhttp_init(&this->http_parser_obj, HTTP_REQUEST, websocket_ctx::settings.get());
     this->http_parser_obj.data = this;
 }
 
@@ -239,19 +240,27 @@ void websocket_ctx::on_event(uint32_t event)
                 else if (len > 0)
                 {
                     this->conn_ptr->record_recv_bytes(len);
-                    int nparsed = http_parser_execute(&this->http_parser_obj, websocket_ctx::settings.get(), buffer + buffer_len, len);
-                    buffer_len += len;
-                    if (this->http_parser_obj.upgrade)
+                    llhttp_errno_t res_errno = llhttp_execute(&this->http_parser_obj, buffer + buffer_len, len);
+
+                    if (llhttp_get_upgrade(&this->http_parser_obj))
                     {
+                        buffer_len += len;
                         this->is_upgrade = true;
                     }
-                    else if (nparsed != len)
+                    else
                     {
-                        LOG_ERROR("nparsed != len");
-                        len = 0;
-                        conn_ptr->is_close = true;
-                        event_mod(nullptr, event::event_poller::RWE, false);
-                        return;
+                        if (res_errno != llhttp_errno::HPE_OK)
+                        {
+                            LOG_ERROR("websocket res_errno {}", (int)res_errno);
+                            len = 0;
+                            conn_ptr->is_close = true;
+                            event_mod(nullptr, event::event_poller::RWE, false);
+                            return;
+                        }
+                        else
+                        {
+                            buffer_len += len;
+                        }
                     }
                 }
                 else

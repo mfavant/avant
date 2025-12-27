@@ -8,7 +8,7 @@
 
 using namespace avant::connection;
 
-std::shared_ptr<http_parser_settings> http_ctx::settings;
+std::shared_ptr<llhttp_settings_t> http_ctx::settings;
 
 void http_ctx::init_http_settings()
 {
@@ -16,37 +16,40 @@ void http_ctx::init_http_settings()
     {
         return;
     }
-    auto settings_ptr = new http_parser_settings;
+    llhttp_settings_t *settings_ptr = new llhttp_settings_t;
+
+    llhttp_settings_init(settings_ptr);
+
     http_ctx::settings.reset(settings_ptr);
 
-    http_ctx::settings->on_message_begin = [](http_parser *parser) -> auto
+    http_ctx::settings->on_message_begin = [](llhttp_t *parser) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
-        http_method method = (http_method)parser->method;
-        t_http_ctx->method = http_method_str(method);
+        llhttp_method_t method = (llhttp_method_t)parser->method;
+        t_http_ctx->method = llhttp_method_name(method);
         return 0;
     };
 
-    http_ctx::settings->on_url = [](http_parser *parser, const char *at, size_t length) -> auto
+    http_ctx::settings->on_url = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->url = std::string(at, length);
         return 0;
     };
 
-    http_ctx::settings->on_status = [](http_parser *parser, const char *at, size_t length) -> auto
+    http_ctx::settings->on_status = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         return 0;
     };
 
-    http_ctx::settings->on_header_field = [](http_parser *parser, const char *at, size_t length) -> auto
+    http_ctx::settings->on_header_field = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->head_field_tmp = std::string(at, length);
         return 0;
     };
 
-    http_ctx::settings->on_header_value = [](http_parser *parser, const char *at, size_t length) -> auto
+    http_ctx::settings->on_header_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         std::string value(at, length);
@@ -54,12 +57,12 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_headers_complete = [](http_parser *parser) -> auto
+    http_ctx::settings->on_headers_complete = [](llhttp_t *parser) -> auto
     {
         return 0;
     };
 
-    http_ctx::settings->on_body = [](http_parser *parser, const char *at, size_t length) -> auto
+    http_ctx::settings->on_body = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         int iret = 0;
@@ -92,19 +95,19 @@ void http_ctx::init_http_settings()
         return iret;
     };
 
-    http_ctx::settings->on_message_complete = [](http_parser *parser) -> auto
+    http_ctx::settings->on_message_complete = [](llhttp_t *parser) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->set_recv_end(true);
         return 0;
     };
 
-    http_ctx::settings->on_chunk_header = [](http_parser *parser) -> auto
+    http_ctx::settings->on_chunk_header = [](llhttp_t *parser) -> auto
     {
         return 0;
     };
 
-    http_ctx::settings->on_chunk_complete = [](http_parser *parser) -> auto
+    http_ctx::settings->on_chunk_complete = [](llhttp_t *parser) -> auto
     {
         return 0;
     };
@@ -131,7 +134,7 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
     this->write_end_callback = nullptr;
     this->destory_callback = nullptr;
     this->ptr = nullptr;
-    http_parser_init(&this->http_parser_obj, HTTP_REQUEST);
+    llhttp_init(&this->http_parser_obj, HTTP_REQUEST, http_ctx::settings.get());
     this->http_parser_obj.data = this;
     this->recv_end = false;
     this->process_end = false;
@@ -300,17 +303,25 @@ void http_ctx::on_event(uint32_t event)
             else if (len > 0)
             {
                 this->conn_ptr->record_recv_bytes(len);
-                int nparsed = http_parser_execute(&this->http_parser_obj, http_ctx::settings.get(), buffer + buffer_len, len);
-                buffer_len += len;
-                if (this->http_parser_obj.upgrade)
+                llhttp_errno_t res_errno = llhttp_execute(&this->http_parser_obj, buffer + buffer_len, len);
+
+                if (llhttp_get_upgrade(&this->http_parser_obj))
                 {
+                    LOG_ERROR("http is upgrade");
                 }
-                else if (nparsed != len) // err
+                else
                 {
-                    LOG_ERROR("nparsed != len");
-                    len = 0;
-                    this->set_everything_end(true);
-                    break;
+                    if (res_errno != llhttp_errno::HPE_OK)
+                    {
+                        LOG_ERROR("res_errno {}", int(res_errno));
+                        len = 0;
+                        this->set_everything_end(true);
+                        break;
+                    }
+                    else
+                    {
+                        buffer_len += len;
+                    }
                 }
             }
             else

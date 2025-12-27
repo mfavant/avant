@@ -69,7 +69,7 @@ kill PID
 
 ## App-Layer
 
-support tcp keep-alive stream (protobuf) and http app (http-parser)、websocket
+support tcp keep-alive stream (protobuf) and http app (llhttp)、websocket
 
 1. [framework config](https://github.com/crust-hub/avant/blob/main/bin/config/main.ini)
 2. [stream protobuf app](https://github.com/crust-hub/avant/blob/main/src/app/stream_app.cpp)
@@ -112,7 +112,6 @@ wrk -c {{connection_num}} -t {{threads}} -d60s --header "Connection: keep-alive"
 
 ## Third-Party
 
-1、[@nodejs/http-parser](https://github.com/nodejs/http-parser)  2、[@lua/lua](https://github.com/lua/lua)  
+1、[@nodejs/llhttp](https://github.com/nodejs/llhttp)  2、[@lua/lua](https://github.com/lua/lua)  
 3、[@protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf)  4、[@openssl/openssl](https://github.com/openssl/openssl)  
 5、[@madler/zlib](https://github.com/madler/zlib)  6、[@homer6/url](https://github.com/homer6/url)
-
