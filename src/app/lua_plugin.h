@@ -2,6 +2,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <functional>
 #include "proto/proto_util.h"
 
 extern "C"
