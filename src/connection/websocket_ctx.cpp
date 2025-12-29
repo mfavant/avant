@@ -28,28 +28,108 @@ void websocket_ctx::init_ws_http_settings()
 
     websocket_ctx::settings->on_message_begin = [](llhttp_t *parser) -> auto
     {
+        // LOG_ERROR("on_message_begin");
+        return 0;
+    };
+
+    websocket_ctx::settings->on_protocol = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
-        llhttp_method_t method = (llhttp_method_t)parser->method;
-        ctx->method = llhttp_method_name(method);
+        ctx->protocol += std::string(at, length);
+        if (ctx->protocol.size() > 10)
+        {
+            LOG_ERROR("websocket protocol.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_protocol");
+        return 0;
+    };
+
+    websocket_ctx::settings->on_protocol_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_protocol_complete");
         return 0;
     };
 
     websocket_ctx::settings->on_url = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
-        ctx->url = std::string(at, length);
+        ctx->url += std::string(at, length);
+        // LOG_ERROR("on_url {}", ctx->url.c_str());
+
+        if (ctx->url.size() > 10240)
+        {
+            LOG_ERROR("websocket url.size() too big");
+            return -1;
+        }
+
         return 0;
     };
 
-    websocket_ctx::settings->on_status = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    websocket_ctx::settings->on_url_complete = [](llhttp_t *parser) -> auto
     {
+        // LOG_ERROR("on_url_complete");
+        return 0;
+    };
+
+    websocket_ctx::settings->on_method = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
+        ctx->method += std::string(at, length);
+        // LOG_ERROR("on_method {}", ctx->method.c_str());
+
+        if (ctx->method.size() > 10)
+        {
+            LOG_ERROR("websocket method.size() too big");
+            return -1;
+        }
+
+        return 0;
+    };
+
+    websocket_ctx::settings->on_method_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_method_complete");
+        return 0;
+    };
+
+    websocket_ctx::settings->on_version = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        websocket_ctx *ctc = static_cast<websocket_ctx *>(parser->data);
+        ctc->version += std::string(at, length);
+        if (ctc->version.size() > 10)
+        {
+            LOG_ERROR("websocket version.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_version");
+        return 0;
+    };
+
+    websocket_ctx::settings->on_version_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_version_complete");
         return 0;
     };
 
     websocket_ctx::settings->on_header_field = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
-        ctx->head_field_tmp = std::string(at, length);
+        ctx->head_field_tmp += std::string(at, length);
+        if (ctx->head_field_tmp.size() > 1024)
+        {
+            LOG_ERROR("websocket head_field_tmp.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_header_field {}", ctx->head_field_tmp.c_str());
+        return 0;
+    };
+
+    websocket_ctx::settings->on_header_field_complete = [](llhttp_t *parser) -> auto
+    {
+        websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
+        ctx->head_value_tmp.clear();
+        // LOG_ERROR("on_header_field_complete");
         return 0;
     };
 
@@ -57,20 +137,73 @@ void websocket_ctx::init_ws_http_settings()
     {
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         std::string value(at, length);
-        ctx->add_header(ctx->head_field_tmp, value);
+        ctx->head_value_tmp += value;
+        if (ctx->head_value_tmp.size() > 20480)
+        {
+            LOG_ERROR("websocket head_value_tmp.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_header_value");
+        return 0;
+    };
+
+    websocket_ctx::settings->on_header_value_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_header_value_complete");
+        websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
+        ctx->add_header(ctx->head_field_tmp, ctx->head_value_tmp);
+        ctx->head_field_tmp.clear();
+        ctx->head_value_tmp.clear();
         return 0;
     };
 
     websocket_ctx::settings->on_headers_complete = [](llhttp_t *parser) -> auto
     {
-        // websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
+        // LOG_ERROR("on_headers_complete");
         return 0;
+    };
+
+    websocket_ctx::settings->on_chunk_header = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("websocket on_chunk_header not supported");
+        return -1;
+    };
+
+    websocket_ctx::settings->on_chunk_complete = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("websocket on_chunk_complete not supported");
+        return -1;
+    };
+
+    websocket_ctx::settings->on_chunk_extension_name = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        LOG_ERROR("websocket on_chunk_extension_name not supported");
+        return -1;
+    };
+
+    websocket_ctx::settings->on_chunk_extension_name_complete = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("websocket on_chunk_extension_name_complete not supported");
+        return -1;
+    };
+
+    websocket_ctx::settings->on_chunk_extension_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        LOG_ERROR("websocket on_chunk_extension_value not supported");
+        return -1;
+    };
+
+    websocket_ctx::settings->on_chunk_extension_value_complete = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("websocket on_chunk_extension_value_complete not supported");
+        return -1;
     };
 
     websocket_ctx::settings->on_body = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         if (length > 0)
         {
+            LOG_ERROR("websocket on_body not supported");
             return -1;
         }
         return 0;
@@ -78,19 +211,10 @@ void websocket_ctx::init_ws_http_settings()
 
     websocket_ctx::settings->on_message_complete = [](llhttp_t *parser) -> auto
     {
+        // LOG_ERROR("on_message_complete");
         websocket_ctx *ctx = static_cast<websocket_ctx *>(parser->data);
         ctx->http_processed = true;
         return 0;
-    };
-
-    websocket_ctx::settings->on_chunk_header = [](llhttp_t *parser) -> auto
-    {
-        return -1;
-    };
-
-    websocket_ctx::settings->on_chunk_complete = [](llhttp_t *parser) -> auto
-    {
-        return -1;
     };
 }
 
@@ -110,10 +234,13 @@ void websocket_ctx::on_create(connection &conn_obj, avant::workers::worker &work
     this->worker_ptr = &worker_obj;
     this->url.clear();
     this->method.clear();
+    this->protocol.clear();
+    this->version.clear();
     this->sec_websocket_key.clear();
     this->sec_websocket_version.clear();
     this->headers.clear();
     this->head_field_tmp.clear();
+    this->head_value_tmp.clear();
     this->http_processed = false;
     this->everything_end = false;
     this->is_upgrade = false;
@@ -242,24 +369,20 @@ void websocket_ctx::on_event(uint32_t event)
                     this->conn_ptr->record_recv_bytes(len);
                     llhttp_errno_t res_errno = llhttp_execute(&this->http_parser_obj, buffer + buffer_len, len);
 
-                    if (llhttp_get_upgrade(&this->http_parser_obj))
+                    if (res_errno != llhttp_errno::HPE_OK && res_errno != llhttp_errno::HPE_PAUSED_UPGRADE)
                     {
-                        buffer_len += len;
-                        this->is_upgrade = true;
+                        LOG_ERROR("websocket res_errno {}", (int)res_errno);
+                        len = 0;
+                        conn_ptr->is_close = true;
+                        event_mod(nullptr, event::event_poller::RWE, false);
+                        return;
                     }
                     else
                     {
-                        if (res_errno != llhttp_errno::HPE_OK)
+                        buffer_len += len;
+                        if (llhttp_get_upgrade(&this->http_parser_obj))
                         {
-                            LOG_ERROR("websocket res_errno {}", (int)res_errno);
-                            len = 0;
-                            conn_ptr->is_close = true;
-                            event_mod(nullptr, event::event_poller::RWE, false);
-                            return;
-                        }
-                        else
-                        {
-                            buffer_len += len;
+                            this->is_upgrade = true;
                         }
                     }
                 }

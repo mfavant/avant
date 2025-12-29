@@ -24,28 +24,108 @@ void http_ctx::init_http_settings()
 
     http_ctx::settings->on_message_begin = [](llhttp_t *parser) -> auto
     {
+        // LOG_ERROR("on_message_begin");
+        return 0;
+    };
+
+    http_ctx::settings->on_protocol = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
-        llhttp_method_t method = (llhttp_method_t)parser->method;
-        t_http_ctx->method = llhttp_method_name(method);
+        t_http_ctx->protocol += std::string(at, length);
+        if (t_http_ctx->protocol.size() > 10)
+        {
+            LOG_ERROR("http protocol.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_protocol");
+        return 0;
+    };
+
+    http_ctx::settings->on_protocol_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_protocol_complete");
         return 0;
     };
 
     http_ctx::settings->on_url = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
-        t_http_ctx->url = std::string(at, length);
+        t_http_ctx->url += std::string(at, length);
+        // LOG_ERROR("on_url {}", t_http_ctx->url.c_str());
+
+        if (t_http_ctx->url.size() > 10240)
+        {
+            LOG_ERROR("http url.size() too big");
+            return -1;
+        }
+
         return 0;
     };
 
-    http_ctx::settings->on_status = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    http_ctx::settings->on_url_complete = [](llhttp_t *parser) -> auto
     {
+        // LOG_ERROR("on_url_complete");
+        return 0;
+    };
+
+    http_ctx::settings->on_method = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
+        t_http_ctx->method += std::string(at, length);
+        // LOG_ERROR("on_method {}", t_http_ctx->method.c_str());
+
+        if (t_http_ctx->method.size() > 10)
+        {
+            LOG_ERROR("http method.size() too big");
+            return -1;
+        }
+
+        return 0;
+    };
+
+    http_ctx::settings->on_method_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_method_complete");
+        return 0;
+    };
+
+    http_ctx::settings->on_version = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
+        t_http_ctx->version += std::string(at, length);
+        if (t_http_ctx->version.size() > 10)
+        {
+            LOG_ERROR("http version.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_version");
+        return 0;
+    };
+
+    http_ctx::settings->on_version_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_version_complete");
         return 0;
     };
 
     http_ctx::settings->on_header_field = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
-        t_http_ctx->head_field_tmp = std::string(at, length);
+        t_http_ctx->head_field_tmp += std::string(at, length);
+        if (t_http_ctx->head_field_tmp.size() > 1024)
+        {
+            LOG_ERROR("http head_field_tmp.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_header_field {}", t_http_ctx->head_field_tmp.c_str());
+        return 0;
+    };
+
+    http_ctx::settings->on_header_field_complete = [](llhttp_t *parser) -> auto
+    {
+        http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
+        t_http_ctx->head_value_tmp.clear();
+        // LOG_ERROR("on_header_field_complete");
         return 0;
     };
 
@@ -53,17 +133,71 @@ void http_ctx::init_http_settings()
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         std::string value(at, length);
-        t_http_ctx->add_header(t_http_ctx->head_field_tmp, value);
+        t_http_ctx->head_value_tmp += value;
+        if (t_http_ctx->head_value_tmp.size() > 20480)
+        {
+            LOG_ERROR("http head_value_tmp.size() too big");
+            return -1;
+        }
+        // LOG_ERROR("on_header_value");
+        return 0;
+    };
+
+    http_ctx::settings->on_header_value_complete = [](llhttp_t *parser) -> auto
+    {
+        // LOG_ERROR("on_header_value_complete");
+        http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
+        t_http_ctx->add_header(t_http_ctx->head_field_tmp, t_http_ctx->head_value_tmp);
+        t_http_ctx->head_field_tmp.clear();
+        t_http_ctx->head_value_tmp.clear();
         return 0;
     };
 
     http_ctx::settings->on_headers_complete = [](llhttp_t *parser) -> auto
     {
+        // LOG_ERROR("on_headers_complete");
         return 0;
+    };
+
+    http_ctx::settings->on_chunk_header = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("http on_chunk_header not supported");
+        return -1;
+    };
+
+    http_ctx::settings->on_chunk_complete = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("http on_chunk_complete not supported");
+        return -1;
+    };
+
+    http_ctx::settings->on_chunk_extension_name = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        LOG_ERROR("http on_chunk_extension_name not supported");
+        return -1;
+    };
+
+    http_ctx::settings->on_chunk_extension_name_complete = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("http on_chunk_extension_name_complete not supported");
+        return -1;
+    };
+
+    http_ctx::settings->on_chunk_extension_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    {
+        LOG_ERROR("http on_chunk_extension_value not supported");
+        return -1;
+    };
+
+    http_ctx::settings->on_chunk_extension_value_complete = [](llhttp_t *parser) -> auto
+    {
+        LOG_ERROR("http on_chunk_extension_value_complete not supported");
+        return -1;
     };
 
     http_ctx::settings->on_body = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
+        // LOG_ERROR("on_body length {}", length);
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         int iret = 0;
 
@@ -97,18 +231,9 @@ void http_ctx::init_http_settings()
 
     http_ctx::settings->on_message_complete = [](llhttp_t *parser) -> auto
     {
+        // LOG_ERROR("on_message_complete");
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->set_recv_end(true);
-        return 0;
-    };
-
-    http_ctx::settings->on_chunk_header = [](llhttp_t *parser) -> auto
-    {
-        return 0;
-    };
-
-    http_ctx::settings->on_chunk_complete = [](llhttp_t *parser) -> auto
-    {
         return 0;
     };
 }
@@ -128,8 +253,11 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
     this->worker_ptr = &worker_obj;
     this->url.clear();
     this->method.clear();
+    this->protocol.clear();
+    this->version.clear();
     this->headers.clear();
     this->head_field_tmp.clear();
+    this->head_value_tmp.clear();
     this->process_callback = nullptr;
     this->write_end_callback = nullptr;
     this->destory_callback = nullptr;
@@ -305,23 +433,20 @@ void http_ctx::on_event(uint32_t event)
                 this->conn_ptr->record_recv_bytes(len);
                 llhttp_errno_t res_errno = llhttp_execute(&this->http_parser_obj, buffer + buffer_len, len);
 
-                if (llhttp_get_upgrade(&this->http_parser_obj))
+                if (res_errno != llhttp_errno::HPE_OK)
                 {
-                    LOG_ERROR("http is upgrade");
+                    LOG_ERROR("res_errno {}", int(res_errno));
+                    len = 0;
+                    this->set_everything_end(true);
+                    break;
                 }
                 else
                 {
-                    if (res_errno != llhttp_errno::HPE_OK)
+                    if (llhttp_get_upgrade(&this->http_parser_obj))
                     {
-                        LOG_ERROR("res_errno {}", int(res_errno));
-                        len = 0;
-                        this->set_everything_end(true);
-                        break;
+                        LOG_ERROR("http is upgrade");
                     }
-                    else
-                    {
-                        buffer_len += len;
-                    }
+                    buffer_len += len;
                 }
             }
             else

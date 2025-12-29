@@ -65,8 +65,11 @@ namespace avant::connection
     public:
         std::string url{};
         std::string method{};
+        std::string protocol{};
+        std::string version{};
         std::map<std::string, std::vector<std::string>> headers{};
         std::string head_field_tmp{};
+        std::string head_value_tmp{};
         std::function<void(http_ctx &ctx)> process_callback{nullptr};
         std::function<void(http_ctx &ctx)> write_end_callback{nullptr};
         std::function<void(http_ctx &ctx)> destory_callback{nullptr};

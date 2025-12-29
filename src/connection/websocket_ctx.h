@@ -75,10 +75,13 @@ namespace avant::connection
     public:
         std::string url{};
         std::string method{};
+        std::string protocol{};
+        std::string version{};
         std::string sec_websocket_key{};
         std::string sec_websocket_version{};
         std::map<std::string, std::vector<std::string>> headers{};
         std::string head_field_tmp{};
+        std::string head_value_tmp{};
         bool http_processed{false};
         bool everything_end{false};
         bool is_upgrade{false};
