@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include "global/tunnel_id.h"
 #include "proto/proto_util.h"
+#include "zlib/zlib.h"
 
 using namespace avant::app;
 using std::string;
@@ -52,12 +53,21 @@ struct avant_http_app_reponse
 
     void *ptr{nullptr};
     type ptr_type{NONE};
+    z_stream strm{};
+    bool use_gzip{false};
+    bool gzip_initialized{false};
 
     typedef std::tuple<std::string, size_t> DIR_TYPE;
     typedef FILE FD_TYPE;
 
     inline void destory()
     {
+        if (gzip_initialized)
+        {
+            deflateEnd(&strm);
+            gzip_initialized = false;
+        }
+
         if (ptr && ptr_type == FD)
         {
             FD_TYPE *free_ptr = (FD_TYPE *)ptr;
@@ -170,6 +180,18 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             ctx.set_response_end(true);
         };
 
+        static auto return_500 = [](avant::connection::http_ctx &ctx) -> void
+        {
+            std::string response = "HTTP/1.1 500 Internal Server Error\r\nServer: avant\r\n";
+            response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            response += "Content-Type: text/plain; charset=UTF-8\r\n";
+            response += "Content-Length: 3\r\n";
+            response += "\r\n";
+            response += "500";
+            ctx.send_buffer_append(response.c_str(), response.size());
+            ctx.set_response_end(true);
+        };
+
         // Header: Connection
         bool header_exist_keep_live = false;
         {
@@ -250,6 +272,22 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 header_if_range = iter_header_if_range->second.at(0);
             }
         }
+        // Header: Accept-Encoding
+        bool client_support_gzip = false;
+        {
+            auto accept_encoding = ctx.headers.find("Accept-Encoding");
+            if (accept_encoding != ctx.headers.end())
+            {
+                for (const std::string &encoding : accept_encoding->second)
+                {
+                    if (encoding.find("gzip") != std::string::npos)
+                    {
+                        client_support_gzip = true;
+                        break;
+                    }
+                }
+            }
+        }
 
         if constexpr (false)
         {
@@ -268,7 +306,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         if (!utility::url::unescape_path(ctx.url, url))
         {
             LOG_ERROR("url::unescape_path false {}", ctx.url.c_str());
-            return_404(ctx);
+            return_500(ctx);
             ctx.set_response_end(true);
             return;
         }
@@ -292,7 +330,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         catch (std::runtime_error &e)
         {
             LOG_ERROR("utility::url url_obj(url) error {}", e.what());
-            return_404(ctx);
+            return_500(ctx);
             ctx.set_response_end(true);
             return;
         }
@@ -365,7 +403,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             if (!response_ptr)
             {
                 LOG_ERROR("new (std::nothrow) avant_http_app_reponse failed");
-                return_404(ctx);
+                return_500(ctx);
                 ctx.set_response_end(true);
                 return;
             }
@@ -383,18 +421,52 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 mime_type = "application/octet-stream";
             }
 
+            // checking mine_type for use_gzip, default using use_gzip
+            {
+                response_ptr->use_gzip = client_support_gzip &&
+                                         (mime_type.find("text/") == 0 ||
+                                          mime_type.find("application/javascript") == 0 ||
+                                          mime_type.find("application/json") == 0 ||
+                                          mime_type.find("application/xml") == 0 ||
+                                          mime_type.find("image/") == 0);
+
+                if (response_ptr->use_gzip && !response_ptr->gzip_initialized)
+                {
+                    response_ptr->strm = {};
+                    response_ptr->strm.zalloc = Z_NULL;
+                    response_ptr->strm.zfree = Z_NULL;
+                    response_ptr->strm.opaque = Z_NULL;
+
+                    // using gzip format (windowBits = 15 + 16)
+                    int ret = deflateInit2(&response_ptr->strm,
+                                           Z_DEFAULT_COMPRESSION,
+                                           Z_DEFLATED,
+                                           15 + 16, // gzip 格式
+                                           8,
+                                           Z_DEFAULT_STRATEGY);
+
+                    if (ret != Z_OK)
+                    {
+                        LOG_ERROR("deflateInit2 failed: {}", ret);
+                        delete response_ptr;
+                        return_500(ctx);
+                        ctx.set_response_end(true);
+                        return;
+                    }
+                    response_ptr->gzip_initialized = true;
+                }
+            }
+
             response_ptr->ptr = ::fopen(t_path.c_str(), "r");
             if (response_ptr->ptr == NULL)
             {
                 LOG_ERROR("fopen({}, r) failed", t_path.c_str());
-                return_404(ctx);
+                return_500(ctx);
                 ctx.set_response_end(true);
                 return;
             }
 
-            ::fseek((FILE *)response_ptr->ptr, 0, SEEK_END);
-            long size = ::ftell((FILE *)response_ptr->ptr);
-            ::rewind((FILE *)response_ptr->ptr);
+            ::fseek((FILE *)response_ptr->ptr, 0, SEEK_SET);
 
             std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
             response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
@@ -406,10 +478,12 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             {
                 response_head += std::string("Last-Modified: ") + now_last_modify_date + "\r\n";
             }
-            response_head += "Content-Type: ";
-            response_head += mime_type;
-            response_head += "\r\nContent-Length: " + std::to_string(size);
-            response_head += "\r\n\r\n";
+            response_head += "Content-Type: " + mime_type + "\r\n";
+            if (response_ptr->use_gzip)
+            {
+                response_head += "Content-Encoding: gzip\r\n";
+            }
+            response_head += "Transfer-Encoding: chunked\r\n\r\n";
 
             ctx.send_buffer_append(response_head.c_str(), response_head.size());
 
@@ -417,19 +491,62 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             // and the response must be set response_end to true, then write after write_end_callback will be continuously recalled
             ctx.write_end_callback = [](connection::http_ctx &ctx) -> void
             {
-                constexpr int buffer_size = 1024000;
+                constexpr int buffer_size = 1024000; // 1000KB
                 char buf[buffer_size] = {0};
-                int len = 0;
-                len = ::fread(buf,
-                              sizeof(char),
-                              buffer_size,
-                              (avant_http_app_reponse::FD_TYPE *)((avant_http_app_reponse *)ctx.ptr)->ptr);
+                constexpr int compress_buffer_size = 2 * buffer_size; // 2000KB
+                char compress_buf[compress_buffer_size] = {0};
+
+                avant_http_app_reponse *resp = (avant_http_app_reponse *)ctx.ptr;
+
+                int len = ::fread(buf,
+                                  sizeof(char),
+                                  buffer_size,
+                                  (avant_http_app_reponse::FD_TYPE *)((avant_http_app_reponse *)ctx.ptr)->ptr);
+
                 if (len > 0)
                 {
-                    ctx.send_buffer_append(buf, len);
+                    if (resp->use_gzip)
+                    {
+                        // using gzip
+                        resp->strm.avail_in = len;
+                        resp->strm.next_in = (Bytef *)buf;
+
+                        resp->strm.avail_out = compress_buffer_size;
+                        resp->strm.next_out = (Bytef *)compress_buf;
+
+                        int ret = deflate(&resp->strm, Z_SYNC_FLUSH);
+                        if (ret == Z_STREAM_ERROR)
+                        {
+                            LOG_ERROR("deflate failed with Z_STREAM_ERROR");
+                            ctx.set_response_end(true);
+                            return;
+                        }
+                        int exit_compressed_data_len = compress_buffer_size - resp->strm.avail_out;
+                        if (exit_compressed_data_len > 0)
+                        {
+                            std::stringstream ss;
+                            ss << std::hex << exit_compressed_data_len;
+                            std::string chunk_size = ss.str() + "\r\n";
+
+                            ctx.send_buffer_append(chunk_size.c_str(), chunk_size.size());
+                            ctx.send_buffer_append(compress_buf, exit_compressed_data_len);
+                            ctx.send_buffer_append("\r\n", 2);
+                        }
+                    }
+                    else
+                    {
+                        std::stringstream ss;
+                        ss << std::hex << len; // convert to hex
+                        std::string chunk_size = ss.str() + "\r\n";
+
+                        ctx.send_buffer_append(chunk_size.c_str(), chunk_size.size());
+                        ctx.send_buffer_append(buf, len);
+                        ctx.send_buffer_append("\r\n", 2);
+                    }
                 }
                 else
                 {
+                    ctx.send_buffer_append("0\r\n\r\n", 5);
                     ctx.set_response_end(true);
                 }
             };
