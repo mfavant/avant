@@ -6,7 +6,7 @@ A High-Performance Network Messaging Framework for Linux (C++).
 
 - Language: `C++20`  
 - Platform: `Linux`  
-- Protocols: `HTTP | TCP Stream(Protobuf) | WebSocket`  
+- Protocols: `HTTP | TCP Stream(Protobuf) | WebSocket | UDP`  
 - TLS/SSL: `OpenSSL`  
 - Lua: `Lua 5.4.8`  
 
@@ -104,16 +104,13 @@ kill PID
 
 ## Application Layer
 
-Avant supports HTTP, WebSocket, and TCP streaming (Protobuf):
+Avant supports HTTP, WebSocket, UDP, and TCP streaming (Protobuf):
 
-1. [framework config](https://github.com/crust-hub/avant/blob/main/bin/config/main.ini)
-2. [stream protobuf app](https://github.com/crust-hub/avant/blob/main/src/app/stream_app.cpp)
-3. [http app](https://github.com/crust-hub/avant/blob/main/src/app/http_app.cpp)
-4. [websocket app](https://github.com/crust-hub/avant/blob/main/src/app/websocket_app.cpp)
-
-Includes a flexible UDP component for building customized UDP communication solutions.
-
-See: [udp_component](external/avant-ipc/udp_component.h)
+1. [framework config](bin/config/main.ini)
+2. [tcp_stream protobuf app](src/app/stream_app.cpp)
+3. [http app](src/app/http_app.cpp)
+4. [websocket app](src/app/websocket_app.cpp)
+5. [other_app::on_udp_server_recvfrom](src/app/other_app.cpp)
 
 ## Client Implementations
 
