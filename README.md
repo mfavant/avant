@@ -2,7 +2,7 @@
 
 [![Docker Image CI](https://github.com/mfavant/avant/actions/workflows/docker-image.yml/badge.svg)](https://github.com/mfavant/avant/actions/workflows/docker-image.yml)
 
-A High-Performance Network Messaging Framework for Linux (C++).
+A High-Performance Network Messaging Framework for Linux C++.
 
 - Language: `C++20`  
 - Platform: `Linux`  
