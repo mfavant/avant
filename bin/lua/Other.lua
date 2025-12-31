@@ -82,12 +82,12 @@ function Other:OnTick()
         }
     };
     -- ProtoCmd::PROTO_CMD_LUA_TEST = 8;
-    local res = avant.Lua2Protobuf(t1, 8);
-    if res == nil then
-        -- Log:Error("avant.Lua2Protobuf failed");
-    else
-        -- Log:Error("avant.Lua2Protobuf succ " .. res);
-    end
+    -- local res = avant.Lua2Protobuf(t1, 8);
+    -- if res == nil then
+    --     -- Log:Error("avant.Lua2Protobuf failed");
+    -- else
+    --     -- Log:Error("avant.Lua2Protobuf succ " .. res);
+    -- end
 end
 
 -- kill -10 {avant PID}
