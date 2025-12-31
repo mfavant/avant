@@ -516,7 +516,7 @@ void http_ctx::on_event(uint32_t event)
                 conn_ptr->send_buffer.move_read_ptr_n(len);
             }
         }
-        if (conn_ptr->send_buffer.empty())
+        if (conn_ptr->send_buffer.empty() && !this->get_response_end())
         {
             try
             {
@@ -539,6 +539,12 @@ void http_ctx::on_event(uint32_t event)
                 this->set_everything_end(true);
             }
         }
+    }
+
+    // response end and not exist bytes in send_buffer, then change to evething end
+    if (conn_ptr->send_buffer.empty() && this->get_response_end())
+    {
+        this->set_everything_end(true);
     }
 
     // keep-live
