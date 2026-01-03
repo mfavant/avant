@@ -426,6 +426,7 @@ void lua_plugin::main_mount()
     static luaL_Reg main_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
+        {"CreateNewProtobufByCmd", CreateNewProtobufByCmd},
         {"HighresTime", HighresTime},
         {"Monotonic", Monotonic},
         {NULL, NULL}};
@@ -445,6 +446,7 @@ void lua_plugin::worker_mount(int worker_idx)
     static luaL_Reg worker_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
+        {"CreateNewProtobufByCmd", CreateNewProtobufByCmd},
         {"HighresTime", HighresTime},
         {"Monotonic", Monotonic},
         {NULL, NULL}};
@@ -461,6 +463,7 @@ void lua_plugin::other_mount()
     static luaL_Reg other_lulibs[] = {
         {"Logger", Logger},
         {"Lua2Protobuf", Lua2Protobuf},
+        {"CreateNewProtobufByCmd", CreateNewProtobufByCmd},
         {"HighresTime", HighresTime},
         {"Monotonic", Monotonic},
         {NULL, NULL}};
@@ -512,6 +515,34 @@ int lua_plugin::Logger(lua_State *lua_state)
     lua_pop(lua_state, 1);
     lua_pushinteger(lua_state, 0);
     return 1;
+}
+
+// avant.CreateNewProtobufByCmd(Cmd) -> table:Message|nil
+int lua_plugin::CreateNewProtobufByCmd(lua_State *lua_state)
+{
+    int num = lua_gettop(lua_state);
+    ASSERT_LOG_EXIT(num == 1);
+
+    int isok = lua_isinteger(lua_state, 1);
+    ASSERT_LOG_EXIT(isok);
+
+    int cmd = lua_tointeger(lua_state, 1);
+    lua_pop(lua_state, 1); // pop cmd
+
+    std::shared_ptr<google::protobuf::Message> msg_ptr = singleton<lua_plugin>::instance()->protobuf_cmd2message(cmd);
+    if (msg_ptr) // return table:message
+    {
+        int old_lua_stack_size = lua_gettop(lua_state);
+        protobuf2lua_nostack(lua_state, *msg_ptr);
+        int new_lua_stack_size = lua_gettop(lua_state);
+        ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size - 1);
+    }
+    else // return nil
+    {
+        lua_pushnil(lua_state);
+    }
+
+    return 1; // return one variable
 }
 
 // 此处只是测试 lua其实不应该直接调用 lua_plugin::Lua2Protobuf
