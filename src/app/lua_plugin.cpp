@@ -621,7 +621,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
         new_frame.curr_key_is_nil = true;
         new_frame.luapop_num_on_destory = 0;
         cpp_stack.push(new_frame);
-        LOG_LUA_PLUGIN_RUNTIME("创建首帧 {}", new_frame.package_ptr->GetDescriptor()->name().c_str());
+        LOG_LUA_PLUGIN_RUNTIME("创建首帧 {}", new_frame.package_ptr->GetDescriptor()->name().data());
     }
 
     // C++栈不为空时
@@ -636,20 +636,20 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
         if (frame.curr_key_is_nil)
         {
             frame.curr_key_is_nil = false;
-            LOG_LUA_PLUGIN_RUNTIME("首次开始遍历 {} 内部字段", frame.package_ptr->GetDescriptor()->name().c_str());
+            LOG_LUA_PLUGIN_RUNTIME("首次开始遍历 {} 内部字段", frame.package_ptr->GetDescriptor()->name().data());
             lua_pushnil(L);
         }
         else
         {
-            LOG_LUA_PLUGIN_RUNTIME("继续遍历 {} 内部字段", frame.package_ptr->GetDescriptor()->name().c_str());
+            LOG_LUA_PLUGIN_RUNTIME("继续遍历 {} 内部字段", frame.package_ptr->GetDescriptor()->name().data());
         }
 
-        LOG_LUA_PLUGIN_RUNTIME("{} frame_in_luastack {} Lua栈大小 {}", frame.package_ptr->GetDescriptor()->name().c_str(), frame.frame_in_luastack, lua_gettop(L));
+        LOG_LUA_PLUGIN_RUNTIME("{} frame_in_luastack {} Lua栈大小 {}", frame.package_ptr->GetDescriptor()->name().data(), frame.frame_in_luastack, lua_gettop(L));
 
         if (lua_next(L, frame.frame_in_luastack) != 0)
         {
             // 判断键的类型
-            LOG_LUA_PLUGIN_RUNTIME("在 {} 中发现一个类型为 {} 的键", frame.package_ptr->GetDescriptor()->name().c_str(), luaL_typename(L, -2));
+            LOG_LUA_PLUGIN_RUNTIME("在 {} 中发现一个类型为 {} 的键", frame.package_ptr->GetDescriptor()->name().data(), luaL_typename(L, -2));
             // lua2protobuf_nostack只支持处理 integer为键或string为键其他一律不支持没有意义
 
             std::string this_loop_key;
@@ -672,13 +672,13 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                 continue;
             }
 
-            LOG_LUA_PLUGIN_RUNTIME("在 {} 中发现了字段 {} 目前Lua栈大小 {}", frame.package_ptr->GetDescriptor()->name().c_str(), this_loop_key.c_str(), lua_gettop(L));
+            LOG_LUA_PLUGIN_RUNTIME("在 {} 中发现了字段 {} 目前Lua栈大小 {}", frame.package_ptr->GetDescriptor()->name().data(), this_loop_key.c_str(), lua_gettop(L));
 
             const google::protobuf::FieldDescriptor *field = descriptor->FindFieldByName(this_loop_key);
             if (!field)
             {
-                LOG_FATAL("在Proto结构 [{}] 中并不能找到字段 [\"{}\"]", descriptor->name().c_str(), this_loop_key.c_str());
-                LOG_LUA_PLUGIN_RUNTIME("放弃处理字段 {}:[\"{}\"]", descriptor->name().c_str(), this_loop_key.c_str());
+                LOG_FATAL("在Proto结构 [{}] 中并不能找到字段 [\"{}\"]", descriptor->name().data(), this_loop_key.c_str());
+                LOG_LUA_PLUGIN_RUNTIME("放弃处理字段 {}:[\"{}\"]", descriptor->name().data(), this_loop_key.c_str());
                 lua_pop(L, 1); // field_val
                 // key需要保留用于下次遍历
                 continue;
@@ -994,7 +994,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                 if (!lua_istable(L, -1))
                 {
                     LOG_FATAL("lua2protobuf field[{}] is not a table in package[{}]",
-                              this_loop_key.c_str(), descriptor->name().c_str());
+                              this_loop_key.c_str(), descriptor->name().data());
                     lua_pop(L, 1); // field_val
                     break;
                 }
@@ -1028,14 +1028,14 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
 
                         if (!lua_istable(L, -1))
                         {
-                            LOG_FATAL("lua2protobuf field[{}] item is not table in package[{}]", this_loop_key.c_str(), descriptor->name().c_str());
+                            LOG_FATAL("lua2protobuf field[{}] item is not table in package[{}]", this_loop_key.c_str(), descriptor->name().data());
                             lua_pop(L, 1); // 将这个数组元素从lua栈顶弹出
                             continue;      // 放弃处理这个数组元素因为lua传过来的数组元素不可能是Message
                         }
 
                         google::protobuf::Message *subMessage = reflection->AddMessage(frame.package_ptr, field);
 
-                        LOG_LUA_PLUGIN_RUNTIME("AddMessage subMessage {}", subMessage->GetDescriptor()->name().c_str());
+                        LOG_LUA_PLUGIN_RUNTIME("AddMessage subMessage {}", subMessage->GetDescriptor()->name().data());
 
                         int n_in_luastack = lua_gettop(L); // 数组Message元素在lua栈的位置
                         StackFrame new_frame;
@@ -1044,7 +1044,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                         new_frame.curr_key_is_nil = true;
                         new_frame.luapop_num_on_destory = (arr_idx == 1) ? 2 : 1;
                         cpp_stack.push(new_frame);
-                        LOG_LUA_PLUGIN_RUNTIME("创建栈帧 {}", new_frame.package_ptr->GetDescriptor()->name().c_str());
+                        LOG_LUA_PLUGIN_RUNTIME("创建栈帧 {}", new_frame.package_ptr->GetDescriptor()->name().data());
                     }
                 }
                 else
@@ -1059,7 +1059,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                     new_frame.curr_key_is_nil = true;
                     new_frame.luapop_num_on_destory = 1; // 需要cpp帧弹出后清理下 val
                     cpp_stack.push(new_frame);
-                    LOG_LUA_PLUGIN_RUNTIME("创建栈帧 {}", new_frame.package_ptr->GetDescriptor()->name().c_str());
+                    LOG_LUA_PLUGIN_RUNTIME("创建栈帧 {}", new_frame.package_ptr->GetDescriptor()->name().data());
                 }
 
                 break;
@@ -1067,7 +1067,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
             default:
             {
                 lua_pop(L, 1); // field_val
-                LOG_FATAL("field->cpp_type() {} key[{}] not support in [{}]", (int)field->cpp_type(), this_loop_key.c_str(), descriptor->name().c_str());
+                LOG_FATAL("field->cpp_type() {} key[{}] not support in [{}]", (int)field->cpp_type(), this_loop_key.c_str(), descriptor->name().data());
                 break;
             }
             }
@@ -1078,13 +1078,13 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
             // 函数传过来的创建的首帧
             if (frame.package_ptr == &package)
             {
-                LOG_LUA_PLUGIN_RUNTIME("弹出首帧栈帧 field {}", frame.package_ptr->GetDescriptor()->name().c_str());
+                LOG_LUA_PLUGIN_RUNTIME("弹出首帧栈帧 field {}", frame.package_ptr->GetDescriptor()->name().data());
                 cpp_stack.pop();
                 // 保留函数调用过lua栈传过来的首个val
             }
             else // while过程中产生的帧
             {
-                LOG_LUA_PLUGIN_RUNTIME("弹出中间栈帧 field {} luapop_num_on_destory {}", frame.package_ptr->GetDescriptor()->name().c_str(), (int)frame.luapop_num_on_destory);
+                LOG_LUA_PLUGIN_RUNTIME("弹出中间栈帧 field {} luapop_num_on_destory {}", frame.package_ptr->GetDescriptor()->name().data(), (int)frame.luapop_num_on_destory);
 
                 if (frame.luapop_num_on_destory == 1)
                 {
@@ -1130,30 +1130,30 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
         const google::protobuf::Descriptor *descriptor = frame.package_ptr->GetDescriptor();
         const google::protobuf::Reflection *reflection = frame.package_ptr->GetReflection();
 
-        LOG_LUA_PLUGIN_RUNTIME("frame {}", descriptor->name().c_str());
+        LOG_LUA_PLUGIN_RUNTIME("frame {}", descriptor->name().data());
 
         if (frame.next_field_idx >= descriptor->field_count())
         {
             ASSERT_LOG_EXIT(frame.settable_n_on_pop == 0 || frame.settable_n_on_pop == -3);
             if (frame.settable_n_on_pop != 0)
             {
-                LOG_LUA_PLUGIN_RUNTIME("frame {} destory settable_n_on_pop {}", frame.package_ptr->GetDescriptor()->name().c_str(), (int)frame.settable_n_on_pop);
+                LOG_LUA_PLUGIN_RUNTIME("frame {} destory settable_n_on_pop {}", frame.package_ptr->GetDescriptor()->name().data(), (int)frame.settable_n_on_pop);
                 lua_settable(L, frame.settable_n_on_pop);
             }
 
-            LOG_LUA_PLUGIN_RUNTIME("弹出 {}", frame.package_ptr->GetDescriptor()->name().c_str());
+            LOG_LUA_PLUGIN_RUNTIME("弹出 {}", frame.package_ptr->GetDescriptor()->name().data());
 
             cpp_stack.pop();
             continue;
         }
         const google::protobuf::FieldDescriptor *field = descriptor->field(frame.next_field_idx);
 
-        LOG_LUA_PLUGIN_RUNTIME("field {}", field->name().c_str());
+        LOG_LUA_PLUGIN_RUNTIME("field {}", field->name().data());
 
         // 将 这个field的key入栈
         if (frame.repeated_loop_idx == 0)
         {
-            lua_pushstring(L, field->name().c_str());
+            lua_pushstring(L, field->name().data());
         }
 
         if (!field->is_repeated())
@@ -1169,7 +1169,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
             {
                 google::protobuf::int32 val = reflection->GetInt32(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushinteger(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1177,7 +1177,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
             {
                 google::protobuf::int64 val = reflection->GetInt64(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushinteger(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1185,7 +1185,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
             {
                 google::protobuf::uint32 val = reflection->GetUInt32(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushinteger(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1193,7 +1193,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
             {
                 google::protobuf::uint64 val = reflection->GetUInt64(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushinteger(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1201,7 +1201,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE:
             {
                 double val = reflection->GetDouble(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushnumber(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1209,7 +1209,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT:
             {
                 float val = reflection->GetFloat(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushnumber(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1217,7 +1217,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
             {
                 int val = reflection->GetBool(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushboolean(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1225,7 +1225,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
             {
                 std::string val = reflection->GetString(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val.c_str());
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val.c_str());
                 lua_pushlstring(L, val.c_str(), val.size());
                 lua_settable(L, -3);
                 break;
@@ -1233,7 +1233,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
             {
                 google::protobuf::uint32 val = reflection->GetEnumValue(*frame.package_ptr, field);
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), val);
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), val);
                 lua_pushinteger(L, val);
                 lua_settable(L, -3);
                 break;
@@ -1244,7 +1244,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 new_frame.package_ptr = const_cast<google::protobuf::Message *>(
                     &reflection->GetMessage(*frame.package_ptr, field));
 
-                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().c_str(), new_frame.package_ptr->GetDescriptor()->name().c_str());
+                LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}:{}", field->name().data(), new_frame.package_ptr->GetDescriptor()->name().data());
 
                 new_frame.next_field_idx = 0;
                 new_frame.settable_n_on_pop = -3;
@@ -1258,7 +1258,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             {
                 lua_pushnil(L);
                 lua_settable(L, -3);
-                LOG_FATAL("field->cpp_type() {} key[{}] not support in [{}]", (int)field->cpp_type(), field->name().c_str(), descriptor->name().c_str());
+                LOG_FATAL("field->cpp_type() {} key[{}] not support in [{}]", (int)field->cpp_type(), field->name().data(), descriptor->name().data());
                 break;
             }
             }
@@ -1292,7 +1292,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
 
             while (frame.repeated_loop_idx < array_size)
             {
-                LOG_LUA_PLUGIN_RUNTIME("解析数组 {} 内第 {} 个内容 cpp_type {}", field->name().c_str(), frame.repeated_loop_idx + 1, cpp_type);
+                LOG_LUA_PLUGIN_RUNTIME("解析数组 {} 内第 {} 个内容 cpp_type {}", field->name().data(), frame.repeated_loop_idx + 1, cpp_type);
 
                 lua_pushinteger(L, frame.repeated_loop_idx + 1); // 数组下表做key
 
@@ -1301,7 +1301,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
                 {
                     google::protobuf::int32 val = reflection->GetRepeatedInt32(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val);
                     lua_pushinteger(L, val);
                     lua_settable(L, -3); // 压入数组元素
                     frame.repeated_loop_idx++;
@@ -1310,7 +1310,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
                 {
                     google::protobuf::int64 val = reflection->GetRepeatedInt64(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val);
                     lua_pushinteger(L, val);
                     lua_settable(L, -3);
                     frame.repeated_loop_idx++;
@@ -1319,7 +1319,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
                 {
                     google::protobuf::uint32 val = reflection->GetRepeatedUInt32(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val);
                     lua_pushinteger(L, val);
                     lua_settable(L, -3);
                     frame.repeated_loop_idx++;
@@ -1328,7 +1328,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
                 {
                     google::protobuf::uint64 val = reflection->GetRepeatedUInt64(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val);
                     lua_pushinteger(L, val);
                     lua_settable(L, -3);
                     frame.repeated_loop_idx++;
@@ -1337,7 +1337,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE:
                 {
                     double val = reflection->GetRepeatedDouble(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val);
                     lua_pushnumber(L, val);
                     lua_settable(L, -3);
                     frame.repeated_loop_idx++;
@@ -1346,7 +1346,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT:
                 {
                     float val = reflection->GetRepeatedFloat(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val);
                     lua_pushnumber(L, val);
                     lua_settable(L, -3);
                     break;
@@ -1354,7 +1354,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
                 {
                     int bool2int = reflection->GetRepeatedBool(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, bool2int);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, bool2int);
                     lua_pushboolean(L, bool2int);
                     lua_settable(L, -3);
                     frame.repeated_loop_idx++;
@@ -1363,7 +1363,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
                 {
                     std::string val = reflection->GetRepeatedString(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val.c_str());
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val.c_str());
                     lua_pushlstring(L, val.c_str(), val.size());
                     lua_settable(L, -3);
                     frame.repeated_loop_idx++;
@@ -1372,7 +1372,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
                 {
                     google::protobuf::uint32 val = reflection->GetRepeatedEnumValue(*frame.package_ptr, field, frame.repeated_loop_idx);
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, val);
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, val);
                     lua_pushinteger(L, val);
                     lua_settable(L, -3);
                     frame.repeated_loop_idx++;
@@ -1386,7 +1386,7 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
 
                     new_frame.package_ptr = const_cast<google::protobuf::Message *>(&reflection->GetRepeatedMessage(*frame.package_ptr, field, frame.repeated_loop_idx));
 
-                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().c_str(), frame.repeated_loop_idx, new_frame.package_ptr->GetDescriptor()->name().c_str());
+                    LOG_LUA_PLUGIN_RUNTIME("Proto2Lua {}[{}]:{}", field->name().data(), frame.repeated_loop_idx, new_frame.package_ptr->GetDescriptor()->name().data());
 
                     frame.repeated_loop_idx++;
                     new_frame.settable_n_on_pop = -3;
@@ -1399,8 +1399,8 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
                 {
                     LOG_FATAL("field->cpp_type() {} key[{}] not support in [{}]  frame.repeated_loop_idx[{}]",
                               (int)field->cpp_type(),
-                              field->name().c_str(),
-                              descriptor->name().c_str(),
+                              field->name().data(),
+                              descriptor->name().data(),
                               frame.repeated_loop_idx);
                     lua_pushnil(L);
                     lua_settable(L, -3);
@@ -1419,12 +1419,12 @@ void lua_plugin::protobuf2lua_nostack(lua_State *L, const google::protobuf::Mess
             {
                 if (need_break_goto_new_frame == false)
                 {
-                    LOG_LUA_PLUGIN_RUNTIME("数组 {} 处理完毕1", field->name().c_str());
+                    LOG_LUA_PLUGIN_RUNTIME("数组 {} 处理完毕1", field->name().data());
                     frame.next_field_idx++;
                     frame.repeated_loop_idx = 0;
 
                     lua_settable(L, -3);
-                    LOG_LUA_PLUGIN_RUNTIME("数组 {} 处理完毕2", field->name().c_str());
+                    LOG_LUA_PLUGIN_RUNTIME("数组 {} 处理完毕2", field->name().data());
                 }
             }
         }

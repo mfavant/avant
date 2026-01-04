@@ -12,6 +12,22 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 
 message(${PROJECT_SOURCE_DIR}/src)
 
+find_package(Protobuf 3.0.0 REQUIRED)
+if (Protobuf_FOUND)
+    message(STATUS "PROTOBUF_ROOT_DIR: ${PROTOBUF_ROOT_DIR}")
+    message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+    message(STATUS "Protobuf found at ${Protobuf_INCLUDE_DIRS}")
+    include_directories(${Protobuf_INCLUDE_DIRS})
+endif()
+
+find_package(OpenSSL 1.1 REQUIRED)
+if (OpenSSL_FOUND)
+    message(STATUS "OPENSSL_ROOT_DIR: ${OPENSSL_ROOT_DIR}")
+    message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
+    message(STATUS "OpenSSL found at ${OpenSSL_INCLUDE_DIRS}")
+    include_directories(${OpenSSL_INCLUDE_DIRS})
+endif()
+
 # add include for src/
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
@@ -46,6 +62,13 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/external)
 # for link external gen .so lib
 set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc-udp avant-timer avant-xml avant-buffer avant-lua avant-zlib avant-json)
 
-target_link_libraries(${PROJECT_NAME} pthread dl stdc++fs protobuf ssl crypto ${EXTERNAL_LIB})
+target_link_libraries(${PROJECT_NAME} 
+    pthread 
+    dl 
+    protobuf::libprotobuf
+    OpenSSL::SSL 
+    OpenSSL::Crypto
+    ${EXTERNAL_LIB}
+)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION /usr/bin)
