@@ -4,11 +4,11 @@
 
 A High-Performance Network Messaging Framework for Linux C++.
 
-- Language: `C++20`  
-- Platform: `Linux`  
-- Protocols: `HTTP | TCP Stream(Protobuf) | WebSocket | UDP`  
-- TLS/SSL: `OpenSSL`  
-- Lua: `Lua 5.4.8`  
+- Language: `C++ 20`
+- Platform: `Linux`
+- Protocols: `HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)`
+- TLS/SSL: `OpenSSL`
+- Lua: `Lua 5.4.8` 
 
 ## Overview
 
@@ -76,9 +76,7 @@ cmake ..
 make -j4
 ```
 
-CentOS 8 Example.
-
-See: [centos8](./centos8.md)
+See: [Other Installing Third-Party Example](./install_third_party_example.md)
 
 ### Configuration
 
