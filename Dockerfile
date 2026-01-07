@@ -9,6 +9,10 @@ RUN apt install libssl-dev -y
 # AVANT_JIT_VERSION=ON
 WORKDIR /avant
 RUN echo "START=>building AVANT_JIT_VERSION=ON"
+RUN cd external/LuaJIT-2.1.ROLLING/ \
+    && make clean \
+    && make -j3
+WORKDIR /avant
 RUN cd protocol \
     && make clean \
     && make \
