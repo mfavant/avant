@@ -17,7 +17,7 @@ RUN cd protocol \
     && make clean \
     && make \
     && cd .. \
-    && mkdir build \
+    && mkdir -p build \
     && rm -rf ./build/* \
     && cd build \
     && cmake -DAVANT_JIT_VERSION=ON .. \
@@ -33,7 +33,7 @@ RUN cd protocol \
     && make clean \
     && make \
     && cd .. \
-    && mkdir build \
+    && mkdir -p build \
     && rm -rf ./build/* \
     && cd build \
     && cmake -DAVANT_JIT_VERSION=OFF .. \
