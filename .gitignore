@@ -49,4 +49,5 @@ cmake_install.cmake
 
 protocol/proto_res/
 !protocol/Makefile
-
+!external/LuaJIT-2.1.ROLLING/Makefile
+!external/LuaJIT-2.1.ROLLING/src/Makefile
