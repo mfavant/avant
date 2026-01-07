@@ -8,7 +8,7 @@ A High-Performance Network Messaging Framework for Linux C++.
 - Platform: `Linux`
 - Protocols: `HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)`
 - TLS/SSL: `OpenSSL`
-- Lua: `Lua 5.4.8` 
+- Lua: `Lua 5.4.8 | LuaJIT-2.1.ROLLING` 
 
 ## Overview
 

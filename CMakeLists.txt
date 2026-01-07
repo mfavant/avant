@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.10.0)
 project(avant)
 
+# JIT VERSION
+option(AVANT_JIT_VERSION "Enable LuaJIT Version" OFF)
+message("Enable LuaJIT Version : " ${AVANT_JIT_VERSION})
+if(AVANT_JIT_VERSION)
+    add_definitions(-DAVANT_JIT_VERSION)
+else()
+    add_definitions(-DAVANT_NO_JIT_VERSION)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -37,6 +46,17 @@ include_directories(${PROJECT_SOURCE_DIR}/protocol)
 # add include for external/
 include_directories(${PROJECT_SOURCE_DIR}/external)
 
+if(AVANT_JIT_VERSION)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/dynasm/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/dynasm/)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/src/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/src/)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/host/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/host/)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/jit/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/jit/)
+endif()
+
 # for cpp file
 file(GLOB_RECURSE SOURCE_FILES "${PROJECT_SOURCE_DIR}/src/*.cpp")
 
@@ -60,15 +80,29 @@ target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unused-variable)
 add_subdirectory(${PROJECT_SOURCE_DIR}/external)
 
 # for link external gen .so lib
-set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc-udp avant-timer avant-xml avant-buffer avant-lua avant-zlib avant-json)
+if(AVANT_JIT_VERSION)
+    set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc-udp avant-timer avant-xml avant-buffer avant-zlib avant-json)
+else()
+    set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc-udp avant-timer avant-xml avant-buffer avant-zlib avant-json avant-lua)
+endif()
 
-target_link_libraries(${PROJECT_NAME} 
-    pthread 
-    dl 
-    protobuf::libprotobuf
-    OpenSSL::SSL 
-    OpenSSL::Crypto
-    ${EXTERNAL_LIB}
-)
-
-install(TARGETS ${PROJECT_NAME} DESTINATION /usr/bin)
+if(AVANT_JIT_VERSION)
+    target_link_libraries(${PROJECT_NAME} 
+        ${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/src/libluajit.a 
+        pthread 
+        dl 
+        protobuf::libprotobuf
+        OpenSSL::SSL 
+        OpenSSL::Crypto
+        ${EXTERNAL_LIB}
+    )
+else()
+    target_link_libraries(${PROJECT_NAME} 
+        pthread 
+        dl 
+        protobuf::libprotobuf
+        OpenSSL::SSL 
+        OpenSSL::Crypto
+        ${EXTERNAL_LIB}
+    )
+endif()

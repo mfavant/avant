@@ -55,9 +55,9 @@ function Other:OnTick()
                 ["double_val"] = 1.1,
                 ["float_val"] = 1.0,
                 ["int32_val"] = 99,
-                ["int64_val"] = 110,
+                ["int64_val"] = "110",
                 ["uint32_val"] = 111,
-                ["uint64_val"] = 112,
+                ["uint64_val"] = "112",
                 ["bool_val"] = true,
                 ["str_val"] = "this is str_val"
             },
@@ -65,27 +65,27 @@ function Other:OnTick()
                 ["double_val"] = 1.2,
                 ["float_val"] = 1.1,
                 ["int32_val"] = 100,
-                ["int64_val"] = 111,
+                ["int64_val"] = "111",
                 ["uint32_val"] = 112,
-                ["uint64_val"] = 113,
+                ["uint64_val"] = "113",
                 ["bool_val"] = true,
                 ["str_val"] = "this is str_val 1"
             }, {
                 ["double_val"] = 1.3,
                 ["float_val"] = 1.2,
                 ["int32_val"] = 101,
-                ["int64_val"] = 112,
+                ["int64_val"] = "112",
                 ["uint32_val"] = 113,
-                ["uint64_val"] = 114,
+                ["uint64_val"] = "114",
                 ["bool_val"] = true,
                 ["str_val"] = "this is str_val 2"
             }, {
                 ["double_val"] = 1.4,
                 ["float_val"] = 1.3,
                 ["int32_val"] = 102,
-                ["int64_val"] = 113,
+                ["int64_val"] = "113",
                 ["uint32_val"] = 114,
-                ["uint64_val"] = 115,
+                ["uint64_val"] = "115",
                 ["bool_val"] = true,
                 ["str_val"] = "this is str_val 3"
             } }
@@ -122,7 +122,7 @@ function Other:OnTick()
     -- if protoLuaTest == nil then
     --     Log:Error("avant.CreateNewProtobufByCmd(ProtoCmd_PROTO_CMD_LUA_TEST) return nil");
     -- else
-    --     Log:Error("avant.CreateNewProtobufByCmd(ProtoCmd_PROTO_CMD_LUA_TEST) return %s", DebugTableToString(protoLuaTest));
+    --     -- Log:Error("avant.CreateNewProtobufByCmd(ProtoCmd_PROTO_CMD_LUA_TEST) return %s", DebugTableToString(protoLuaTest));
     -- end
 end
 
