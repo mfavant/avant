@@ -9,8 +9,7 @@ RUN apt install libssl-dev -y
 # AVANT_JIT_VERSION=ON
 WORKDIR /avant
 RUN echo "START=>building AVANT_JIT_VERSION=ON"
-RUN rm -rf CMakeCache.txt \
-    && cd protocol \
+RUN cd protocol \
     && make clean \
     && make \
     && cd .. \
@@ -26,8 +25,7 @@ RUN echo "END=>building AVANT_JIT_VERSION=ON"
 # AVANT_JIT_VERSION=OFF
 WORKDIR /avant
 RUN echo "START=>building AVANT_JIT_VERSION=OFF"
-RUN rm -rf CMakeCache.txt \
-    && cd protocol \
+RUN cd protocol \
     && make clean \
     && make \
     && cd .. \
