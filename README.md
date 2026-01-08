@@ -4,11 +4,11 @@
 
 A High-Performance Network Messaging Framework for Linux C++.
 
-- Language: `C++ 20`
-- Platform: `Linux`
-- Protocols: `HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)`
-- TLS/SSL: `OpenSSL`
-- Lua: `Lua 5.4.8 | LuaJIT-2.1.ROLLING` 
+- Language: C++ 20
+- Platform: Linux
+- Protocols: HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)
+- TLS/SSL: OpenSSL
+- Lua: Lua 5.4.8 | LuaJIT-2.1.ROLLING
 
 ## Overview
 
@@ -72,7 +72,7 @@ mkdir -p build
 rm -rf ./build/*
 
 cd build
-cmake ..
+cmake -DAVANT_JIT_VERSION=OFF ..
 make -j4
 ```
 
@@ -123,6 +123,10 @@ Each thread (main, worker, auxiliary) runs in its own isolated Lua virtual machi
 
 * Entry script: `bin/lua/Init.lua`
 
+### JIT Version Compile Option
+
+Whether to use Lua or LuaJIT is a decision you need to consider carefully, as there are significant differences between Lua 5.4 and LuaJIT (based on Lua 5.1), especially in terms of numeric type storage and support, as well as the built-in functions available in Lua. The project provides support for both the LuaJIT version and the regular Lua version during compilation. You can compile the LuaJIT version by passing -DAVANT_JIT_VERSION=ON to CMake, or compile the regular Lua version by passing -DAVANT_JIT_VERSION=OFF. By default, the non-JIT version is compiled.
+
 ### Lua Hot Reload
 
 Lua scripts can be reloaded at runtime using SIGUSR1 without restarting the process:
@@ -152,8 +156,8 @@ wrk -c {{connection_num}} -t {{threads}} -d60s \
 
 1. [@nodejs/llhttp](https://github.com/nodejs/llhttp)  
 2. [@lua/lua](https://github.com/lua/lua)  
-3. [@protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf)  
-4. [@openssl/openssl](https://github.com/openssl/openssl)  
-5. [@madler/zlib](https://github.com/madler/zlib)  
-6. [@homer6/url](https://github.com/homer6/url)
-
+3. [@LuaJIT/LuaJIT](https://github.com/LuaJIT/LuaJIT)
+4. [@protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf)  
+5. [@openssl/openssl](https://github.com/openssl/openssl)  
+6. [@madler/zlib](https://github.com/madler/zlib)  
+7. [@homer6/url](https://github.com/homer6/url)

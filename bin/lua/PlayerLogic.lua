@@ -17,9 +17,9 @@ function PlayerLogic.Move(playerId, newX, newY)
         player.pos.x = player.pos.x + newX;
         player.pos.y = player.pos.y + newY;
 
-        local sec, ns = avant.HighresTime();
+        local sec, milliseconds, ns = avant.HighresTime();
         local mono = avant.Monotonic();
-        -- Log:Error("sec " .. tostring(sec) .. " ns " .. tostring(ns) .. " mono " .. tostring(mono));
+        -- Log:Error("sec " .. tostring(sec) .. " milliseconds " .. tostring(milliseconds) .. " ns " .. tostring(ns) .. " mono " .. tostring(mono));
 
         -- Log:Error("player " .. tostring(playerId) .. " x " .. tostring(player.pos.x) .. " y " .. tostring(player.pos.y));
         -- Log:Error("player %d name %s ", player.id, player.name);

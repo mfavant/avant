@@ -502,25 +502,28 @@ void lua_plugin::other_mount()
     }
 }
 
-// 返回两个值：1) seconds (double), 2) nanoseconds (integer)
+// 返回三个值：1) seconds (integer), 2) milliseconds (integer), 3) nanoseconds_part (integer)
 int lua_plugin::HighresTime(lua_State *lua_state)
 {
     using namespace std::chrono;
     auto now = system_clock::now();
     auto ns = duration_cast<nanoseconds>(now.time_since_epoch()).count();
-    double seconds = static_cast<double>(ns) / 1e9;
-    lua_pushnumber(lua_state, seconds);                        // pushes double seconds
-    lua_pushnumber(lua_state, static_cast<std::uint64_t>(ns)); // pushes integer nanoseconds
-    return 2;
+    auto seconds = ns / 1000000000;
+    auto nanoseconds_part = ns % 1000000000;
+    auto milliseconds = ns / 1000000;
+    lua_pushnumber(lua_state, seconds); // push seconds
+    lua_pushnumber(lua_state, milliseconds); // push milliseconds
+    lua_pushnumber(lua_state, nanoseconds_part); // pushes nanoseconds_part
+    return 3;
 }
 
-// 返回单个值：monotonic seconds (integer)
+// 返回单个值：monotonic milliseconds (integer)
 int lua_plugin::Monotonic(lua_State *lua_state)
 {
     using namespace std::chrono;
     auto now = steady_clock::now();
-    auto ns = duration_cast<nanoseconds>(now.time_since_epoch()).count();
-    lua_pushnumber(lua_state, static_cast<std::uint64_t>(ns)); // pushes integer nanoseconds
+    auto ms = duration_cast<milliseconds>(now.time_since_epoch()).count();
+    lua_pushnumber(lua_state, ms);
     return 1;
 }
 
