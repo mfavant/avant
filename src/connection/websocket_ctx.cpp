@@ -8,6 +8,7 @@
 #include <openssl/opensslv.h>
 #include "utility/sha1.h"
 #include "utility/base64.h"
+#include "utility/comm_errno.h"
 
 using namespace avant::connection;
 
@@ -354,12 +355,15 @@ void websocket_ctx::on_event(uint32_t event)
             while (buffer_len < buffer_size)
             {
                 len = socket_ptr->recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
-                if (len == -1 && (oper_errno == EAGAIN || oper_errno == EWOULDBLOCK))
+                if (len == -1 &&
+                    (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
+                     oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
                 {
                     len = 0;
                     break;
                 }
-                else if (len == -1 && oper_errno == EINTR)
+                else if (len == -1 &&
+                         oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
                 {
                     len = 0;
                     break;
@@ -498,12 +502,15 @@ void websocket_ctx::on_event(uint32_t event)
             while (buffer_len < buffer_size)
             {
                 len = socket_ptr->recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
-                if (len == -1 && (oper_errno == EAGAIN || oper_errno == EWOULDBLOCK))
+                if (len == -1 &&
+                    (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
+                     oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
                 {
                     len = 0;
                     break;
                 }
-                else if (len == -1 && oper_errno == EINTR)
+                else if (len == -1 &&
+                         oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
                 {
                     len = 0;
                     continue;
@@ -590,9 +597,11 @@ void websocket_ctx::try_send_flush()
         }
         else
         {
-            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
-                // LOG_ERROR("socket_ptr->send len {} oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK", len);
+                // LOG_ERROR("socket_ptr->send len {} oper_errno != COMM_ERRNO_EAGAIN && oper_errno != COMM_ERRNO_EINTR && oper_errno != COMM_ERRNO_EWOULDBLOCK", len);
                 conn_ptr->is_close = true;
             }
             event_mod(nullptr, event::event_poller::RWE, false);

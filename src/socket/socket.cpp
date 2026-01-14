@@ -10,6 +10,7 @@
 
 #include "socket/socket.h"
 #include "utility/singleton.h"
+#include "utility/comm_errno.h"
 
 using avant::socket::socket;
 using namespace avant::utility;
@@ -252,7 +253,7 @@ int socket::recv(char *buf, size_t len, int &oper_errno)
             int ssl_error = SSL_get_error(m_ssl_instance, bytes_received);
             if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE)
             {
-                oper_errno = EAGAIN;
+                oper_errno = avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN;
             }
             else
             {
@@ -297,7 +298,7 @@ int socket::send(const char *buf, size_t len, int &oper_errno)
             int ssl_error = SSL_get_error(m_ssl_instance, bytes_written);
             if (ssl_error == SSL_ERROR_WANT_READ || ssl_error == SSL_ERROR_WANT_WRITE)
             {
-                oper_errno = EAGAIN;
+                oper_errno = avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN;
             }
             else
             {

@@ -12,6 +12,7 @@
 #include "server/server.h"
 #include <pthread.h>
 #include <signal.h>
+#include "utility/comm_errno.h"
 
 using namespace avant::workers;
 using namespace avant::global;
@@ -161,7 +162,7 @@ void other::operator()()
         num = this->epoller.wait(this->get_server()->get_config()->get_epoll_wait_time());
         if (num < 0)
         {
-            if (errno == EINTR)
+            if (errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
             {
                 continue;
             }
@@ -313,7 +314,9 @@ void other::try_send_flush_tunnel()
         }
         else
         {
-            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                 this->to_stop = true;
@@ -357,7 +360,9 @@ void other::on_tunnel_event(uint32_t event)
             }
             else
             {
-                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+                if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
+                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
+                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     this->to_stop = true;

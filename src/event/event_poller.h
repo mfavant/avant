@@ -2,7 +2,6 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <sys/epoll.h>
-#include <errno.h>
 #include <string>
 #include <cstring>
 #include <unordered_map>

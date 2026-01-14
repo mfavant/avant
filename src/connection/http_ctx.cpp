@@ -5,6 +5,7 @@
 #include <openssl/opensslv.h>
 #include "app/http_app.h"
 #include "server/server.h"
+#include "utility/comm_errno.h"
 
 using namespace avant::connection;
 
@@ -418,12 +419,14 @@ void http_ctx::on_event(uint32_t event)
         while (buffer_len < buffer_size)
         {
             len = socket_ptr->recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
-            if (len == -1 && (oper_errno == EAGAIN || oper_errno == EWOULDBLOCK))
+            if (len == -1 &&
+                (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
+                 oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
             {
                 len = 0;
                 break;
             }
-            else if (len == -1 && oper_errno == EINTR)
+            else if (len == -1 && oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
             {
                 len = 0;
                 continue;
@@ -490,11 +493,12 @@ void http_ctx::on_event(uint32_t event)
             int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
             if (0 > len)
             {
-                if (oper_errno == EINTR)
+                if (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
                 {
                     continue;
                 }
-                else if (oper_errno == EAGAIN || oper_errno == EWOULDBLOCK)
+                else if (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
+                         oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     break;
                 }

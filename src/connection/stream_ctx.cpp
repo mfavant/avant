@@ -5,6 +5,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
+#include "utility/comm_errno.h"
 
 using namespace avant::connection;
 
@@ -163,12 +164,15 @@ void stream_ctx::on_event(uint32_t event)
         while (buffer_len < buffer_size)
         {
             len = socket_ptr->recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
-            if (len == -1 && (oper_errno == EAGAIN || oper_errno == EWOULDBLOCK))
+            if (len == -1 &&
+                (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
+                 oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
             {
                 len = 0;
                 break;
             }
-            else if (len == -1 && oper_errno == EINTR)
+            else if (len == -1 &&
+                     oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
             {
                 len = 0;
                 continue;
@@ -239,7 +243,9 @@ void stream_ctx::try_send_flush()
         }
         else
         {
-            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 // LOG_ERROR("stream ctx client sock send data oper_errno {}", oper_errno);
                 conn_ptr->is_close = true;

@@ -25,6 +25,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <cmath>
+#include "utility/comm_errno.h"
 
 using namespace std;
 using namespace avant::server;
@@ -550,7 +551,7 @@ void server::on_start()
 
             if (num < 0)
             {
-                if (errno == EINTR)
+                if (errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
                 {
                     continue;
                 }
@@ -754,7 +755,9 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
             }
             else
             {
-                if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+                if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
+                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
+                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     LOG_ERROR("on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     to_stop();
@@ -941,7 +944,9 @@ void server::try_send_flush_tunnel(avant::socket::socket_pair &tunnel)
         }
         else
         {
-            if (oper_errno != EAGAIN && oper_errno != EINTR && oper_errno != EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 LOG_ERROR("try_send_flush_tunnel tunnel_conn oper_errno {}", oper_errno);
                 to_stop();
