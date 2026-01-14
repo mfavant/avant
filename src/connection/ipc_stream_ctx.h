@@ -28,7 +28,7 @@ namespace avant::connection
     public:
         uint64_t get_conn_gid();
         size_t get_recv_buffer_size();
-        const char *get_recv_buffer_read_ptr();
+        [[nodiscard]] const char *get_recv_buffer_read_ptr();
         void recv_buffer_move_read_ptr_n(size_t n);
 
         size_t get_send_buffer_size();

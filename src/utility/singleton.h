@@ -15,7 +15,7 @@ namespace avant
         {
         public:
             template <typename... Args>
-            static T *instance(Args &&...args)
+            [[nodiscard]] static T *instance(Args &&...args)
             {
                 if (m_instance == nullptr)
                 {
@@ -23,7 +23,7 @@ namespace avant
                 }
                 return m_instance.get();
             }
-            static T *get_instance()
+            [[nodiscard]] static T *get_instance()
             {
                 return m_instance.get();
             }

@@ -33,10 +33,10 @@ namespace avant::server
         ~server();
 
         void start();
-        SSL_CTX *get_ssl_ctx();
+        [[nodiscard]] SSL_CTX *get_ssl_ctx();
 
         void config(system::config_mgr *config_mgr);
-        const system::config_mgr *get_config() const { return m_config_mgr; }
+        [[nodiscard]] const system::config_mgr *get_config() const { return m_config_mgr; }
 
         avant::task::task_type get_task_type();
         void to_stop();
@@ -64,8 +64,8 @@ namespace avant::server
         void on_tunnel_process(ProtoPackage &message);
         int tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage &message, bool flush = true);
 
-        connection::connection *get_main2worker_tunnel(int worker_tunnel_id);
-        connection::connection *get_main2other_tunnel();
+        [[nodiscard]] connection::connection *get_main2worker_tunnel(int worker_tunnel_id);
+        [[nodiscard]] connection::connection *get_main2other_tunnel();
 
     private:
         system::config_mgr *m_config_mgr{nullptr};

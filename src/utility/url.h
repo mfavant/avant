@@ -31,6 +31,7 @@ namespace avant::utility
         unsigned short get_port() const;
         std::string get_path() const;
         std::string get_query() const;
+        [[nodiscard]]
         const std::multimap<std::string, std::string> &get_query_parameters() const;
         std::string get_fragment() const;
         std::string get_full_path() const; // path+query+fragment

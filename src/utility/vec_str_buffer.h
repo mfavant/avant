@@ -14,7 +14,7 @@ namespace avant::utility
     public:
         vec_str_buffer();
         ~vec_str_buffer();
-        const char *get_read_ptr();
+        [[nodiscard]] const char *get_read_ptr();
         void reserve(size_t bytes);
         void move_read_ptr_n(size_t n);
         void append(const char *bytes, size_t n);

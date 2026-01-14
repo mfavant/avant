@@ -14,7 +14,9 @@ namespace avant::socket
     public:
         int get_me();
         int get_other();
+        [[nodiscard]]
         avant::socket::socket &get_me_socket();
+        [[nodiscard]]
         avant::socket::socket &get_other_socket();
 
     private:

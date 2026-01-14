@@ -34,9 +34,9 @@ namespace avant::socket
 
         bool connect(const std::string &ip, int port);
         bool close();
-        int accept();
+        [[nodiscard]] int accept();
 
-        int recv(char *buf, size_t len, int &oper_errno);
+        [[nodiscard]] int recv(char *buf, size_t len, int &oper_errno);
         int send(const char *buf, size_t len, int &oper_errno);
 
         bool set_non_blocking();
@@ -60,7 +60,7 @@ namespace avant::socket
         {
             this->m_sockfd = fd;
         }
-
+        [[nodiscard]]
         SSL *get_ssl_instance();
         void set_ssl_instance(SSL *ssl_instance);
         bool get_ssl_accepted();

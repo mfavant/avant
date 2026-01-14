@@ -33,7 +33,7 @@ namespace avant::workers
         void operator()();
 
         void set_server(avant::server::server *server) { m_server = server; }
-        const avant::server::server *get_server() const { return m_server; }
+        [[nodiscard]] const avant::server::server *get_server() const { return m_server; }
         int init_call_by_server();
 
     public:

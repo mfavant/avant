@@ -31,7 +31,7 @@ namespace avant
              *
              * @return T* can null
              */
-            T *allocate();
+            [[nodiscard]] T *allocate();
 
             /**
              * @brief return object to list
