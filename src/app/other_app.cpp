@@ -63,7 +63,7 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
     if constexpr (false)
     {
         // test ipc message process
-        for (auto item : authenticated_ipc_pair.gid2appid)
+        for (const auto &item : authenticated_ipc_pair.gid2appid)
         {
             uint64_t gid = item.first;
             avant::connection::connection *conn = other_obj.ipc_connection_mgr.get()->get_conn_by_gid(gid);

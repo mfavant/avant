@@ -414,15 +414,15 @@ void websocket_ctx::on_event(uint32_t event)
         // handshake
         if (!this->is_connected && this->is_upgrade && this->http_processed)
         {
-            for (auto &header : this->headers)
+            for (const auto &[header_field, header_values] : this->headers)
             {
-                if (header.first == "Sec-WebSocket-Key" && header.second.size() >= 1)
+                if (header_field == "Sec-WebSocket-Key" && header_values.size() >= 1)
                 {
-                    this->sec_websocket_key = header.second[0];
+                    this->sec_websocket_key = header_values[0];
                 }
-                if (header.first == "Sec-WebSocket-Version" && header.second.size() >= 1)
+                else if (header_field == "Sec-WebSocket-Version" && header_values.size() >= 1)
                 {
-                    this->sec_websocket_version = header.second[0];
+                    this->sec_websocket_version = header_values[0];
                 }
             }
             if (this->sec_websocket_key.empty() || this->sec_websocket_version != "13")
