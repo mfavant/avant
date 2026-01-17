@@ -22,7 +22,8 @@ using namespace avant::app;
 void websocket_app::on_main_init(avant::server::server &server_obj)
 {
     LOG_ERROR("websocket_app::on_main_init");
-    utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_config()->get_lua_dir(), server_obj.get_config()->get_worker_cnt());
+    utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_config().get_lua_dir(),
+                                                             server_obj.get_config().get_worker_cnt());
 }
 
 void websocket_app::on_worker_init(avant::workers::worker &worker_obj)

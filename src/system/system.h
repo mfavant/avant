@@ -1,6 +1,9 @@
 #pragma once
 #include <string>
 #include <signal.h>
+#include <memory>
+#include "server/server.h"
+#include "system/config_mgr.h"
 
 namespace avant::system
 {
@@ -25,5 +28,7 @@ namespace avant::system
 
     private:
         std::string m_root_path{};
+        std::shared_ptr<avant::server::server> m_server_ptr;
+        avant::system::config_mgr m_config_mgr;
     };
 }

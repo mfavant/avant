@@ -12,8 +12,6 @@
 
 #include "system/system.h"
 #include "utility/singleton.h"
-#include "server/server.h"
-#include "system/config_mgr.h"
 
 using avant::utility::singleton;
 using namespace avant::server;
@@ -22,18 +20,27 @@ using namespace avant::inifile;
 using namespace avant::log;
 using std::string;
 
+static avant::system::system *avant_global_system_ptr = nullptr;
+
 int system::init()
 {
+    if (avant_global_system_ptr)
+    {
+        std::cerr << "avant_global_system_ptr!=nullptr" << std::endl;
+        return -1;
+    }
+    avant_global_system_ptr = this;
+
     // load config ini file
-    singleton<config_mgr>::instance()->set_root_path(get_root_path());
-    if (0 != singleton<config_mgr>::instance()->init(get_root_path() + "/config/main.ini"))
+    m_config_mgr.set_root_path(get_root_path());
+    if (0 != m_config_mgr.init("/config/main.ini"))
     {
         std::cerr << "system::init() config_mgr init error" << std::endl;
         return -1;
     }
 
     // daemon
-    if (singleton<config_mgr>::instance()->get_daemon())
+    if (m_config_mgr.get_daemon())
     {
         create_daemon();
     }
@@ -45,7 +52,7 @@ int system::init()
     signal_conf();
 
     // logger
-    const string log_dir_path = singleton<config_mgr>::instance()->get_root_path() + "/log";
+    const string log_dir_path = m_config_mgr.get_root_path() + "/log";
     DIR *dp = opendir(log_dir_path.c_str());
     if (dp == nullptr)
     {
@@ -55,14 +62,20 @@ int system::init()
     {
         closedir(dp);
     }
-    logger::instance().open(m_root_path + "/log/", singleton<config_mgr>::instance()->get_log_level());
+    logger::instance().open(m_root_path + "/log/", m_config_mgr.get_log_level());
 
     // server
-    auto m_server = singleton<server::server>::instance();
-    m_server->config(singleton<config_mgr>::instance());
+    avant::server::server *new_server = new server::server;
+    if (!new_server)
+    {
+        LOG_ERROR("new server::server failed");
+        return 1;
+    }
+    m_server_ptr.reset(new_server);
+    m_server_ptr->config(m_config_mgr); // copy config_mgr to server object
+    m_server_ptr->start(); // main thread loop
 
-    m_server->start(); // main thread loop
-    LOG_ERROR("m_server_start() return");
+    LOG_ERROR("m_server_ptr->start() return");
     return 0;
 }
 
@@ -116,10 +129,9 @@ void system::signal_conf()
 {
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, SIG_IGN);
+
     signal(SIGINT, &system::signal_int);
     signal(SIGTERM, &system::signal_term); // to call server::to_stop
-    signal(SIGSTOP, &system::signal_term);
-    signal(SIGKILL, &system::signal_term);
     signal(SIGUSR1, &system::signal_usr1);
 }
 
@@ -154,21 +166,18 @@ void system::create_daemon()
 
 void system::signal_term(int sig)
 {
-    singleton<server::server>::instance()->to_stop();
+    avant_global_system_ptr->m_server_ptr->to_stop();
 }
 
 void system::signal_usr1(int sig)
 {
-    singleton<server::server>::instance()->cmd_reload();
+    avant_global_system_ptr->m_server_ptr->cmd_reload();
 }
 
 void system::signal_int(int sig)
 {
-    inifile::inifile *ini = singleton<inifile::inifile>::instance();
-    const int daemon = (*ini)["server"]["daemon"];
-
-    if (!daemon)
+    if (!avant_global_system_ptr->m_config_mgr.get_daemon())
     {
-        singleton<server::server>::instance()->to_stop();
+        avant_global_system_ptr->m_server_ptr->to_stop();
     }
 }

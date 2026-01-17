@@ -35,8 +35,8 @@ namespace avant::server
         void start();
         [[nodiscard]] SSL_CTX *get_ssl_ctx();
 
-        void config(system::config_mgr *config_mgr);
-        [[nodiscard]] const system::config_mgr *get_config() const { return m_config_mgr; }
+        void config(const system::config_mgr &config_mgr);
+        [[nodiscard]] const system::config_mgr &get_config() const { return m_config_mgr; }
 
         avant::task::task_type get_task_type();
         void to_stop();
@@ -68,7 +68,7 @@ namespace avant::server
         [[nodiscard]] connection::connection *get_main2other_tunnel();
 
     private:
-        system::config_mgr *m_config_mgr{nullptr};
+        system::config_mgr m_config_mgr;
 
         avant::utility::time m_server_loop_time;
         uint64_t m_latest_tick_time{0};

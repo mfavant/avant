@@ -25,7 +25,7 @@ void stream_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_
 
     bool err = false;
 
-    if (!err && !this->worker_ptr->get_server()->get_config()->get_use_ssl())
+    if (!err && !this->worker_ptr->get_server()->get_config().get_use_ssl())
     {
         this->conn_ptr->is_ready = true;
         try
@@ -94,7 +94,7 @@ void stream_ctx::on_event(uint32_t event)
     }
 
     // ssl not ready, ssl begin
-    if (this->worker_ptr->get_server()->get_config()->get_use_ssl() && !socket_ptr->get_ssl_accepted())
+    if (this->worker_ptr->get_server()->get_config().get_use_ssl() && !socket_ptr->get_ssl_accepted())
     {
         int ssl_status = SSL_accept(socket_ptr->get_ssl_instance());
 

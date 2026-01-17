@@ -62,7 +62,7 @@ namespace avant::system
         int m_other_udp_svr_port;
         int m_other_udp_svr_max_loop;
 
-        avant::inifile::inifile *m_ini;
+        avant::inifile::inifile m_ini;
         std::string m_root_path;
     };
 }

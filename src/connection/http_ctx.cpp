@@ -282,7 +282,7 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
 
     bool err = false;
 
-    if (!err && (!this->worker_ptr->get_server()->get_config()->get_use_ssl() || this->keep_alive))
+    if (!err && (!this->worker_ptr->get_server()->get_config().get_use_ssl() || this->keep_alive))
     {
         this->conn_ptr->is_ready = true;
         try
@@ -349,7 +349,7 @@ void http_ctx::on_event(uint32_t event)
         return;
     }
 
-    if (this->worker_ptr->get_server()->get_config()->get_use_ssl() && !socket_ptr->get_ssl_accepted()) // ssl not ready
+    if (this->worker_ptr->get_server()->get_config().get_use_ssl() && !socket_ptr->get_ssl_accepted()) // ssl not ready
     {
         int ssl_status = SSL_accept(socket_ptr->get_ssl_instance());
 

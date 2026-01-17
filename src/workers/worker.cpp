@@ -59,7 +59,7 @@ void worker::operator()()
     int num = -1;
     while (true)
     {
-        num = this->epoller.wait(this->get_server()->get_config()->get_epoll_wait_time());
+        num = this->epoller.wait(this->get_server()->get_config().get_epoll_wait_time());
         if (num < 0)
         {
             if (errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
@@ -633,7 +633,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         }
 
         // SSL
-        if (this->get_server()->get_config()->get_use_ssl())
+        if (this->get_server()->get_config().get_use_ssl())
         {
             if (conn->socket_obj.get_ssl_instance())
             {
