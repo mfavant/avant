@@ -36,13 +36,21 @@ concepts directly, making it easier to design application-specific protocols and
 For C++ beginners, Avant can also serve as a practical learning project for understanding
 Linux system programming, network I/O, and multi-threaded server architecture.
 
-## Docker Image
+## Containers
+
+Docker Image
 
 ```bash
 docker run --privileged \
     -p 20023:20023 \
     -v ${LOCAL_HTTP_DIR_PATH}:/avant_static \
     gaowanlu/avant:latest
+```
+
+Kubernetes
+
+```bash
+kubectl apply -f avant-pod.yaml
 ```
 
 ## Getting Started
