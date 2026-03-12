@@ -12,10 +12,10 @@ spec:
   containers:
     - name: avant
       image: gaowanlu/avant:latest
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
 
       ports:
-        - containerPort: 8080
+        - containerPort: 20023
           name: http
           protocol: TCP
       
