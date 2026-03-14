@@ -7,12 +7,12 @@ spec:
   volumes:
     - name: avant-data
       hostPath:
-        path: /
+        path: /var/www/html
 
   containers:
     - name: avant
       image: gaowanlu/avant:latest
-      imagePullPolicy: Always
+      imagePullPolicy: IfNotPresent
 
       ports:
         - containerPort: 20023
