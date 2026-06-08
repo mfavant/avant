@@ -1,6 +1,12 @@
 // g++ client_nb_connect.cpp -o main.exe --std=c++11
 #include <iostream>
+
+#if defined(__linux__)
 #include <sys/epoll.h>
+#elif defined(__APPLE__)
+#include <sys/event.h>
+#endif
+
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -56,6 +62,7 @@ int main(int argc, const char **argv)
         return -1;
     }
 
+#ifdef __linux__
     int epoll_fd = epoll_create1(0);
     if (epoll_fd == -1)
     {
@@ -64,10 +71,11 @@ int main(int argc, const char **argv)
         return -1;
     }
 
-    struct epoll_event event;
-    event.events = EPOLLOUT;
-    event.data.fd = sockfd;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sockfd, &event) == -1)
+    epoll_event ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.events = EPOLLOUT;
+    ev.data.fd = sockfd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sockfd, &ev) == -1)
     {
         std::cerr << "failed to add socket to epoll" << std::endl;
         ::close(sockfd);
@@ -75,7 +83,7 @@ int main(int argc, const char **argv)
         return -1;
     }
 
-    struct epoll_event events[1];
+    epoll_event events[1];
     int nfds = epoll_wait(epoll_fd, events, 1, 5000); // wait 5 s
     if (nfds == -1)
     {
@@ -91,6 +99,65 @@ int main(int argc, const char **argv)
         ::close(epoll_fd);
         return -1;
     }
+
+    ::close(epoll_fd);
+
+#endif
+
+#ifdef __APPLE__
+    // 创建一个 kqueue 实例
+    int kq = kqueue();
+    if (kq == -1)
+    {
+        std::cerr << "failed to create kqueue" << std::endl;
+        ::close(sockfd);
+        return -1;
+    }
+
+    // 定义一个kqueue时间结构
+    struct kevent change;
+    // 设置监听事件 监听写事件
+    EV_SET(&change, sockfd, EVFILT_WRITE, EV_ADD, 0, 0, NULL);
+    // 把change注册到kqueue kq 哪个kqueue &change 要提交的事件数组
+    // 1 数组元素数量 NULL 不取返回事件 0 返回事件数量为0 NULL 不等待
+    // 相当于 epoll_ctl
+    if (kevent(kq, &change, 1, NULL, 0, NULL) == -1)
+    {
+        std::cerr << "failed to add socket to kqueue" << std::endl;
+        ::close(sockfd);
+        ::close(kq);
+        return -1;
+    }
+
+    // 准备接收事件
+    struct kevent events[1];
+    struct timespec timeout; // 设置超时
+    timeout.tv_sec = 5;      // 5 s
+    timeout.tv_nsec = 0;
+    // 等待事件 kq kqueue对象 NULL 没有新事件需要提交
+    // 0 提交事件数量 events 接收触发事件
+    // 1 最多返回1个事件
+    // &timeout 超时设置
+    int nfds = kevent(kq, NULL, 0, events, 1, &timeout);
+
+    if (nfds == -1)
+    {
+        std::cerr << "kevent failed" << std::endl;
+        ::close(sockfd);
+        ::close(kq);
+        return -1;
+    }
+    else if (nfds == 0)
+    {
+        std::cerr << "connect timed out" << std::endl;
+        ::close(sockfd);
+        ::close(kq);
+        return -1;
+    }
+
+    ::close(kq);
+
+#endif
 
     // checking result
     int error = 0;
@@ -109,7 +176,6 @@ int main(int argc, const char **argv)
     }
 
     ::close(sockfd);
-    ::close(epoll_fd);
 
     return 0;
 }
