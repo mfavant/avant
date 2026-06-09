@@ -395,7 +395,9 @@ int main(int argc, const char **argv)
 #ifdef __linux__
                                     uint64_t packSize = ::be64toh(*((uint64_t *)client_conn->recv_buffer));
 #elif defined(__APPLE__)
-                                    uint64_t packSize = OSSwapBigToHostInt64(*((uint64_t *)client_conn->recv_buffer));
+                                    uint64_t rawPackSize;
+                                    memcpy(&rawPackSize, client_conn->recv_buffer, sizeof(rawPackSize));
+                                    uint64_t packSize = OSSwapBigToHostInt64(rawPackSize);
 #endif
                                     if (client_conn->recv_data_len < packSize + sizeof(uint64_t))
                                     {
@@ -418,7 +420,7 @@ int main(int argc, const char **argv)
                                             {
                                                 recv_size.fetch_add(1);
 
-                                                // std::cout << "recv a package " << client_socket << " recv_size " << recv_size.load() << std::endl;
+                                                std::cout << "recv a package " << client_socket << " recv_size " << recv_size.load() << std::endl;
 
                                                 // uint64_t now_time = std::time(nullptr);
                                                 if ((recv_size - last_print_size) >= 100000)

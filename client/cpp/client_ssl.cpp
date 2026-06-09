@@ -8,7 +8,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#if defined(__linux__)
 #include <endian.h>
+#elif defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#endif
+
 #include <thread>
 #include <chrono>
 
@@ -18,6 +24,8 @@
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+
+using namespace avant;
 
 //             std::string body_str;
 //             body_str.resize(exampleReq.ByteSizeLong());
@@ -79,7 +87,7 @@ int main(int argc, const char **argv)
     }
 
     // const char *server_ip = "61.171.51.135";
-    const char *server_ip = "127.0.0.1";
+    const char *server_ip = "45.205.26.156";
     int server_port = ::atoi(argv[1]);
 
     int n;
@@ -109,6 +117,7 @@ int main(int argc, const char **argv)
         std::thread m_thread(
             [server_port, server_ip, argv, loop, &stop_flag, &client_cnt, &pingpong_cnt, ctx]()
             {
+                std::cout << "thread " << loop << " start" << std::endl;
                 ProtoPackage message;
                 ProtoCSReqExample exampleReq;
                 constexpr uint send_all_string_bytes = 8;
@@ -124,6 +133,7 @@ int main(int argc, const char **argv)
 
                 int client_socket_arr[client_cnt]{0};
                 std::vector<SSL *> ssl;
+                std::vector<char> buffer(502400);
 
                 for (int client_idx = 0; client_idx < client_cnt; client_idx++)
                 {
@@ -181,6 +191,8 @@ int main(int argc, const char **argv)
                     SSL_connect(ssl[client_idx]);
                 }
 
+                std::cout << "client " << loop << " connected" << std::endl;
+
                 while (true)
                 {
                     if (stop_flag)
@@ -208,15 +220,22 @@ int main(int argc, const char **argv)
                         message.SerializeToString(&data);
 
                         uint64_t packageLen = data.size();
+
+#if defined(__linux__)
                         packageLen = ::htobe64(packageLen);
-                        data.insert(0, (char *)&packageLen, sizeof(packageLen));
+#elif defined(__APPLE__)
+                        packageLen = OSSwapHostToBigInt64(packageLen);
+#endif
+                        char len_bytes[sizeof(uint64_t)];
+                        memcpy(len_bytes, &packageLen, sizeof(packageLen));
+                        data.insert(0, len_bytes, sizeof(len_bytes));
 
                         // every client pingpong 1
                         for (int i = 0; i < pingpong_cnt; i++)
                         {
                             std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
                             std::chrono::milliseconds send_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-                            // std::cout << "ping" << std::endl;
+                            std::cout << "ping" << std::endl;
                             uint64_t sended = 0;
                             while (data.size() != sended)
                             {
@@ -237,20 +256,18 @@ int main(int argc, const char **argv)
                             }
                             send_size++;
                             // printf("Send all bytes package %ld body %ld all %ld\n", data.size(), body_str.size(), data.size() + body_str.size());
-                            // std::cout << "ping OK" << std::endl;
+                            std::cout << "ping OK" << std::endl;
 
-                            // block read res package
-                            char buffer[5024000]{0};
                             uint64_t data_len = 0;
 
                             // std::cout << "pong" << std::endl;
-                            // std::cout <<"recv.."<<std::endl;
+                            std::cout <<"recv.."<<std::endl;
                             // std::cout << "reading=======================================================================>" << std::endl;
 
                             std::this_thread::sleep_for(std::chrono::microseconds(1));
                             while (true)
                             {
-                                int recv_len = SSL_read(ssl[client_idx], buffer + data_len, 5024000);
+                                int recv_len = SSL_read(ssl[client_idx], buffer.data() + data_len, 5024000);
                                 if (recv_len == 0)
                                 {
                                     close(client_socket);
@@ -264,7 +281,7 @@ int main(int argc, const char **argv)
                                     continue;
                                 }
                                 // 6000 * 20 * 2MB = 6 000 * 2 0 * 2=240 000MB = 240GB
-                                // printf("data_len[%u] += recv_len[%d]\n", data_len, recv_len);
+                                printf("data_len[%u] += recv_len[%d]\n", data_len, recv_len);
                                 data_len += recv_len;
 
                                 if (data_len < sizeof(uint64_t))
@@ -273,7 +290,14 @@ int main(int argc, const char **argv)
                                     continue;
                                 }
 
-                                uint64_t packSize = ::be64toh(*((uint64_t *)buffer));
+                                uint64_t packSize = 0;
+                                uint64_t rawPackSize;
+                                memcpy(&rawPackSize, buffer.data(), sizeof(rawPackSize));
+#if defined(__linux__)
+                                packSize = ::be64toh(rawPackSize);
+#elif defined(__APPLE__)
+                                packSize = OSSwapBigToHostInt64(rawPackSize);
+#endif
 
                                 if (data_len < packSize + sizeof(uint64_t))
                                 {
@@ -284,7 +308,7 @@ int main(int argc, const char **argv)
                                 ProtoPackage protoPackage;
                                 // std::cout << "ParseFromArray recv_len[" << recv_len << "]"
                                 //           << "data_len=" << data_len << std::endl;
-                                if (!protoPackage.ParseFromArray(buffer + sizeof(uint64_t), packSize))
+                                if (!protoPackage.ParseFromArray(buffer.data() + sizeof(uint64_t), packSize))
                                 {
                                     // std::cout << "Failed" << std::endl;
                                     // std::cout << "ParseFromArray recv_len[" << recv_len << "]"
@@ -305,7 +329,7 @@ int main(int argc, const char **argv)
                                             uint64_t now_time = std::time(nullptr);
                                             if ((recv_size - last_print_size) >= 100)
                                             {
-                                                // printf("RES(thread[%d] seconds[%lu] send_size[%lu],recv_size[%lu])\n", loop, now_time - last_time, send_size, recv_size);
+                                                printf("RES(thread[%d] seconds[%lu] send_size[%lu],recv_size[%lu])\n", loop, now_time - last_time, send_size, recv_size);
                                                 std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
                                                 std::chrono::milliseconds recv_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
                                                 std::cout << "pingpong " << recv_ms.count() - send_ms.count() << " ms cnt " << recv_size << "  " << send_all_string_bytes << " bytes " << std::endl;
@@ -332,7 +356,7 @@ int main(int argc, const char **argv)
                                 }
                             }
 
-                            // std::cout << "pong OK" << std::endl;
+                            std::cout << "pong OK" << std::endl;
                             // std::cout << "pingpong OK" << std::endl;
                         }
 
