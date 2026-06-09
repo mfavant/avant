@@ -1,7 +1,7 @@
 // g++ client_nb_connect.cpp -o main.exe --std=c++11
 #include <iostream>
 
-#if defined(__linux__)
+#ifdef __linux__
 #include <sys/epoll.h>
 #elif defined(__APPLE__)
 #include <sys/event.h>
@@ -102,9 +102,8 @@ int main(int argc, const char **argv)
 
     ::close(epoll_fd);
 
-#endif
+#elif defined(__APPLE__)
 
-#ifdef __APPLE__
     // 创建一个 kqueue 实例
     int kq = kqueue();
     if (kq == -1)
@@ -178,4 +177,5 @@ int main(int argc, const char **argv)
     ::close(sockfd);
 
     return 0;
+
 }

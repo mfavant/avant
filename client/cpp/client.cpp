@@ -1,18 +1,31 @@
+// linux
 // g++ -o client.exe client.cpp ../../protocol/proto_res/*.pb.cc --std=c++17 -lprotobuf -lpthread
+// macos
+// CMakeLists.txt
+
 #include <iostream>
 #include <string>
 #include <sstream>
-#include <google/protobuf/io/zero_copy_stream.h>
-#include <google/protobuf/io/coded_stream.h>
-#include <google/protobuf/message.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <endian.h>
+
 #include <thread>
 #include <chrono>
 #include <unistd.h>
+
+#include <google/protobuf/io/zero_copy_stream.h>
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/message.h>
+
+#if defined(__linux__)
 #include <sys/epoll.h>
+#include <endian.h>
+#elif defined(__APPLE__)
+#include <sys/event.h>
+#include <libkern/OSByteOrder.h>
+#endif
+
 #include <cstring>
 #include <vector>
 #include <fcntl.h>
@@ -21,6 +34,8 @@
 #include "../../protocol/proto_res/proto_cmd.pb.h"
 #include "../../protocol/proto_res/proto_example.pb.h"
 #include "../../protocol/proto_res/proto_message_head.pb.h"
+
+using namespace avant;
 
 static bool is_ipv6(std::string ip)
 {
@@ -49,17 +64,17 @@ int main(int argc, const char **argv)
     }
 
     // const char *server_ip = "61.171.51.135";
-    const char *server_ip = "127.0.0.1";
+    const char *server_ip = "45.205.26.156";
     int server_port = ::atoi(argv[1]);
 
     int n;
     bool stop_flag = false;
 
-    constexpr int thread_count = 3;
+    constexpr int thread_count = 2;
 
-    constexpr int client_cnt = 100;
+    constexpr int client_cnt = 10;
 
-    constexpr int pingpong_cnt = 20;
+    constexpr int pingpong_cnt = 2;
     // 350KB/s
 
     std::atomic<uint64_t> recv_size = 0;
@@ -67,6 +82,7 @@ int main(int argc, const char **argv)
     // 1024KB
     for (int loop = 0; loop < thread_count; loop++)
     {
+        // std::cout << "start thread " << loop << std::endl;
         std::thread m_thread(
             [server_port, server_ip, argv, loop, &stop_flag, &client_cnt, &pingpong_cnt, &recv_size]()
             {
@@ -85,6 +101,8 @@ int main(int argc, const char **argv)
 
                 int client_socket_arr[client_cnt]{0};
                 conn conn_arr[client_cnt];
+
+#ifdef __linux__
                 struct epoll_event event, events[client_cnt];
                 // epoll
                 int epoll_fd = epoll_create(client_cnt);
@@ -93,7 +111,17 @@ int main(int argc, const char **argv)
                     std::cerr << "epoll_create1 failed" << std::endl;
                     return;
                 }
-
+#elif defined(__APPLE__)
+                struct kevent event, events[client_cnt];
+                // kqueue
+                int kq = kqueue();
+                if (kq == -1)
+                {
+                    std::cerr << "failed to create kqueue" << std::endl;
+                    return -1;
+                }
+#endif
+                // std::cout << "start connect server " << server_ip << ":" << server_port << std::endl;
                 for (int client_idx = 0; client_idx < client_cnt; client_idx++)
                 {
                     int &client_socket = client_socket_arr[client_idx];
@@ -108,7 +136,7 @@ int main(int argc, const char **argv)
                     if (client_socket == -1)
                     {
                         perror("Socket creation failed");
-                        return;
+                        return -1;
                     }
 
                     if (INET == AF_INET)
@@ -122,7 +150,7 @@ int main(int argc, const char **argv)
                         {
                             perror("Connection failed");
                             close(client_socket);
-                            return;
+                            return -1;
                         }
                     }
                     else
@@ -134,14 +162,14 @@ int main(int argc, const char **argv)
                         {
                             perror("Invalid IPV6 address");
                             close(client_socket);
-                            return;
+                            return -1;
                         }
 
                         if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1)
                         {
                             perror("Connection failed");
                             close(client_socket);
-                            return;
+                            return -1;
                         }
                     }
 
@@ -163,6 +191,8 @@ int main(int argc, const char **argv)
                     conn_arr[client_idx].fd = client_socket;
                     conn_arr[client_idx].recv_data_len = 0;
                     conn_arr[client_idx].sended = 0;
+
+#ifdef __linux__
                     // 添加fd到epoll
                     event.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
                     // event.data.fd = client_socket;
@@ -171,9 +201,23 @@ int main(int argc, const char **argv)
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &event) == -1)
                     {
                         std::cerr << "epoll_ctl failed" << std::endl;
-                        exit(EXIT_FAILURE);
+                        ::close(client_socket);
+                        ::close(epoll_fd);
+                        return -1;
                     }
+#elif defined(__APPLE__)
+                    // 添加fd到kqueue
+                    EV_SET(&event, client_socket, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, &conn_arr[client_idx]);
+                    if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
+                    {
+                        std::cerr << "failed to add socket to kqueue" << std::endl;
+                        ::close(client_socket);
+                        ::close(kq);
+                        return -1;
+                    }
+#endif
                 }
+                // std::cout << "connect server success " << client_cnt << " clients" << std::endl;
 
                 std::string str;
                 exampleReq.SerializeToString(&str);
@@ -183,17 +227,35 @@ int main(int argc, const char **argv)
                 message.SerializeToString(&data);
 
                 uint64_t packageLen = data.size();
+#ifdef __linux__
                 packageLen = ::htobe64(packageLen);
+#elif defined(__APPLE__)
+                packageLen = OSSwapHostToBigInt64(packageLen);
+#endif
                 data.insert(0, (char *)&packageLen, sizeof(packageLen));
 
                 while (true)
                 {
+#ifdef __linux__
                     int nfds = epoll_wait(epoll_fd, events, client_cnt, 10);
                     if (nfds == -1 && errno != EINTR)
                     {
                         perror("epoll_wait err");
                         exit(EXIT_FAILURE);
                     }
+#elif defined(__APPLE__)
+                    struct timespec timeout;
+                    timeout.tv_sec = 1;
+                    timeout.tv_nsec = 0; // 10 * 1000 * 1000; // 10ms
+                    int nfds = kevent(kq, NULL, 0, events, client_cnt, &timeout);
+                    if (nfds == -1 && errno != EINTR)
+                    {
+                        perror("kevent err nfds==-1");
+                        exit(EXIT_FAILURE);
+                    }
+#endif
+
+                    // std::cout << "loop " << loop << " nfds " << nfds << std::endl;
 
                     if (stop_flag)
                     {
@@ -204,20 +266,40 @@ int main(int argc, const char **argv)
                                 close(client_socket_arr[i]);
                             }
                         }
-                        return;
+                        return -1;
                     }
 
                     for (int event_idx = 0; event_idx < nfds; event_idx++)
                     {
+#ifdef __linux__
                         conn *client_conn = (conn *)events[event_idx].data.ptr;
+#elif defined(__APPLE__)
+                        conn *client_conn = (conn *)events[event_idx].udata;
+#endif
+
                         int client_socket = client_conn->fd;
+
+#ifdef __linux__
                         if (events[event_idx].events & (EPOLLERR | EPOLLRDHUP | EPOLLHUP))
                         {
                             perror("EPOLLERR | EPOLLRDHUP | EPOLLHUP");
                             exit(EXIT_FAILURE);
                         }
-                        while ((events[event_idx].events & EPOLLOUT) && client_conn->status == 0)
+#elif defined(__APPLE__)
+                        if (events[event_idx].flags & (EV_ERROR | EV_EOF))
                         {
+                            perror("EV_ERROR");
+                            exit(EXIT_FAILURE);
+                        }
+#endif
+
+#ifdef __linux__
+                        while ((events[event_idx].events & EPOLLOUT) && client_conn->status == 0)
+#elif defined(__APPLE__)
+                        while ((events[event_idx].filter == EVFILT_WRITE) && client_conn->status == 0)
+#endif
+                        {
+                            // std::cout << "try send " << client_socket << std::endl;
                             while (data.size() != client_conn->sended)
                             {
                                 int len = send(client_socket, data.c_str() + client_conn->sended, data.size() - client_conn->sended, 0);
@@ -242,6 +324,8 @@ int main(int argc, const char **argv)
                                 client_conn->sended = 0;
                                 client_conn->recv_data_len = 0;
                                 client_conn->status = 1; // 监听读
+
+#ifdef __linux__
                                 event.events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
                                 // event.data.fd = client_socket;
                                 event.data.ptr = client_conn;
@@ -250,14 +334,36 @@ int main(int argc, const char **argv)
                                     std::cerr << "epoll_ctl failed" << std::endl;
                                     exit(EXIT_FAILURE);
                                 }
+#elif defined(__APPLE__)
+                                // 修改kqueue事件为监听读事件
+                                EV_SET(&event, client_socket, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, client_conn);
+                                if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
+                                {
+                                    std::cerr << "failed to add socket to kqueue" << std::endl;
+                                    exit(EXIT_FAILURE);
+                                }
+                                // 暂时停止监听写事件
+                                EV_SET(&event, client_socket, EVFILT_WRITE, EV_DISABLE, 0, 0, client_conn);
+                                if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
+                                {
+                                    std::cerr << "failed to disable write event in kqueue" << std::endl;
+                                    exit(EXIT_FAILURE);
+                                }
+#endif
                                 // printf("send a package\n");
+                                // std::cout << "send a package " << client_socket << std::endl;
                                 break;
                             }
                             break;
                         }
+
+#ifdef __linux__
                         while ((events[event_idx].events & EPOLLIN) && client_conn->status == 1)
+#elif defined(__APPLE__)
+                        while ((events[event_idx].filter == EVFILT_READ) && client_conn->status == 1)
+#endif
                         {
-                            // printf("try read");
+                            // std::cout << "try read " << client_socket << std::endl;
                             while (22 != client_conn->recv_data_len)
                             {
                                 int read_len = read(client_socket, client_conn->recv_buffer + client_conn->recv_data_len, sizeof(client_conn->recv_buffer));
@@ -286,8 +392,11 @@ int main(int argc, const char **argv)
                                         perror("client_conn->recv_data_len < sizeof(uint64_t)");
                                         exit(EXIT_FAILURE);
                                     }
+#ifdef __linux__
                                     uint64_t packSize = ::be64toh(*((uint64_t *)client_conn->recv_buffer));
-
+#elif defined(__APPLE__)
+                                    uint64_t packSize = OSSwapBigToHostInt64(*((uint64_t *)client_conn->recv_buffer));
+#endif
                                     if (client_conn->recv_data_len < packSize + sizeof(uint64_t))
                                     {
                                         perror("client_conn->recv_data_len < packSize + sizeof(uint64_t)");
@@ -308,6 +417,8 @@ int main(int argc, const char **argv)
                                             if (exampleRes.ParseFromString(protoPackage.protocol()))
                                             {
                                                 recv_size.fetch_add(1);
+
+                                                // std::cout << "recv a package " << client_socket << " recv_size " << recv_size.load() << std::endl;
 
                                                 // uint64_t now_time = std::time(nullptr);
                                                 if ((recv_size - last_print_size) >= 100000)
@@ -338,6 +449,8 @@ int main(int argc, const char **argv)
                                 client_conn->sended = 0;
                                 client_conn->recv_data_len = 0;
                                 client_conn->status = 0; // 监听发
+
+#ifdef __linux__
                                 event.events = EPOLLOUT | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
                                 // event.data.fd = client_socket;
                                 event.data.ptr = client_conn;
@@ -346,6 +459,23 @@ int main(int argc, const char **argv)
                                     std::cerr << "epoll_ctl failed" << std::endl;
                                     exit(EXIT_FAILURE);
                                 }
+#elif defined(__APPLE__)
+                                // 修改kqueue事件为监写事件
+                                EV_SET(&event, client_socket, EVFILT_WRITE, EV_ENABLE, 0, 0, client_conn);
+                                if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
+                                {
+                                    std::cerr << "failed to disable write event in kqueue" << std::endl;
+                                    exit(EXIT_FAILURE);
+                                }
+                                // 暂时停止监听读事件
+                                EV_SET(&event, client_socket, EVFILT_READ, EV_DISABLE, 0, 0, client_conn);
+                                if (kevent(kq, &event, 1, NULL, 0, NULL) == -1)
+                                {
+                                    std::cerr << "failed to disable read event in kqueue" << std::endl;
+                                    exit(EXIT_FAILURE);
+                                }
+#endif
+
                                 // printf("recv over,loop status to send");
                                 break;
                             }
