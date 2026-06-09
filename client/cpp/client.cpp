@@ -118,7 +118,7 @@ int main(int argc, const char **argv)
                 if (kq == -1)
                 {
                     std::cerr << "failed to create kqueue" << std::endl;
-                    return -1;
+                    return;
                 }
 #endif
                 // std::cout << "start connect server " << server_ip << ":" << server_port << std::endl;
@@ -136,7 +136,7 @@ int main(int argc, const char **argv)
                     if (client_socket == -1)
                     {
                         perror("Socket creation failed");
-                        return -1;
+                        return;
                     }
 
                     if (INET == AF_INET)
@@ -150,7 +150,7 @@ int main(int argc, const char **argv)
                         {
                             perror("Connection failed");
                             close(client_socket);
-                            return -1;
+                            return;
                         }
                     }
                     else
@@ -162,14 +162,14 @@ int main(int argc, const char **argv)
                         {
                             perror("Invalid IPV6 address");
                             close(client_socket);
-                            return -1;
+                            return;
                         }
 
                         if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1)
                         {
                             perror("Connection failed");
                             close(client_socket);
-                            return -1;
+                            return;
                         }
                     }
 
@@ -203,7 +203,7 @@ int main(int argc, const char **argv)
                         std::cerr << "epoll_ctl failed" << std::endl;
                         ::close(client_socket);
                         ::close(epoll_fd);
-                        return -1;
+                        return;
                     }
 #elif defined(__APPLE__)
                     // 添加fd到kqueue
@@ -213,7 +213,7 @@ int main(int argc, const char **argv)
                         std::cerr << "failed to add socket to kqueue" << std::endl;
                         ::close(client_socket);
                         ::close(kq);
-                        return -1;
+                        return;
                     }
 #endif
                 }
@@ -266,7 +266,7 @@ int main(int argc, const char **argv)
                                 close(client_socket_arr[i]);
                             }
                         }
-                        return -1;
+                        return;
                     }
 
                     for (int event_idx = 0; event_idx < nfds; event_idx++)
