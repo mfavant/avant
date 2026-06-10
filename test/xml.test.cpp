@@ -1,6 +1,7 @@
 #include <iostream>
-#include "../src/xml/element.h"
-#include "../src/xml/document.h"
+
+#include "../external/avant-xml/element.h"
+#include "../external/avant-xml/document.h"
 
 using namespace std;
 using namespace avant::xml;
@@ -24,5 +25,5 @@ int main(int argc, char **argv)
 
     return 0;
 }
-// g++ ../src/xml/element.cpp ../src/xml/document.cpp xml.test.cpp -o xml.test.exe
+// g++ ../external/avant-xml/element.cpp ../external/avant-xml/document.cpp xml.test.cpp -o xml.test.exe
 // ./xml.test.exe

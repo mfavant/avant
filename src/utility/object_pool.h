@@ -1,16 +1,14 @@
 #pragma once
 #include <unordered_set>
 #include <cstdlib>
-#include "thread/mutex.h"
-#include "thread/auto_lock.h"
-#include "thread/condition.h"
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 namespace avant
 {
     namespace utility
     {
-        using namespace thread;
-
         template <typename T>
         class object_pool
         {
@@ -48,8 +46,8 @@ namespace avant
              * @brief ensure thread safety for m_list operations
              *
              */
-            mutex m_mutex;
-            condition m_condition;
+            std::mutex m_mutex;
+            std::condition_variable m_condition;
             T *m_objects{nullptr};
             bool m_block{true};
             size_t m_max_size{0};
@@ -58,7 +56,7 @@ namespace avant
         template <typename T>
         object_pool<T>::~object_pool()
         {
-            auto_lock lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             if (m_objects)
             {
                 for (size_t i = 0; i < m_max_size; i++)
@@ -75,7 +73,7 @@ namespace avant
         template <typename... ARGS>
         int object_pool<T>::init(size_t max_size, bool block, ARGS &&...args)
         {
-            auto_lock lock(m_mutex);
+            std::lock_guard<std::mutex> lock(m_mutex);
             m_objects = (T *)::malloc(sizeof(T) * max_size);
             if (!m_objects)
             {
@@ -102,12 +100,12 @@ namespace avant
         template <typename T>
         T *object_pool<T>::allocate()
         {
-            auto_lock lock(m_mutex);
+            std::unique_lock<std::mutex> lock(m_mutex);
             if (m_block)
             {
                 while (m_set.empty())
                 {
-                    m_condition.wait(&m_mutex);
+                    m_condition.wait(lock);
                 }
             }
             else
@@ -127,10 +125,11 @@ namespace avant
         {
             if (t)
             {
-                m_mutex.lock();
-                m_set.insert(t);
-                m_mutex.unlock();
-                m_condition.broadcast();
+                {
+                    std::lock_guard<std::mutex> lock(m_mutex);
+                    m_set.insert(t);
+                }
+                m_condition.notify_all();
             }
         }
 
@@ -138,9 +137,10 @@ namespace avant
         uint object_pool<T>::space()
         {
             uint space = 0;
-            m_mutex.lock();
-            space = m_set.size();
-            m_mutex.unlock();
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                space = m_set.size();
+            }
             return space;
         }
     }

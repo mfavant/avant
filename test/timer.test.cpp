@@ -58,4 +58,4 @@ int main(int argc, char **argv)
     return 0;
 }
 
-//  g++ timer.test.cpp ../external/avant-timer/timer.cpp ../external/avant-timer/timer_manager.cpp -o timer.test.exe -I"../src/" -lpthread
+// g++ timer.test.cpp ../external/avant-timer/timer.cpp ../external/avant-timer/timer_manager.cpp -o timer.test.exe -I"../src/" -lpthread
