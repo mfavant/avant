@@ -87,8 +87,8 @@ int main(int argc, char **argv)
         std::cout << "udp closed" << std::endl;
     };
 
-    std::cout << "udp listening on :: 20027" << std::endl;
-    udp.udp_component_server("::", 20027);
+    std::cout << "udp listening on 127.0.0.1 20027" << std::endl;
+    udp.udp_component_server("127.0.0.1", 20027);
 
     return 0;
 }

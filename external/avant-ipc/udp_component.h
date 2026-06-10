@@ -9,7 +9,13 @@
 #include <fcntl.h>
 #include <cstring>
 #include <string>
+
+#ifdef __linux__
 #include <sys/epoll.h>
+#elif defined(__APPLE__)
+#include <sys/event.h>
+#endif
+
 #include <functional>
 
 namespace avant
@@ -55,7 +61,7 @@ namespace avant
         private:
             // 用 -1 表示无效 fd
             int m_socket_fd{-1};
-            int m_epoll_fd{-1};
+            int m_epoll_or_kqueue_fd{-1};
 
         public:
             // tick_callback: 可在 event loop 中周期性调用来判断是否退出

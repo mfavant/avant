@@ -33,11 +33,13 @@ namespace avant
                 close(m_socket_fd);
                 m_socket_fd = -1;
             }
-            if (m_epoll_fd != -1)
+
+            if (m_epoll_or_kqueue_fd != -1)
             {
-                close(m_epoll_fd);
-                m_epoll_fd = -1;
+                close(m_epoll_or_kqueue_fd);
+                m_epoll_or_kqueue_fd = -1;
             }
+
             if (close_callback)
             {
                 close_callback();
@@ -228,7 +230,7 @@ namespace avant
             // ensure socket exists
             if (m_socket_fd == -1 && addr == nullptr)
             {
-                if (0 != init_sock("")) // client udp socket
+                if (0 != init_sock(TARGET_IP)) // client udp socket - use target IP to determine socket family
                 {
                     perror("udp_component_client: Error creating client udp socket");
                     return -1;
@@ -296,7 +298,7 @@ namespace avant
 
             if (bytesSent != len)
             {
-                perror("udp_component_client: Error sending message (bytesSent != len)");
+                std::cout << "udp_component_client: Error sending message, bytesSent = " << bytesSent << ", expected = " << len << std::endl;
                 // 不立即 close，返回错误以便上层处理
                 return -1;
             }
@@ -321,17 +323,23 @@ namespace avant
             }
 
             // create epoll instance if not created
-            if (m_epoll_fd == -1)
+            if (m_epoll_or_kqueue_fd == -1)
             {
-                m_epoll_fd = epoll_create1(0);
+#ifdef __linux__
+                m_epoll_or_kqueue_fd = epoll_create1(0);
+#elif defined(__APPLE__)
+                m_epoll_or_kqueue_fd = kqueue();
+#endif
             }
-            if (m_epoll_fd == -1)
+
+            if (m_epoll_or_kqueue_fd == -1)
             {
-                perror("event_loop: error creating epoll");
+                perror("event_loop: error creating epoll/kqueue");
                 to_close();
                 return -1;
             }
 
+#ifdef __linux__
             // add server fd to epoll's listen list
             epoll_event event;
             memset(&event, 0, sizeof(event));
@@ -343,16 +351,40 @@ namespace avant
                 to_close();
                 return -1;
             }
+#elif defined(__APPLE__)
+            // add server fd to kqueue's listen list
+            struct kevent event;
+            EV_SET(&event, m_socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+            if (kevent(m_epoll_or_kqueue_fd, &event, 1, NULL, 0, NULL) == -1)
+            {
+                perror("event_loop: error adding server socket to kqueue");
+                to_close();
+                return -1;
+            }
+#endif
 
             constexpr int MAX_EVENTS_NUM = 8;
-            epoll_event events[MAX_EVENTS_NUM];
+
+#ifdef __linux__
+            struct epoll_event events[MAX_EVENTS_NUM];
+#elif defined(__APPLE__)
+            struct kevent events[MAX_EVENTS_NUM];
+#endif
+
             memset(events, 0, sizeof(events));
 
             // event loop
             while (true)
             {
                 int timeout_ms = 1000; // 1s；避免 10ms 的 busy-loop
-                int events_num = epoll_wait(m_epoll_fd, events, MAX_EVENTS_NUM, timeout_ms);
+                int events_num = 0;
+
+#ifdef __linux__
+                events_num = epoll_wait(m_epoll_fd, events, MAX_EVENTS_NUM, timeout_ms);
+#elif defined(__APPLE__)
+                events_num = kevent(m_epoll_or_kqueue_fd, NULL, 0, events, MAX_EVENTS_NUM, NULL);
+#endif
+
                 if (events_num < 0)
                 {
                     if (errno == EINTR)
@@ -384,7 +416,11 @@ namespace avant
 
                 for (int i = 0; i < events_num; ++i)
                 {
+#ifdef __linux__
                     if (events[i].data.fd == m_socket_fd)
+#elif defined(__APPLE__)
+                    if (events[i].ident == (uintptr_t)m_socket_fd)
+#endif
                     {
                         server_recvfrom(10000);
                         // 可能有多个消息（edge-triggered），循环读尽
@@ -405,7 +441,7 @@ namespace avant
                 max_loop = UINT32_MAX;
             }
 
-            constexpr int buffer_size = 65507;
+            constexpr int buffer_size = 65536;
             std::unique_ptr<char[]> buffer(new char[buffer_size]);
 
             unsigned int loop_count = 0;

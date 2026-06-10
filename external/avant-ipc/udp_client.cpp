@@ -85,9 +85,8 @@ int main(int argc, char **argv)
         // close
     };
 
-    // IPv6 地址示例
     udp.udp_component_client(
-        "fe80::14c8:ffff:fe00:34", 20027,
+        "127.0.0.1", 20027,
         "pingpong", 8, nullptr, 0);
     udp.event_loop();
 
