@@ -345,7 +345,7 @@ namespace avant
             memset(&event, 0, sizeof(event));
             event.data.fd = m_socket_fd;
             event.events = EPOLLIN | EPOLLET; // edge-triggered 更高效（注意：非阻塞）
-            if (-1 == epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_socket_fd, &event))
+            if (-1 == epoll_ctl(m_epoll_or_kqueue_fd, EPOLL_CTL_ADD, m_socket_fd, &event))
             {
                 perror("event_loop: error adding server socket to epoll");
                 to_close();
@@ -380,7 +380,7 @@ namespace avant
                 int events_num = 0;
 
 #ifdef __linux__
-                events_num = epoll_wait(m_epoll_fd, events, MAX_EVENTS_NUM, timeout_ms);
+                events_num = epoll_wait(m_epoll_or_kqueue_fd, events, MAX_EVENTS_NUM, timeout_ms);
 #elif defined(__APPLE__)
                 events_num = kevent(m_epoll_or_kqueue_fd, NULL, 0, events, MAX_EVENTS_NUM, NULL);
 #endif
