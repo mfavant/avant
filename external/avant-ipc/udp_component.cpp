@@ -382,7 +382,10 @@ namespace avant
 #ifdef __linux__
                 events_num = epoll_wait(m_epoll_or_kqueue_fd, events, MAX_EVENTS_NUM, timeout_ms);
 #elif defined(__APPLE__)
-                events_num = kevent(m_epoll_or_kqueue_fd, NULL, 0, events, MAX_EVENTS_NUM, NULL);
+                struct timespec timeout;
+                timeout.tv_sec = timeout_ms / 1000;
+                timeout.tv_nsec = (timeout_ms % 1000) * 1000000; // ms 转 ns
+                events_num = kevent(m_epoll_or_kqueue_fd, NULL, 0, events, MAX_EVENTS_NUM, &timeout);
 #endif
 
                 if (events_num < 0)

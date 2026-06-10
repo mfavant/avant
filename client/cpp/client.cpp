@@ -246,7 +246,7 @@ int main(int argc, const char **argv)
 #elif defined(__APPLE__)
                     struct timespec timeout;
                     timeout.tv_sec = 1;
-                    timeout.tv_nsec = 0; // 10 * 1000 * 1000; // 10ms
+                    timeout.tv_nsec = 0;
                     int nfds = kevent(kq, NULL, 0, events, client_cnt, &timeout);
                     if (nfds == -1 && errno != EINTR)
                     {
