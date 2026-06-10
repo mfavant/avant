@@ -18,7 +18,7 @@ jobs:
 
     steps:
     - name: checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       
     - name: create tag
       run: |
@@ -31,7 +31,7 @@ jobs:
           echo TAG $TAG 
       
     - name: login to dockerhub
-      uses: docker/login-action@v1
+      uses: docker/login-action@v3
       with: 
         username: ${{ secrets.DOCKER_HUB_USER }}
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
