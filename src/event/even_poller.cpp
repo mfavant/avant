@@ -2,7 +2,7 @@
 
 using namespace avant::event;
 
-event_poller::event_poller() : m_epfd(0),
+event_poller::event_poller() : m_epfd(-1),
                                m_max_connections(0),
                                m_events(nullptr)
 {
@@ -10,11 +10,10 @@ event_poller::event_poller() : m_epfd(0),
 
 event_poller::~event_poller()
 {
-    if (m_epfd > 0)
+    if (m_epfd >= 0)
     {
-        if (m_epfd != 0)
-            ::close(m_epfd);
-        m_epfd = 0;
+        ::close(m_epfd);
+        m_epfd = -1;
     }
     if (m_events != nullptr)
     {
@@ -128,7 +127,36 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
     }
     return iret;
 #elif defined(__APPLE__)
-    return -1;
+    auto iter = fd_curr_reg_event.find(fd);
+    if (iter != fd_curr_reg_event.end())
+    {
+        if (iter->second == events) // no change
+        {
+            return 0;
+        }
+    }
+
+    struct kevent event{};
+    int iret = 0;
+    if (events & event_poller::READ)
+    {
+        EV_SET(&event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, ptr);
+        if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+        {
+            return -1;
+        }
+        fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::READ | event_poller::ERR;
+    }
+    if (events & event_poller::WRITE)
+    {
+        EV_SET(&event, fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, ptr);
+        if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+        {
+            return -1;
+        }
+        fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::WRITE | event_poller::ERR;
+    }
+    return 0;
 #endif
 }
 
@@ -154,21 +182,108 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
     }
     return iret;
 #elif defined(__APPLE__)
-    return -1;
+    auto iter = fd_curr_reg_event.find(fd);
+    if (iter != fd_curr_reg_event.end())
+    {
+        if (iter->second == events) // no change
+        {
+            return 0;
+        }
+    }
+
+    struct kevent event{};
+
+    // 需要监听读
+    if (events & event_poller::READ)
+    {
+        // 现在没有监听读，开启
+        if (!(fd_curr_reg_event[fd] & event_poller::READ))
+        {
+            EV_SET(&event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, ptr);
+            if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+            {
+                return -1;
+            }
+            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::READ | event_poller::ERR;
+        }
+    }
+    else // 需要停止监听读
+    {
+        // 现在正在监听读，关闭
+        if (fd_curr_reg_event[fd] & event_poller::READ)
+        {
+            EV_SET(&event, fd, EVFILT_READ, EV_DISABLE, 0, 0, ptr);
+            if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+            {
+                return -1;
+            }
+            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] & (~event_poller::READ);
+        }
+    }
+
+    // 需要监听写
+    if (events & event_poller::WRITE)
+    {
+        // 现在没有监听写，开启
+        if (!(fd_curr_reg_event[fd] & event_poller::WRITE))
+        {
+            EV_SET(&event, fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, ptr);
+            if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+            {
+                return -1;
+            }
+            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::WRITE | event_poller::ERR;
+        }
+    }
+    else // 需要停止监听写
+    {
+        // 现在正在监听写，关闭
+        if (fd_curr_reg_event[fd] & event_poller::WRITE)
+        {
+            EV_SET(&event, fd, EVFILT_WRITE, EV_DISABLE, 0, 0, ptr);
+            if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+            {
+                return -1;
+            }
+            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] & (~event_poller::WRITE);
+        }
+    }
+
+    return 0;
+
 #endif
 }
 
 int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 {
-#ifdef __linux__
     auto iter = fd_curr_reg_event.find(fd);
     if (iter != fd_curr_reg_event.end())
     {
         fd_curr_reg_event.erase(iter);
     }
+
+#ifdef __linux__
     return ctrl(fd, ptr, events, EPOLL_CTL_DEL, et);
 #elif defined(__APPLE__)
-    return -1;
+    struct kevent event{};
+    int iret = 0;
+    EV_SET(&event, fd, EVFILT_READ, EV_DELETE, 0, 0, ptr);
+    if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+    {
+        if (errno != ENOENT)
+        {
+            iret = -1;
+        }
+    }
+    EV_SET(&event, fd, EVFILT_WRITE, EV_DELETE, 0, 0, ptr);
+    if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
+    {
+        if (errno != ENOENT)
+        {
+            iret = -1;
+        }
+    }
+    return iret;
 #endif
 }
 
@@ -209,26 +324,28 @@ uint32_t event_poller::get_code_from_event(const struct kevent *event)
         return 0;
     }
 
+    uint32_t code = 0;
+
     if (event->flags & EV_ERROR)
     {
-        return event_poller::ERR;
+        code |= event_poller::ERR;
     }
 
     if (event->flags & EV_EOF)
     {
-        return event_poller::ERR;
+        code |= event_poller::ERR;
     }
 
     if (event->filter == EVFILT_READ)
     {
-        return event_poller::READ;
+        code |= event_poller::READ;
     }
 
     if (event->filter == EVFILT_WRITE)
     {
-        return event_poller::WRITE;
+        code |= event_poller::WRITE;
     }
 
-    return 0;
+    return code;
 }
 #endif

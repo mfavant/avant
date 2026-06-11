@@ -1,4 +1,3 @@
-#include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -9,6 +8,13 @@
 #include <fcntl.h>
 #include <avant-inifile/inifile.h>
 #include <avant-log/logger.h>
+
+#if defined(__linux__)
+#include <unistd.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <stdlib.h>
+#endif
 
 #include "system/system.h"
 #include "utility/singleton.h"
@@ -73,7 +79,7 @@ int system::init()
     }
     m_server_ptr.reset(new_server);
     m_server_ptr->config(m_config_mgr); // copy config_mgr to server object
-    m_server_ptr->start(); // main thread loop
+    m_server_ptr->start();              // main thread loop
 
     LOG_ERROR("m_server_ptr->start() return");
     return 0;
@@ -99,29 +105,58 @@ int system::set_sys_limits()
     return ret;
 }
 
-string system::get_root_path()
+std::string system::get_root_path()
 {
-    if (m_root_path != "")
+    if (!m_root_path.empty())
     {
         return m_root_path;
     }
-    char path[1024];
-    memset(path, 0, 1024);                            // setting all memory byte to zero
-    int cnt = readlink("/proc/self/exe", path, 1024); // system operator
-    if (cnt < 0 || cnt >= 1024)
+
+    char path[PATH_MAX] = {0};
+
+#if defined(__linux__)
+
+    ssize_t len = ::readlink("/proc/self/exe", path, sizeof(path) - 1);
+    if (len <= 0)
     {
         return "";
     }
-    // find last charactor /,change to \0
-    for (int i = cnt; i >= 0; --i)
+
+    path[len] = '\0';
+
+#elif defined(__APPLE__)
+
+    uint32_t size = sizeof(path);
+
+    if (_NSGetExecutablePath(path, &size) != 0)
     {
-        if (path[i] == '/')
-        {
-            path[i] = '\0';
-            break;
-        }
+        return "";
     }
-    m_root_path = string(path);
+
+    // 转换为真实绝对路径
+    char resolved[PATH_MAX] = {0};
+
+    if (::realpath(path, resolved) != nullptr)
+    {
+        strncpy(path, resolved, sizeof(path) - 1);
+    }
+
+#else
+
+    return "";
+
+#endif
+
+    // 去掉文件名，只保留目录
+    char *last_slash = strrchr(path, '/');
+
+    if (last_slash != nullptr)
+    {
+        *last_slash = '\0';
+    }
+
+    m_root_path = path;
+
     return m_root_path;
 }
 
