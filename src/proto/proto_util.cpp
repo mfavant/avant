@@ -25,7 +25,7 @@ uint64_t proto::toh64(uint64_t num)
 #endif
 }
 
-uint64_t proto::toh64_from_buffer(void *buffer)
+uint64_t proto::toh64_from_buffer(const void *buffer)
 {
     uint64_t num = 0;
     memcpy(&num, buffer, sizeof(num));

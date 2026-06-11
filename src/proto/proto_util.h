@@ -7,7 +7,7 @@ namespace avant::proto
 {
     uint64_t ton64(uint64_t num);
     uint64_t toh64(uint64_t num);
-    uint64_t toh64_from_buffer(void *buffer);
+    uint64_t toh64_from_buffer(const void *buffer);
 
     template <typename T>
     std::string &pack_package(std::string &data, const T &t, ProtoCmd cmd)
