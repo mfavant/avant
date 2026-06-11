@@ -360,7 +360,11 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 }
                 {
                     std::stringstream ss;
-                    ss << std::put_time(std::gmtime(&st.st_mtim.tv_sec), "%a, %d %b %Y %H:%M:%S GMT");
+
+                    ss << std::put_time(
+                        std::gmtime(&st.st_mtime),
+                        "%a, %d %b %Y %H:%M:%S GMT");
+
                     out_http_date = ss.str();
                 }
 
@@ -607,7 +611,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
             ctx.send_buffer_append(response_head.c_str(), response_head.size());
 
-            ctx.write_end_callback = [header_exist_keep_live](connection::http_ctx &ctx) -> void
+            ctx.write_end_callback = [](connection::http_ctx &ctx) -> void
             {
                 avant_http_app_reponse *response_ptr = (avant_http_app_reponse *)ctx.ptr;
                 auto dir_type_ptr = (avant_http_app_reponse::DIR_TYPE *)response_ptr->ptr;

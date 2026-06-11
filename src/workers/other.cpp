@@ -191,19 +191,24 @@ void other::operator()()
         hooks::tick::on_other_tick(*this); // maybe change errno
         for (int i = 0; i < num; i++)
         {
-            int evented_fd = this->epoller.m_events[i].data.fd;
+            int evented_fd = this->epoller.get_fd_from_event(&this->epoller.m_events[i]);
+            if (evented_fd < 0)
+            {
+                continue;
+            }
+
             // main other tunnel fd
             if (evented_fd == this->main_other_tunnel->get_other())
             {
-                on_tunnel_event(this->epoller.m_events[i].events);
+                on_tunnel_event(this->epoller.get_code_from_event(&this->epoller.m_events[i]));
             }
             else if (evented_fd == this->ipc_listen_socket->get_fd())
             {
-                on_ipc_listen_event(this->epoller.m_events[i].events);
+                on_ipc_listen_event(this->epoller.get_code_from_event(&this->epoller.m_events[i]));
             }
             else if (this->ipc_connection_mgr->get_conn(evented_fd))
             {
-                on_ipc_client_event(evented_fd, this->epoller.m_events[i].events);
+                on_ipc_client_event(evented_fd, this->epoller.get_code_from_event(&this->epoller.m_events[i]));
             }
             else if (this->udp_svr_component && evented_fd == this->udp_svr_component->get_socket_fd())
             {

@@ -149,7 +149,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
                 ph = (u_char *)&tmp;
                 *ph++ = data[index];
                 *ph++ = data[index + 1];
-                tmp = ::ntohs(tmp);
+                tmp = ntohs(tmp);
                 frame.payload_length = tmp;
                 index += 2;
             }

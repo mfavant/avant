@@ -26,27 +26,61 @@ event_poller::~event_poller()
 int event_poller::create(int max_connections)
 {
     m_max_connections = max_connections;
+
+#ifdef __linux__
     m_epfd = ::epoll_create(max_connections + 1); // plane
+#elif defined(__APPLE__)
+    m_epfd = ::kqueue();
+#endif
+
     if (m_epfd < 0)
     {
         return -1;
     }
+
     if (m_events != nullptr)
     {
         delete[] m_events;
         m_events = nullptr;
     }
+
+#ifdef __linux__
     m_events = new (std::nothrow)::epoll_event[max_connections + 1];
+#elif defined(__APPLE__)
+    m_events = new (std::nothrow) struct kevent[max_connections + 1];
+#endif
+
     if (!m_events)
     {
         return -2;
     }
+
     return 0;
+}
+
+int event_poller::wait(int millsecond)
+{
+#ifdef __linux__
+    return epoll_wait(m_epfd, m_events, m_max_connections + 1, millsecond);
+#elif defined(__APPLE__)
+    if (millsecond > 0)
+    {
+        struct timespec timeout;
+        timeout.tv_sec = millsecond / 1000;
+        timeout.tv_nsec = (millsecond % 1000) * 1000000;
+        return kevent(this->m_epfd, NULL, 0, this->m_events, this->m_max_connections + 1, &timeout);
+    }
+    else
+    {
+        return kevent(this->m_epfd, NULL, 0, this->m_events, this->m_max_connections + 1, NULL);
+    }
+#endif
 }
 
 int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=false*/)
 {
-    struct ::epoll_event ev;
+#ifdef __linux__
+    struct epoll_event ev;
     ev.data.ptr = ptr;
     ev.data.fd = fd;
     if (et)
@@ -67,10 +101,14 @@ int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=fa
     }
     ev.events = events;
     return epoll_ctl(m_epfd, op, fd, &ev);
+#elif defined(__APPLE__)
+    return -1;
+#endif
 }
 
 int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 {
+#ifdef __linux__
     if (et)
     {
         events |= EPOLLET;
@@ -89,10 +127,14 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         fd_curr_reg_event[fd] = events;
     }
     return iret;
+#elif defined(__APPLE__)
+    return -1;
+#endif
 }
 
 int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 {
+#ifdef __linux__
     if (et)
     {
         events |= EPOLLET;
@@ -111,19 +153,82 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         fd_curr_reg_event[fd] = events;
     }
     return iret;
+#elif defined(__APPLE__)
+    return -1;
+#endif
 }
 
 int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 {
+#ifdef __linux__
     auto iter = fd_curr_reg_event.find(fd);
     if (iter != fd_curr_reg_event.end())
     {
         fd_curr_reg_event.erase(iter);
     }
     return ctrl(fd, ptr, events, EPOLL_CTL_DEL, et);
+#elif defined(__APPLE__)
+    return -1;
+#endif
 }
 
-int event_poller::wait(int millsecond)
+#ifdef __linux__
+int event_poller::get_fd_from_event(const struct epoll_event *event)
 {
-    return epoll_wait(m_epfd, m_events, m_max_connections + 1, millsecond);
+    if (event)
+    {
+        return event->data.fd;
+    }
+    return -1;
 }
+#elif defined(__APPLE__)
+int event_poller::get_fd_from_event(const struct kevent *event)
+{
+    if (event)
+    {
+        return event->ident;
+    }
+    return -1;
+}
+#endif
+
+#ifdef __linux__
+uint32_t event_poller::get_code_from_event(const struct epoll_event *event)
+{
+    if (event == nullptr)
+    {
+        return 0;
+    }
+    return event->events;
+}
+#elif defined(__APPLE__)
+uint32_t event_poller::get_code_from_event(const struct kevent *event)
+{
+    if (event == nullptr)
+    {
+        return 0;
+    }
+
+    if (event->flags & EV_ERROR)
+    {
+        return event_poller::ERR;
+    }
+
+    if (event->flags & EV_EOF)
+    {
+        return event_poller::ERR;
+    }
+
+    if (event->filter == EVFILT_READ)
+    {
+        return event_poller::READ;
+    }
+
+    if (event->filter == EVFILT_WRITE)
+    {
+        return event_poller::WRITE;
+    }
+
+    return 0;
+}
+#endif

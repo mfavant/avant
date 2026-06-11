@@ -17,7 +17,7 @@ namespace avant::proto
 
         std::string body_str;
         body_str.resize(t.ByteSizeLong());
-        t.SerializeToString(&body_str);
+        (void)t.SerializeToString(&body_str);
 
         message.set_cmd(cmd);
         message.set_protocol(body_str);
@@ -38,7 +38,8 @@ namespace avant::proto
     {
         std::string body_str;
         body_str.resize(t.ByteSizeLong());
-        t.SerializeToString(&body_str);
+
+        (void)t.SerializeToString(&body_str);
 
         package.set_cmd(cmd);
         package.set_protocol(body_str);

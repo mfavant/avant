@@ -37,6 +37,15 @@ if (OpenSSL_FOUND)
     include_directories(${OpenSSL_INCLUDE_DIRS})
 endif()
 
+if(APPLE)
+    #set(absl_DIR /opt/homebrew/lib/cmake/absl)
+    find_package(absl REQUIRED)
+    if (absl_FOUND)
+        message(STATUS "absl found at ${absl_INCLUDE_DIRS}")
+        include_directories(${absl_INCLUDE_DIRS})
+    endif()
+endif()
+
 # add include for src/
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
@@ -81,13 +90,43 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/external)
 
 # for link external gen .so lib
 if(AVANT_JIT_VERSION)
-    set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc-udp avant-timer avant-xml avant-buffer avant-zlib avant-json)
+    set(EXTERNAL_LIB avant-llhttp 
+    avant-inifile 
+    avant-log 
+    avant-ipc-udp 
+    avant-timer 
+    avant-xml 
+    avant-buffer 
+    avant-zlib 
+    avant-json)
 else()
-    set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc-udp avant-timer avant-xml avant-buffer avant-zlib avant-json avant-lua)
+    set(EXTERNAL_LIB avant-llhttp 
+    avant-inifile 
+    avant-log 
+    avant-ipc-udp 
+    avant-timer 
+    avant-xml 
+    avant-buffer 
+    avant-zlib 
+    avant-json 
+    avant-lua)
+endif()
+
+if(APPLE)
+    set(APPLE_SPEC_LIB absl::log 
+    absl::check 
+    absl::base 
+    absl::strings 
+    absl::raw_logging_internal 
+    absl::log_internal_message
+    absl::spinlock_wait)
+else()
+    set(APPLE_SPEC_LIB "")
 endif()
 
 if(AVANT_JIT_VERSION)
     target_link_libraries(${PROJECT_NAME} 
+        ${APPLE_SPEC_LIB}
         ${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/src/libluajit.a 
         pthread 
         dl 
@@ -98,6 +137,7 @@ if(AVANT_JIT_VERSION)
     )
 else()
     target_link_libraries(${PROJECT_NAME} 
+        ${APPLE_SPEC_LIB}
         pthread 
         dl 
         protobuf::libprotobuf

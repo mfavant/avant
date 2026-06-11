@@ -104,7 +104,11 @@ void worker::operator()()
 
         for (int i = 0; i < num; i++)
         {
-            int evented_fd = this->epoller.m_events[i].data.fd;
+            int evented_fd = this->epoller.get_fd_from_event(&this->epoller.m_events[i]);
+            if (evented_fd < 0)
+            {
+                continue;
+            }
 
             if (timeout_fd_copy.find(evented_fd) != timeout_fd_copy.end())
             {
@@ -115,12 +119,12 @@ void worker::operator()()
             // main worker tunnel fd
             if (evented_fd == this->main_worker_tunnel->get_other())
             {
-                on_tunnel_event(this->epoller.m_events[i].events);
+                on_tunnel_event(this->epoller.get_code_from_event(&this->epoller.m_events[i]));
             }
             // default client fd
             else
             {
-                on_client_event(evented_fd, this->epoller.m_events[i].events);
+                on_client_event(evented_fd, this->epoller.get_code_from_event(&this->epoller.m_events[i]));
             }
         }
     }

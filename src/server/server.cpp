@@ -605,8 +605,14 @@ void server::on_start()
 
             for (int i = 0; i < num; i++)
             {
-                int evented_fd = m_epoller.m_events[i].data.fd;
-                uint32_t event_come = m_epoller.m_events[i].events;
+                int evented_fd = m_epoller.get_fd_from_event(&m_epoller.m_events[i]);
+                if (evented_fd < 0)
+                {
+                    continue;
+                }
+
+                uint32_t event_come = m_epoller.get_code_from_event(&m_epoller.m_events[i]);
+
                 // listen_fd
                 if (evented_fd == this->m_server_listen_socket->get_fd())
                 {

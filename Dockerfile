@@ -12,6 +12,12 @@ RUN echo "START=>building AVANT_JIT_VERSION=ON"
 RUN cd external/LuaJIT-2.1.ROLLING \
     && make clean \
     && make -j3
+
+# if macos
+# RUN cd external/LuaJIT-2.1.ROLLING \
+#     && make clean \
+#     && env MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion) make -j3
+
 WORKDIR /avant
 RUN cd protocol \
     && make clean \
