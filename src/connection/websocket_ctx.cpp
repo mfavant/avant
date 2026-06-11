@@ -349,12 +349,12 @@ void websocket_ctx::on_event(uint32_t event)
             int oper_errno = 0;
             int len = -1;
             constexpr int buffer_size = 10240;
-            char buffer[buffer_size]{0};
+            std::vector<char> buffer(buffer_size);
             int buffer_len = 0;
 
             while (buffer_len < buffer_size)
             {
-                len = socket_ptr->recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
+                len = socket_ptr->recv(buffer.data() + buffer_len, buffer_size - buffer_len, oper_errno);
                 if (len == -1 &&
                     (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
                      oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
@@ -371,7 +371,7 @@ void websocket_ctx::on_event(uint32_t event)
                 else if (len > 0)
                 {
                     this->conn_ptr->record_recv_bytes(len);
-                    llhttp_errno_t res_errno = llhttp_execute(&this->http_parser_obj, buffer + buffer_len, len);
+                    llhttp_errno_t res_errno = llhttp_execute(&this->http_parser_obj, buffer.data() + buffer_len, len);
 
                     if (res_errno != llhttp_errno::HPE_OK && res_errno != llhttp_errno::HPE_PAUSED_UPGRADE)
                     {
@@ -496,12 +496,12 @@ void websocket_ctx::on_event(uint32_t event)
             int oper_errno = 0;
             int len = -1;
             constexpr int buffer_size = 10240;
-            char buffer[buffer_size]{0};
+            std::vector<char> buffer(buffer_size);
             int buffer_len = 0;
 
             while (buffer_len < buffer_size)
             {
-                len = socket_ptr->recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
+                len = socket_ptr->recv(buffer.data() + buffer_len, buffer_size - buffer_len, oper_errno);
                 if (len == -1 &&
                     (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
                      oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
@@ -531,7 +531,7 @@ void websocket_ctx::on_event(uint32_t event)
             if (buffer_len > 0)
             {
                 conn_ptr->record_recv_bytes(buffer_len);
-                conn_ptr->recv_buffer.append(buffer, buffer_len);
+                conn_ptr->recv_buffer.append(buffer.data(), buffer_len);
             }
         }
     }

@@ -11,6 +11,7 @@
 #include <thread>
 #include <chrono>
 #include <csignal>
+#include <vector>
 
 namespace avant
 {
@@ -262,17 +263,18 @@ int main()
                             fifo_instance_a.init();
 
                             constexpr int buffer_size = 512;
-                            char send_buffer[buffer_size]{0};
-                            char recv_buffer[buffer_size]{0};
+                            
+                            std::vector<char> send_buffer(buffer_size);
+                            std::vector<char> recv_buffer(buffer_size);
 
-                            snprintf(send_buffer, buffer_size, "Message from A to B");
+                            snprintf(send_buffer.data(), buffer_size, "Message from A to B");
                             while (true)
                             {
-                                fifo_instance_a.write(send_buffer, strlen(send_buffer));
-                                int len = fifo_instance_a.recv(recv_buffer, buffer_size);
+                                fifo_instance_a.write(send_buffer.data(), strlen(send_buffer.data()));
+                                int len = fifo_instance_a.recv(recv_buffer.data(), buffer_size);
                                 if (len > 0)    {
                                     recv_buffer[len] = '\0';
-                                    std::cout << "A received: " << recv_buffer << std::endl;
+                                    std::cout << "A received: " << recv_buffer.data() << std::endl;
                                 }
                                 else
                                 {

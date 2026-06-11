@@ -747,14 +747,14 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     if (event & event::event_poller::READ)
     {
         constexpr int buffer_size = 1024000;
-        char buffer[buffer_size]{0};
+        std::vector<char> buffer(buffer_size);
         int buffer_used_idx{0};
 
         while (buffer_used_idx < buffer_size)
         {
             int len = 0;
             int oper_errno = 0;
-            len = sock.recv(buffer + buffer_used_idx, buffer_size - buffer_used_idx, oper_errno);
+            len = sock.recv(buffer.data() + buffer_used_idx, buffer_size - buffer_used_idx, oper_errno);
             if (len > 0)
             {
                 buffer_used_idx += len;
@@ -774,7 +774,7 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
         if (buffer_used_idx > 0)
         {
             tunnel_conn->record_recv_bytes(buffer_used_idx);
-            tunnel_conn->recv_buffer.append(buffer, buffer_used_idx);
+            tunnel_conn->recv_buffer.append(buffer.data(), buffer_used_idx);
         }
 
         // parser protocol

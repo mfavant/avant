@@ -117,7 +117,7 @@ void worker::operator()()
             }
 
             // main worker tunnel fd
-            if (evented_fd == this->main_worker_tunnel->get_other())
+            if (this->main_worker_tunnel && evented_fd == this->main_worker_tunnel->get_other())
             {
                 on_tunnel_event(this->epoller.get_code_from_event(&this->epoller.m_events[i]));
             }
@@ -136,28 +136,46 @@ void worker::operator()()
 
 void worker::on_tunnel_event(uint32_t event)
 {
+    if (!this->main_worker_tunnel)
+    {
+        LOG_ERROR("worker::on_tunnel_event main_worker_tunnel is null");
+        return;
+    }
     avant::socket::socket_pair &tunnel = *this->main_worker_tunnel;
+    int tunnel_fd = tunnel.get_other();
+    if (tunnel_fd < 0)
+    {
+        LOG_ERROR("worker::on_tunnel_event tunnel_fd invalid {}", tunnel_fd);
+        return;
+    }
     // find conn
-    connection::connection *tunnel_conn = this->worker_connection_mgr->get_conn(tunnel.get_other());
+    connection::connection *tunnel_conn = this->worker_connection_mgr->get_conn(tunnel_fd);
     if (!tunnel_conn)
     {
         LOG_ERROR("worker::on_tunnel_event tunnel_conn is null");
         return;
     }
     avant::socket::socket &sock = tunnel.get_other_socket();
+    if (sock.get_fd() != tunnel_fd)
+    {
+        LOG_ERROR("worker::on_tunnel_event socket fd mismatch {} != {}", sock.get_fd(), tunnel_fd);
+        return;
+    }
 
     // check if there is any content that needs to be read
     if (event & event::event_poller::READ)
     {
         constexpr int buffer_size = 1024000;
-        char buffer[buffer_size]{0};
+     
+        std::vector<char> buffer(buffer_size);
+
         int buffer_len = 0;
 
         while (buffer_len < buffer_size)
         {
             int len = 0;
             int oper_errno = 0;
-            len = sock.recv(buffer + buffer_len, buffer_size - buffer_len, oper_errno);
+            len = sock.recv(buffer.data() + buffer_len, buffer_size - buffer_len, oper_errno);
             if (len > 0)
             {
                 buffer_len += len;
@@ -177,7 +195,7 @@ void worker::on_tunnel_event(uint32_t event)
         if (buffer_len > 0)
         {
             tunnel_conn->record_recv_bytes(buffer_len);
-            tunnel_conn->recv_buffer.append(buffer, buffer_len);
+            tunnel_conn->recv_buffer.append(buffer.data(), buffer_len);
         }
 
         // parser protocol
