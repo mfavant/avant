@@ -382,8 +382,8 @@ void other::on_tunnel_event(uint32_t event)
             uint64_t data_size = 0;
             if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
             {
-                data_size = *((uint64_t *)tunnel_conn->recv_buffer.get_read_ptr());
-                data_size = avant::proto::toh64(data_size);
+                data_size = avant::proto::toh64_from_buffer(tunnel_conn->recv_buffer.get_read_ptr());
+
                 if (data_size + sizeof(data_size) > tunnel_conn->recv_buffer.size())
                 {
                     break;

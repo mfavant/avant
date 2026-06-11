@@ -7,6 +7,7 @@ namespace avant::proto
 {
     uint64_t ton64(uint64_t num);
     uint64_t toh64(uint64_t num);
+    uint64_t toh64_from_buffer(void *buffer);
 
     template <typename T>
     std::string &pack_package(std::string &data, const T &t, ProtoCmd cmd)
@@ -21,9 +22,14 @@ namespace avant::proto
         message.set_cmd(cmd);
         message.set_protocol(body_str);
 
-        message.SerializeToString(&data);
-        uint64_t len = ton64(data.size());
+        uint64_t len = 0;
+        if (message.SerializeToString(&data))
+        {
+            len = proto::ton64(data.size());
+        }
+
         data.insert(0, (char *)&len, sizeof(len));
+
         return data;
     }
 

@@ -79,8 +79,7 @@ void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
         uint64_t data_size = 0;
         if (ctx.get_recv_buffer_size() >= sizeof(data_size))
         {
-            data_size = *((uint64_t *)ctx.get_recv_buffer_read_ptr());
-            data_size = avant::proto::toh64(data_size);
+            data_size = avant::proto::toh64_from_buffer(ctx.get_recv_buffer_read_ptr());
 
             if (!avant::app::stream_app::on_recved_packsize(ctx, data_size))
             {

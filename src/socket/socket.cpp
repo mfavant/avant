@@ -8,6 +8,12 @@
 #include <cstring>
 #include <avant-log/logger.h>
 
+#ifdef __linux__
+#include <endian.h>
+#elif defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#endif
+
 #include "socket/socket.h"
 #include "utility/singleton.h"
 #include "utility/comm_errno.h"

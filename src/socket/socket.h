@@ -3,7 +3,6 @@
 #include <functional>
 #include <openssl/ssl.h>
 #include <arpa/inet.h>
-#include <endian.h>
 
 namespace avant::socket
 {
