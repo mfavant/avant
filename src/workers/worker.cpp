@@ -166,7 +166,7 @@ void worker::on_tunnel_event(uint32_t event)
     if (event & event::event_poller::READ)
     {
         constexpr int buffer_size = 1024000;
-     
+
         std::vector<char> buffer(buffer_size);
 
         int buffer_len = 0;

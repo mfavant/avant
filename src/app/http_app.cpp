@@ -496,13 +496,14 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             ctx.write_end_callback = [](connection::http_ctx &ctx) -> void
             {
                 constexpr int buffer_size = 1024000; // 1000KB
-                char buf[buffer_size] = {0};
+
+                std::vector<char> buf(buffer_size);
                 constexpr int compress_buffer_size = 2 * buffer_size; // 2000KB
-                char compress_buf[compress_buffer_size] = {0};
+                std::vector<char> compress_buf(compress_buffer_size);
 
                 avant_http_app_reponse *resp = (avant_http_app_reponse *)ctx.ptr;
 
-                int len = ::fread(buf,
+                int len = ::fread(buf.data(),
                                   sizeof(char),
                                   buffer_size,
                                   (avant_http_app_reponse::FD_TYPE *)((avant_http_app_reponse *)ctx.ptr)->ptr);
@@ -513,10 +514,10 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                     {
                         // using gzip
                         resp->strm.avail_in = len;
-                        resp->strm.next_in = (Bytef *)buf;
+                        resp->strm.next_in = (Bytef *)buf.data();
 
                         resp->strm.avail_out = compress_buffer_size;
-                        resp->strm.next_out = (Bytef *)compress_buf;
+                        resp->strm.next_out = (Bytef *)compress_buf.data();
 
                         int ret = deflate(&resp->strm, Z_SYNC_FLUSH);
                         if (ret == Z_STREAM_ERROR)
@@ -533,7 +534,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                             std::string chunk_size = ss.str() + "\r\n";
 
                             ctx.send_buffer_append(chunk_size.c_str(), chunk_size.size());
-                            ctx.send_buffer_append(compress_buf, exit_compressed_data_len);
+                            ctx.send_buffer_append(compress_buf.data(), exit_compressed_data_len);
                             ctx.send_buffer_append("\r\n", 2);
                         }
                     }
@@ -544,7 +545,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                         std::string chunk_size = ss.str() + "\r\n";
 
                         ctx.send_buffer_append(chunk_size.c_str(), chunk_size.size());
-                        ctx.send_buffer_append(buf, len);
+                        ctx.send_buffer_append(buf.data(), len);
                         ctx.send_buffer_append("\r\n", 2);
                     }
                 }
