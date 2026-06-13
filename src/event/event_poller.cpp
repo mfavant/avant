@@ -62,17 +62,15 @@ int event_poller::wait(int millsecond)
 #ifdef __linux__
     return epoll_wait(m_epfd, m_events, m_max_connections + 1, millsecond);
 #elif defined(__APPLE__)
-    if (millsecond > 0)
-    {
-        struct timespec timeout;
-        timeout.tv_sec = millsecond / 1000;
-        timeout.tv_nsec = (millsecond % 1000) * 1000000;
-        return kevent(this->m_epfd, NULL, 0, this->m_events, this->m_max_connections + 1, &timeout);
-    }
-    else
+    if (millsecond < 0)
     {
         return kevent(this->m_epfd, NULL, 0, this->m_events, this->m_max_connections + 1, NULL);
     }
+
+    struct timespec timeout;
+    timeout.tv_sec = millsecond / 1000;
+    timeout.tv_nsec = (millsecond % 1000) * 1000000;
+    return kevent(this->m_epfd, NULL, 0, this->m_events, this->m_max_connections + 1, &timeout);
 #endif
 }
 
@@ -84,7 +82,7 @@ int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=fa
     ev.data.fd = fd;
     if (et)
     {
-        events = events | EPOLLET; // decause epoll default LT
+        events = events | EPOLLET; // enable epoll default LT
         /*
         epoll是linux系统最新的处理多连接的高效率模型， 工作在两种方式下， EPOLLLT方式和EPOLLET方式。
         EPOLLLT是系统默认， 工作在这种方式下， 程序员不易出问题， 在接收数据时，只要socket输入缓存有数据，
@@ -145,7 +143,7 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         {
             return -1;
         }
-        fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::READ | event_poller::ERR;
+        fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::READ;
     }
     if (events & event_poller::WRITE)
     {
@@ -154,7 +152,7 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         {
             return -1;
         }
-        fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::WRITE | event_poller::ERR;
+        fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::WRITE;
     }
     return 0;
 #endif
@@ -197,20 +195,22 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
     if (events & event_poller::READ)
     {
         // 现在没有监听读，开启
-        if (!(fd_curr_reg_event[fd] & event_poller::READ))
+        if ((fd_curr_reg_event.find(fd) == fd_curr_reg_event.end()) ||
+            !(fd_curr_reg_event[fd] & event_poller::READ))
         {
             EV_SET(&event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, ptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
             {
                 return -1;
             }
-            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::READ | event_poller::ERR;
+            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::READ;
         }
     }
     else // 需要停止监听读
     {
         // 现在正在监听读，关闭
-        if (fd_curr_reg_event[fd] & event_poller::READ)
+        if ((fd_curr_reg_event.find(fd) != fd_curr_reg_event.end()) &&
+            (fd_curr_reg_event[fd] & event_poller::READ))
         {
             EV_SET(&event, fd, EVFILT_READ, EV_DISABLE, 0, 0, ptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
@@ -225,20 +225,22 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
     if (events & event_poller::WRITE)
     {
         // 现在没有监听写，开启
-        if (!(fd_curr_reg_event[fd] & event_poller::WRITE))
+        if ((fd_curr_reg_event.find(fd) == fd_curr_reg_event.end()) ||
+            !(fd_curr_reg_event[fd] & event_poller::WRITE))
         {
             EV_SET(&event, fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, ptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
             {
                 return -1;
             }
-            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::WRITE | event_poller::ERR;
+            fd_curr_reg_event[fd] = fd_curr_reg_event[fd] | event_poller::WRITE;
         }
     }
     else // 需要停止监听写
     {
         // 现在正在监听写，关闭
-        if (fd_curr_reg_event[fd] & event_poller::WRITE)
+        if ((fd_curr_reg_event.find(fd) != fd_curr_reg_event.end()) &&
+            (fd_curr_reg_event[fd] & event_poller::WRITE))
         {
             EV_SET(&event, fd, EVFILT_WRITE, EV_DISABLE, 0, 0, ptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
