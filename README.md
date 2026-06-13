@@ -2,17 +2,17 @@
 
 [![Docker Image CI](https://github.com/mfavant/avant/actions/workflows/docker-image.yml/badge.svg)](https://github.com/mfavant/avant/actions/workflows/docker-image.yml)
 
-A High-Performance Network Messaging Framework for Linux C++.
+A Network Messaging Framework for C++.
 
 - Language: C++ 20
-- Platform: Linux
+- Platform: Linux x86 ARM64 | MacOS(Apple Silicon) ARM64
 - Protocols: HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)
 - TLS/SSL: OpenSSL
 - Lua: Lua 5.5 | LuaJIT-2.1.ROLLING
 
 ## Overview
 
-Avant is a modular and extensible network framework for Linux, designed to serve as a foundation
+Avant is a modular and extensible network framework for C++, designed to serve as a foundation
 for building customized network services rather than providing fixed, opinionated solutions.
 
 It can be used to implement HTTP servers, WebSocket-based services, and high-performance TCP or UDP
@@ -34,7 +34,7 @@ event-driven libraries like libevent. Its clear and approachable codebase expose
 concepts directly, making it easier to design application-specific protocols and workflows.
 
 For C++ beginners, Avant can also serve as a practical learning project for understanding
-Linux system programming, network I/O, and multi-threaded server architecture.
+Linux or MacOS system programming, network I/O, and multi-threaded server architecture.
 
 ## Containers
 
@@ -105,7 +105,7 @@ ps -ef | grep avant
 
 ```bash
 ps -ef | grep avant
-kill PID
+kill -SIGTERM PID
 ```
 
 ## Application Layer
@@ -141,7 +141,7 @@ Lua scripts can be reloaded at runtime using SIGUSR1 without restarting the proc
 
 ```bash
 ps -ef | grep avant
-kill -USR1 <PID>
+kill -SIGUSR1 <PID>
 ```
 
 ## IPC
