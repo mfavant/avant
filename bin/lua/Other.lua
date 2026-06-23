@@ -25,7 +25,7 @@ function Other:OnTick()
     MapSvr.OnTick()
 end
 
--- kill -10 {avant PID}
+-- kill -SIGUSR1 {avant PID}
 function Other:OnReload()
     Log:Error("luavm Other:OnReload");
 

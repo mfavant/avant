@@ -43,7 +43,7 @@ function MapSvr.IsSafeStop()
     return MapSvr.safeStop;
 end
 
---- 当服务器进程被kill -10 或 线程Init时被触发
+--- 当服务器进程被kill -SIGUSR1 或 线程Init时被触发
 ---@return nil
 function MapSvr.OnReload()
     -- hot load PlayerLogic scriptss
