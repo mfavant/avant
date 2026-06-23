@@ -56,7 +56,7 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
     static time_t latest_tick_time = 0;
     time_component.update();
     time_t tick_time = time_component.get_seconds();
-    if (std::abs(tick_time - latest_tick_time) >= 5)
+    if (std::abs(tick_time - latest_tick_time) >= 10)
     {
         // send to all worker
         {

@@ -728,7 +728,8 @@ void http_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoP
             LOG_ERROR("proto::parse(other2worker_test, package) failed");
             return;
         }
-        // LOG_ERROR("worker_id {} PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time {}", worker_obj.get_worker_idx(), other2worker_test.time());
+        LOG_ERROR("worker_id {} PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time {}", worker_obj.get_worker_idx(), other2worker_test.time());
+        return;
     }
     else
     {
