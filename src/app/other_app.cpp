@@ -9,6 +9,7 @@
 #include "proto/proto_util.h"
 #include "proto_res/proto_example.pb.h"
 #include "proto_res/proto_ipc_stream.pb.h"
+#include "proto_res/proto_tunnel.pb.h"
 #include <unordered_map>
 
 using avant::app::other_app;
@@ -18,8 +19,13 @@ namespace global = avant::global;
 class avant_authenticated_ipc_pair
 {
 public:
+    avant_authenticated_ipc_pair()
+    {
+        this->other_obj = nullptr;
+    }
     std::unordered_map<uint64_t, std::string> gid2appid;
     std::unordered_map<std::string, uint64_t> appid2gid;
+    avant::workers::other *other_obj;
 };
 
 static avant_authenticated_ipc_pair authenticated_ipc_pair;
@@ -27,7 +33,12 @@ static avant_authenticated_ipc_pair authenticated_ipc_pair;
 void other_app::on_other_init(avant::workers::other &other_obj)
 {
     LOG_ERROR("other_app::on_other_init()");
-    utility::singleton<lua_plugin>::instance()->on_other_init();
+    if (!authenticated_ipc_pair.other_obj)
+    {
+        authenticated_ipc_pair.other_obj = &other_obj;
+    }
+
+    utility::singleton<lua_plugin>::instance()->on_other_init(&other_obj);
 }
 
 void other_app::on_other_stop(avant::workers::other &other_obj)
@@ -63,7 +74,7 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
     if constexpr (false)
     {
         // test ipc message process
-        for (const auto &item : authenticated_ipc_pair.gid2appid)
+        for (auto item : authenticated_ipc_pair.gid2appid)
         {
             uint64_t gid = item.first;
             avant::connection::connection *conn = other_obj.ipc_connection_mgr.get()->get_conn_by_gid(gid);
@@ -90,23 +101,46 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
 
 void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
-    if constexpr (false)
+    // 从 worker 传到 other 线程 lua 虚拟机
+    if (package.cmd() == ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM)
     {
-        int sourcetunnelsid = tunnel_package.sourcetunnelsid();
-        std::string targettunnelsid;
-
-        for (int i = 0; i < tunnel_package.targettunnelsid().size(); i++)
+        ProtoTunnelWorker2OtherLuaVM worker2OtherVMPackage;
+        bool ret = avant::proto::parse(worker2OtherVMPackage, package);
+        if (!ret)
         {
-            targettunnelsid += std::to_string(tunnel_package.targettunnelsid().at(i)) + "_";
+            LOG_ERROR("parse worker2OtherVMPackage from package failed");
+            return;
+        }
+        uint64_t fromGid = worker2OtherVMPackage.gid();
+        int worker_idx = worker2OtherVMPackage.workeridx();
+
+        // LOG_ERROR("client conngid {} send cmd[{}]", fromGid, worker2OtherVMPackage.innerprotopackage().cmd());
+        // 交给LuaVM处理
+        avant::ProtoCmd cmd = worker2OtherVMPackage.innerprotopackage().cmd();
+
+        // 必须写解包操作
+        std::shared_ptr<google::protobuf::Message> ptrMessage = utility::singleton<lua_plugin>::instance()->protobuf_cmd2message(cmd);
+        if (!ptrMessage)
+        {
+            LOG_ERROR("other_app::on_other_tunnel unknow cmd {}", (int)cmd);
+            return;
         }
 
-        int targetallworker = tunnel_package.targetallworker();
+        ret = avant::proto::parse(*ptrMessage, worker2OtherVMPackage.innerprotopackage());
+        if (!ret)
+        {
+            LOG_ERROR("other_app::on_other_tunnel unknow cmd {}", (int)cmd);
+            return;
+        }
 
-        LOG_ERROR("other_app::on_other_tunnel() CMD {} sourcetunnelsid {} targettunnelsid {} targetallworker {}",
-                  (int)package.cmd(),
-                  sourcetunnelsid,
-                  targettunnelsid.c_str(),
-                  targetallworker);
+        utility::singleton<lua_plugin>::instance()->on_other_lua_vm_recv_client_message(cmd,
+                                                                                        *ptrMessage,
+                                                                                        fromGid,
+                                                                                        worker_idx);
+    }
+    else
+    {
+        LOG_ERROR("other_app::on_other_tunnel unknow cmd {}", (int)package.cmd());
     }
 }
 
@@ -193,27 +227,7 @@ void other_app::on_process_connection(avant::connection::ipc_stream_ctx &ctx)
 void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const ProtoPackage &package)
 {
     // LOG_ERROR("ipc_stream_ctx gid {} cmd {}", ctx.get_conn_gid(), package.cmd());
-    if (package.cmd() == ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
-    {
-        ProtoCSReqExample req;
-        if (avant::proto::parse(req, package))
-        {
-            ProtoPackage resPackage;
-            ProtoCSResExample res;
-            res.set_testcontext(req.testcontext());
-            std::string data;
-            ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)));
-        }
-    }
-    else if (package.cmd() == ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE)
-    {
-        ProtoCSResExample res;
-        if (avant::proto::parse(res, package))
-        {
-            // res.testcontext();
-        }
-    }
-    else if (package.cmd() == ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)
+    if (package.cmd() == ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)
     {
         // ipc auth
         // this <-- whoami -- remote
@@ -256,7 +270,66 @@ void other_app::on_recv_package(avant::connection::ipc_stream_ctx &ctx, const Pr
     }
     else
     {
-        LOG_ERROR("unknow cmd {}", (int)package.cmd());
+        if (authenticated_ipc_pair.gid2appid.find(ctx.get_conn_gid()) == authenticated_ipc_pair.gid2appid.end())
+        {
+            LOG_ERROR("authenticated_ipc_pair.gid2appid.find(ctx.get_conn_gid()) == authenticated_ipc_pair.gid2appid.end()");
+            return;
+        }
+
+        const std::string &from_app_id_string = authenticated_ipc_pair.gid2appid.find(ctx.get_conn_gid())->second;
+        int worker_idx = avant::global::tunnel_id::get().get_other_tunnel_id();
+
+        // 必须写解包操作
+        std::shared_ptr<google::protobuf::Message> ptrMessage = utility::singleton<lua_plugin>::instance()->protobuf_cmd2message(package.cmd());
+        if (!ptrMessage)
+        {
+            LOG_ERROR("other_app::on_recv_package unknow cmd {}", (int)package.cmd());
+            return;
+        }
+
+        bool ret = avant::proto::parse(*ptrMessage, package);
+        if (!ret)
+        {
+            LOG_ERROR("other_app::on_recv_package unknow cmd {}", (int)package.cmd());
+            return;
+        }
+
+        utility::singleton<lua_plugin>::instance()->on_other_lua_vm_recv_ipc_message(package.cmd(),
+                                                                                     *ptrMessage,
+                                                                                     from_app_id_string);
+    }
+}
+
+void other_app::other_lua_send_ipc_package(const std::string &app_id, int cmd, google::protobuf::Message &message)
+{
+    if (authenticated_ipc_pair.appid2gid.find(app_id) == authenticated_ipc_pair.appid2gid.end())
+    {
+        LOG_ERROR("other_app::other_lua_send_ipc_package appid2gid not found app_id[{}] cmd[{}]", app_id.c_str(), cmd);
+        return;
+    }
+    uint64_t ipc_ctx_gid = authenticated_ipc_pair.appid2gid.find(app_id)->second;
+    avant::connection::connection *ipc_conn = authenticated_ipc_pair.other_obj->ipc_connection_mgr->get_conn_by_gid(ipc_ctx_gid);
+    if (!ipc_conn)
+    {
+        LOG_ERROR("other_app::other_lua_send_ipc_package !ipc_conn app_id[{}] cmd[{}]", app_id.c_str(), cmd);
+        return;
+    }
+
+    avant::connection::ipc_stream_ctx *ipc_stream_ctx = dynamic_cast<avant::connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get());
+    if (!ipc_stream_ctx)
+    {
+        LOG_ERROR("other_app::other_lua_send_ipc_package !ipc_stream_ctx app_id[{}] cmd[{}]", app_id.c_str(), cmd);
+        return;
+    }
+
+    ProtoPackage resPackage;
+    resPackage.set_cmd((avant::ProtoCmd)cmd);
+    std::string data;
+    int ret = ipc_stream_ctx->send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, message, (avant::ProtoCmd)cmd)));
+    if (ret != 0)
+    {
+        LOG_ERROR("other_app::other_lua_send_ipc_package ret[{}]!= 0 app_id[{}] cmd[{}]", ret, app_id.c_str(), cmd);
+        return;
     }
 }
 
@@ -277,24 +350,24 @@ void other_app::on_udp_server_recvfrom(avant::workers::other &other_obj, const c
         return;
     }
 
-    if (package.cmd() != ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE)
+    int cmd = package.cmd();
+
+    std::shared_ptr<google::protobuf::Message> ptrMessage = utility::singleton<lua_plugin>::instance()->protobuf_cmd2message(cmd);
+    if (!ptrMessage)
     {
-        LOG_ERROR("other udp_svr_component message_callback recv unknown cmd {} len {}", (int)package.cmd(), len);
+        LOG_ERROR("other_app::on_other_tunnel unknow cmd {}", cmd);
         return;
     }
 
-    ProtoCSReqExample req;
-    if (avant::proto::parse(req, package))
+    bool bool_ret = avant::proto::parse(*ptrMessage, package);
+    if (!bool_ret)
     {
-        ProtoPackage resPackage;
-        ProtoCSResExample res;
-        res.set_testcontext(req.testcontext());
-        std::string data;
-        avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE));
-        int int_ret = other_obj.udp_svr_component.get()->udp_component_client("", 0, data.data(), data.size(), (struct sockaddr *)&addr, addr_len);
-        if (int_ret != 0)
-        {
-            LOG_ERROR("other udp_svr_component message_callback recv len {} udp_component_client {}", len, int_ret);
-        }
+        LOG_ERROR("other_app::on_other_tunnel unknow cmd {}", cmd);
+        return;
     }
+
+    std::string from_ip = other_obj.udp_svr_component->udp_component_get_ip(addr);
+    int from_port = other_obj.udp_svr_component->udp_component_get_port(addr);
+
+    utility::singleton<lua_plugin>::instance()->on_other_lua_vm_recv_udp_message(cmd, *ptrMessage, from_ip, from_port);
 }

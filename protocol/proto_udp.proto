@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package avant;
+
+option go_package = "/proto_res";
+
+// PROTO_CMD_UDP_SAFESTOP_REQ
+message ProtoUDPSafeStopReq
+{
+    bytes appId = 1;
+}
+
+// PROTO_CMD_UDP_SAFESTOP_RES
+message ProtoUDPSafeStopRes
+{
+    bytes appId = 1;
+}

@@ -24,6 +24,8 @@ namespace avant
             static void on_process_connection(avant::connection::ipc_stream_ctx &ctx);
             static void on_recv_package(avant::connection::ipc_stream_ctx &ctx, const ProtoPackage &package);
 
+            static void other_lua_send_ipc_package(const std::string &app_id, int cmd, google::protobuf::Message &message);
+
             static void on_udp_server_recvfrom(avant::workers::other &other_obj, const char *buffer,
                                                ssize_t len,
                                                const struct sockaddr_storage &addr,

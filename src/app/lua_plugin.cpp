@@ -2,18 +2,29 @@
 #include <avant-log/logger.h>
 #include <string>
 #include <cstdlib>
+#include <vector>
 #include "proto/proto_util.h"
 #include "proto_res/proto_lua.pb.h"
+#include "proto_res/proto_example.pb.h"
+#include "proto_res/proto_udp.pb.h"
 #include "utility/singleton.h"
+#include "global/tunnel_id.h"
+#include "app/other_app.h"
 #include <stack>
 #include <chrono>
 
 using namespace avant::app;
 using namespace avant::utility;
 
+#define LUA_PLUGIN_LUAOPEN_EMMY_CORE 0
+
 // 屏蔽所有调试日志
 #define LOG_LUA_PLUGIN_RUNTIME(...) ((void)0)
 // #define LOG_LUA_PLUGIN_RUNTIME(...) LOG_DEBUG(__VA_ARGS__)
+
+#if LUA_PLUGIN_LUAOPEN_EMMY_CORE
+extern "C" int luaopen_emmy_core(lua_State *L);
+#endif
 
 #ifdef AVANT_JIT_VERSION
 int countTableElements(lua_State *L, int tableIndex)
@@ -28,7 +39,8 @@ int countTableElements(lua_State *L, int tableIndex)
     // 遍历表并计数
     lua_pushnil(L); // 将 `nil` 压入栈上作为初始键
     while (lua_next(L, tableCopyIndex))
-    { // tableCopyIndex 是表的位置
+    {
+        // tableCopyIndex 是表的位置
         count++;
         lua_pop(L, 1); // 移除值，保留键
     }
@@ -39,6 +51,67 @@ int countTableElements(lua_State *L, int tableIndex)
     return count;
 }
 #endif
+
+void lua_plugin::lua_plugin_lua_return_not_is_ok_print_error(int isok, lua_State *lua_state)
+{
+    if (isok != LUA_OK)
+    {
+        const char *err = lua_tostring(lua_state, -1);
+
+        LOG_ERROR("Lua crash: {}", err);
+
+        lua_pop(lua_state, 1); // pop lua_plugin_lua_error_handler msg
+    }
+}
+
+int lua_plugin::lua_plugin_lua_error_handler(lua_State *L)
+{
+    // 这里基本就是栈顶为1 因为错误处理函数有自己独立栈帧
+    LOG_ERROR("lua_plugin_lua_error_handler called, stack top: {}", lua_gettop(L));
+    const char *msg = lua_tostring(L, -1);
+    if (msg == NULL)
+    {
+        if (luaL_callmeta(L, -1, "__tostring") && lua_type(L, -1) == LUA_TSTRING)
+        {
+            // 栈: [原始错误, __tostring结果]
+            lua_remove(L, -2); // 移除原始错误
+            // 栈: [__tostring结果]
+        }
+        else
+        {
+            msg = lua_pushfstring(L, "(error object is a %s value)", luaL_typename(L, -1));
+            // 栈: [原始错误, 格式化字符串]
+            lua_remove(L, -2); // 移除原始错误
+            // 栈: [格式化字符串]
+        }
+        msg = lua_tostring(L, -1); // 重新获取 msg
+    }
+
+    // 现在栈上只有一个错误信息
+    // 栈: [错误信息]
+
+    luaL_traceback(L, L, msg, 1);
+    // 栈: [错误信息, traceback字符串]
+
+    lua_remove(L, -2); // 移除原始错误信息
+    // 栈: [traceback字符串]
+
+    LOG_ERROR("Lua traceback: {}", lua_tostring(L, -1));
+    lua_remove(L, -1); // 移除 traceback 字符串
+    LOG_ERROR("Lua traceback end. stack top: {}", lua_gettop(L));
+
+    return 0;
+}
+
+int lua_plugin::lua_plugin_push_lua_error_handler(lua_State *L)
+{
+    // 1. 压入错误处理函数
+    lua_pushcfunction(L, lua_plugin::lua_plugin_lua_error_handler);
+    // 2. 记录错误处理函数在栈中的位置
+    int msgh = lua_gettop(L);
+    // 3. 返回错误处理函数在栈中的绝对位置
+    return msgh;
+}
 
 lua_plugin::lua_plugin()
 {
@@ -108,9 +181,10 @@ void lua_plugin::reload()
     this->other_lua_state_be_reload = true;
 }
 
-void lua_plugin::on_main_init(const std::string &lua_dir, const int worker_cnt)
+void lua_plugin::on_main_init(const std::string &lua_dir, const std::string &app_id, const int worker_cnt)
 {
     this->lua_dir = lua_dir;
+    this->app_id = app_id;
 
     // init worker lua vm
     {
@@ -136,7 +210,7 @@ void lua_plugin::real_on_main_init()
         main_mount();
         std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->lua_state, filename.data());
-
+        lua_plugin::lua_plugin_lua_return_not_is_ok_print_error(isok, this->lua_state);
         ASSERT_LOG_EXIT(isok == LUA_OK);
     }
 
@@ -185,7 +259,7 @@ void lua_plugin::on_worker_init(int worker_idx)
         worker_mount(worker_idx);
         std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->worker_lua_state[worker_idx], filename.data());
-
+        lua_plugin::lua_plugin_lua_return_not_is_ok_print_error(isok, this->worker_lua_state[worker_idx]);
         ASSERT_LOG_EXIT(isok == LUA_OK);
     }
 
@@ -227,38 +301,54 @@ void lua_plugin::on_worker_tick(int worker_idx)
 void lua_plugin::exe_OnMainInit()
 {
     int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->lua_state);
     lua_getglobal(this->lua_state, "OnMainInit");
 
     int old_lua_stack_size = lua_gettop(this->lua_state);
-    isok = lua_pcall(this->lua_state, 0, 0, 0);
+    isok = lua_pcall(this->lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->lua_state, err_msgh);
     ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnMainStop()
 {
     int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->lua_state);
     lua_getglobal(this->lua_state, "OnMainStop");
 
-    isok = lua_pcall(this->lua_state, 0, 0, 0);
+    isok = lua_pcall(this->lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->lua_state, err_msgh);
     ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnMainTick()
 {
     static int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->lua_state);
+
     lua_getglobal(this->lua_state, "OnMainTick");
 
-    isok = lua_pcall(this->lua_state, 0, 0, 0);
+    isok = lua_pcall(this->lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->lua_state, err_msgh);
     ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnMainReload()
 {
     static int isok = LUA_OK;
-
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->lua_state);
     lua_getglobal(this->lua_state, "OnMainReload");
 
-    isok = lua_pcall(this->lua_state, 0, 0, 0);
+    isok = lua_pcall(this->lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->lua_state, err_msgh);
     ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
@@ -267,24 +357,31 @@ void lua_plugin::exe_OnWorkerInit(int worker_idx)
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
 
     int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(lua_ptr);
     lua_getglobal(lua_ptr, "OnWorkerInit");
 
     lua_pushinteger(lua_ptr, worker_idx);
 
-    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    isok = lua_pcall(lua_ptr, 1, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(lua_ptr, err_msgh);
     ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
 void lua_plugin::exe_OnWorkerStop(int worker_idx)
 {
-    int isok = LUA_OK;
-
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
 
+    int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(lua_ptr);
     lua_getglobal(lua_ptr, "OnWorkerStop");
 
     lua_pushinteger(lua_ptr, worker_idx);
-    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    isok = lua_pcall(lua_ptr, 1, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(lua_ptr, err_msgh);
     ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
@@ -293,10 +390,14 @@ void lua_plugin::exe_OnWorkerTick(int worker_idx)
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
 
     int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(lua_ptr);
     lua_getglobal(lua_ptr, "OnWorkerTick");
 
     lua_pushinteger(lua_ptr, worker_idx);
-    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    isok = lua_pcall(lua_ptr, 1, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(lua_ptr, err_msgh);
     ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
@@ -305,18 +406,30 @@ void lua_plugin::exe_OnWorkerReload(int worker_idx)
     lua_State *lua_ptr = this->worker_lua_state[worker_idx];
 
     int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(lua_ptr);
     lua_getglobal(lua_ptr, "OnWorkerReload");
 
     lua_pushinteger(lua_ptr, worker_idx);
-    isok = lua_pcall(lua_ptr, 1, 0, 0);
+    isok = lua_pcall(lua_ptr, 1, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(lua_ptr, err_msgh);
     ASSERT_LOG_EXIT(LUA_OK == isok);
 }
 
-void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const google::protobuf::Message &package)
+void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state,
+                                        int msg_type,
+                                        int cmd,
+                                        const google::protobuf::Message &package,
+                                        uint64_t uint64_param1,
+                                        int64_t int64_param2,
+                                        const std::string &str_param3)
 {
     lua_plugin *lua_plugin_ptr = singleton<lua_plugin>::instance();
 
     int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(lua_state);
     lua_getglobal(lua_state, "OnLuaVMRecvMessage");
 
     int is_mainVM = 0;
@@ -350,6 +463,7 @@ void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const goo
     lua_pushboolean(lua_state, is_otherVM);
     lua_pushboolean(lua_state, is_workerVM);
     lua_pushinteger(lua_state, worker_idx);
+    lua_pushinteger(lua_state, msg_type);
     lua_pushinteger(lua_state, cmd);
 
     int old_lua_stack_size = lua_gettop(lua_state);
@@ -357,19 +471,72 @@ void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state, int cmd, const goo
     int new_lua_stack_size = lua_gettop(lua_state);
     ASSERT_LOG_EXIT(new_lua_stack_size == old_lua_stack_size + 1);
 
-    isok = lua_pcall(lua_state, 6, 0, 0);
+    lua_pushstring(lua_state, std::to_string(uint64_param1).c_str());
+    lua_pushstring(lua_state, std::to_string(int64_param2).c_str());
+    lua_pushstring(lua_state, str_param3.c_str());
+
+    isok = lua_pcall(lua_state, 10, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(lua_state, err_msgh);
     ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
-void lua_plugin::on_other_init()
+void lua_plugin::on_other_lua_vm_recv_client_message(int cmd,
+                                                     const google::protobuf::Message &package,
+                                                     uint64_t gid,
+                                                     int worker_idx)
 {
+    exe_OnLuaVMRecvMessage(this->other_lua_state,
+                           1,
+                           cmd,
+                           package,
+                           gid,
+                           worker_idx,
+                           "");
+}
+
+void lua_plugin::on_other_lua_vm_recv_ipc_message(int cmd,
+                                                  const google::protobuf::Message &package,
+                                                  const std::string &app_id)
+{
+    exe_OnLuaVMRecvMessage(this->other_lua_state,
+                           2,
+                           cmd,
+                           package,
+                           0,
+                           0,
+                           app_id);
+}
+
+void lua_plugin::on_other_lua_vm_recv_udp_message(int cmd,
+                                                  const google::protobuf::Message &package,
+                                                  const std::string &from_ip,
+                                                  int from_port)
+{
+    exe_OnLuaVMRecvMessage(this->other_lua_state,
+                           3,
+                           cmd,
+                           package,
+                           0,
+                           from_port,
+                           from_ip);
+}
+
+void lua_plugin::on_other_init(avant::workers::other *ptr_other_obj)
+{
+    this->ptr_other_obj = ptr_other_obj;
     {
         this->other_lua_state = luaL_newstate();
         luaL_openlibs(this->other_lua_state);
+#if LUA_PLUGIN_LUAOPEN_EMMY_CORE
+        // 加载 emmy_core 模块
+        luaL_requiref(this->other_lua_state, "emmy_core", luaopen_emmy_core, 1);
+        lua_pop(this->other_lua_state, 1);
+#endif
         other_mount();
         std::string filename = this->lua_dir + "/Init.lua";
         int isok = luaL_dofile(this->other_lua_state, filename.data());
-
+        lua_plugin::lua_plugin_lua_return_not_is_ok_print_error(isok, this->other_lua_state);
         ASSERT_LOG_EXIT(isok == LUA_OK);
     }
 
@@ -412,37 +579,52 @@ void lua_plugin::on_other_tick()
 void lua_plugin::exe_OnOtherInit()
 {
     static int isok = LUA_OK;
-
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->other_lua_state);
     lua_getglobal(this->other_lua_state, "OnOtherInit");
 
-    isok = lua_pcall(this->other_lua_state, 0, 0, 0);
+    isok = lua_pcall(this->other_lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->other_lua_state, err_msgh);
     ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnOtherStop()
 {
     static int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->other_lua_state);
     lua_getglobal(this->other_lua_state, "OnOtherStop");
 
-    isok = lua_pcall(this->other_lua_state, 0, 0, 0);
+    isok = lua_pcall(this->other_lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->other_lua_state, err_msgh);
     ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnOtherTick()
 {
     static int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->other_lua_state);
     lua_getglobal(this->other_lua_state, "OnOtherTick");
 
-    isok = lua_pcall(this->other_lua_state, 0, 0, 0);
+    isok = lua_pcall(this->other_lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->other_lua_state, err_msgh);
     ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
 void lua_plugin::exe_OnOtherReload()
 {
     static int isok = LUA_OK;
+    // 添加错误处理函数
+    int err_msgh = lua_plugin_push_lua_error_handler(this->other_lua_state);
     lua_getglobal(this->other_lua_state, "OnOtherReload");
 
-    isok = lua_pcall(this->other_lua_state, 0, 0, 0);
+    isok = lua_pcall(this->other_lua_state, 0, 0, err_msgh);
+    // 移除错误处理函数
+    lua_remove(this->other_lua_state, err_msgh);
     ASSERT_LOG_EXIT(isok == LUA_OK);
 }
 
@@ -462,6 +644,9 @@ void lua_plugin::main_mount()
         lua_pushstring(this->lua_state, this->lua_dir.c_str());
         lua_setfield(this->lua_state, -2, "LuaDir");
 
+        lua_pushstring(this->lua_state, this->app_id.c_str());
+        lua_setfield(this->lua_state, -2, "AppID");
+
         lua_setglobal(this->lua_state, "avant");
     }
 }
@@ -479,6 +664,9 @@ void lua_plugin::worker_mount(int worker_idx)
 
     lua_pushstring(this->worker_lua_state[worker_idx], this->lua_dir.c_str());
     lua_setfield(this->worker_lua_state[worker_idx], -2, "LuaDir");
+
+    lua_pushstring(this->worker_lua_state[worker_idx], this->app_id.c_str());
+    lua_setfield(this->worker_lua_state[worker_idx], -2, "AppID");
 
     lua_setglobal(this->worker_lua_state[worker_idx], "avant");
 }
@@ -498,6 +686,9 @@ void lua_plugin::other_mount()
         lua_pushstring(this->other_lua_state, this->lua_dir.c_str());
         lua_setfield(this->other_lua_state, -2, "LuaDir");
 
+        lua_pushstring(this->other_lua_state, this->app_id.c_str());
+        lua_setfield(this->other_lua_state, -2, "AppID");
+
         lua_setglobal(this->other_lua_state, "avant");
     }
 }
@@ -511,8 +702,8 @@ int lua_plugin::HighresTime(lua_State *lua_state)
     auto seconds = ns / 1000000000;
     auto nanoseconds_part = ns % 1000000000;
     auto milliseconds = ns / 1000000;
-    lua_pushnumber(lua_state, seconds); // push seconds
-    lua_pushnumber(lua_state, milliseconds); // push milliseconds
+    lua_pushnumber(lua_state, seconds);          // push seconds
+    lua_pushnumber(lua_state, milliseconds);     // push milliseconds
     lua_pushnumber(lua_state, nanoseconds_part); // pushes nanoseconds_part
     return 3;
 }
@@ -578,20 +769,34 @@ int lua_plugin::CreateNewProtobufByCmd(lua_State *lua_state)
 int lua_plugin::Lua2Protobuf(lua_State *lua_state)
 {
     int num = lua_gettop(lua_state);
-    ASSERT_LOG_EXIT(num == 2);
+    ASSERT_LOG_EXIT(num == 6);
 
-    int isok = lua_isnumber(lua_state, 2);
+    int isok = lua_isstring(lua_state, 6); // str_param3
+    ASSERT_LOG_EXIT(isok);
+    isok = lua_isstring(lua_state, 5); // int64_param2_string
+    ASSERT_LOG_EXIT(isok);
+    isok = lua_isstring(lua_state, 4); // uint64_param1_string
+    ASSERT_LOG_EXIT(isok);
+    isok = lua_isnumber(lua_state, 3); // cmd
+    ASSERT_LOG_EXIT(isok);
+    isok = lua_isnumber(lua_state, 2); // msg_tyep
+    ASSERT_LOG_EXIT(isok);
+    isok = lua_istable(lua_state, 1); // message
     ASSERT_LOG_EXIT(isok);
 
-    int cmd = lua_tonumber(lua_state, 2);
-    lua_pop(lua_state, 1); // 弹出cmd
-
-    isok = lua_istable(lua_state, 1);
-    ASSERT_LOG_EXIT(isok);
+    const std::string str_param3(lua_tostring(lua_state, 6));
+    lua_pop(lua_state, 1); // 弹出 str_param3
+    int64_t int64_param2 = std::stoll(std::string(lua_tostring(lua_state, 5)));
+    lua_pop(lua_state, 1); // 弹出 int64_param2
+    uint64_t uint64_param1 = std::stoull(std::string(lua_tostring(lua_state, 4)));
+    lua_pop(lua_state, 1); // 弹出 uint64_param1
+    int cmd = lua_tointeger(lua_state, 3);
+    lua_pop(lua_state, 1); // 弹出 cmd
+    int msg_type = lua_tointeger(lua_state, 2);
+    lua_pop(lua_state, 1); // 弹出 msg_type
 
     int old_lua_stack_size = lua_gettop(lua_state);
 
-    // 注意应该把消息通过管道传输而不是直接调用exe_onLuaVMRecvMessage不然可能造成递归
     std::shared_ptr<google::protobuf::Message> msg_ptr = singleton<lua_plugin>::instance()->protobuf_cmd2message(cmd);
     if (msg_ptr)
     {
@@ -600,10 +805,49 @@ int lua_plugin::Lua2Protobuf(lua_State *lua_state)
         int new_lua_stack_size = lua_gettop(lua_state);
         ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
 
-        LOG_LUA_PLUGIN_RUNTIME("ProtoLuaTest\n{}", msg_ptr->DebugString().c_str());
+        LOG_LUA_PLUGIN_RUNTIME("Lua2Protobuf Print cmd[{}] param1[{}] param2[{}] \n{}",
+                               cmd,
+                               uint64_param1,
+                               int64_param2,
+                               msg_ptr->DebugString().c_str());
 
-        // 模拟向lua发包
-        exe_OnLuaVMRecvMessage(lua_state, cmd, *msg_ptr);
+        // 在这里处理lua发来的包
+        if (msg_type == (int)ProtoLuaVMMsgType::PROTO_LUA_VM_MSG_TYPE_CLIENT) // 发给客户端连接的包
+        {
+            ProtoTunnelOtherLuaVM2WorkerConn tunnelOtherVM2WorkerConn;
+            tunnelOtherVM2WorkerConn.set_gid(uint64_param1);
+            tunnelOtherVM2WorkerConn.set_workeridx(int64_param2);
+            avant::proto::pack_package(*tunnelOtherVM2WorkerConn.mutable_innerprotopackage(), *msg_ptr, (avant::ProtoCmd)cmd);
+
+            ProtoPackage resPackage;
+            singleton<lua_plugin>::instance()->ptr_other_obj->tunnel_forward(
+                std::vector{avant::global::tunnel_id::get().get_worker_tunnel_id(int64_param2)},
+                avant::proto::pack_package(resPackage, tunnelOtherVM2WorkerConn, ProtoCmd::PROTO_CMD_TUNNEL_OTHERLUAVM2WORKERCONN));
+        }
+        else if (msg_type == (int)ProtoLuaVMMsgType::PROTO_LUA_VM_MSG_TYPE_IPC) // ipc
+        {
+            avant::app::other_app::other_lua_send_ipc_package(str_param3, cmd, *msg_ptr);
+        }
+        else if (msg_type == (int)ProtoLuaVMMsgType::PROTO_LUA_VM_MSG_TYPE_UDP) // udp
+        {
+            // udp
+            // LOG_ERROR("Lua2Protobuf UDP send cmd {} to {}:{}", cmd, str_param3.c_str(), int64_param2);
+            avant::workers::other &other_obj = *singleton<lua_plugin>::instance()->ptr_other_obj;
+            ProtoPackage package;
+            package.set_cmd((avant::ProtoCmd)cmd);
+            avant::proto::pack_package(package, *msg_ptr, (avant::ProtoCmd)cmd);
+            std::string data;
+            (void)package.SerializeToString(&data);
+            int int_ret = other_obj.udp_svr_component->udp_component_client(str_param3, int64_param2, data.c_str(), data.size(), nullptr, 0);
+            if (int_ret != 0)
+            {
+                LOG_ERROR("udp_component_client failed cmd {} to {}:{}", cmd, str_param3.c_str(), int64_param2);
+            }
+        }
+        else
+        {
+            LOG_ERROR("Lua2Protobuf unknow msg_type {}", msg_type);
+        }
 
         new_lua_stack_size = lua_gettop(lua_state);
         ASSERT_LOG_EXIT(old_lua_stack_size == new_lua_stack_size);
@@ -1090,7 +1334,7 @@ void lua_plugin::lua2protobuf_nostack(lua_State *L, const google::protobuf::Mess
                     const int n_in_array = lua_rawlen(L, -1);
 #endif
 
-                    int array_val_in_lua_stack = lua_gettop(L);       // 数组就在栈顶
+                    int array_val_in_lua_stack = lua_gettop(L); // 数组就在栈顶
 
                     if (n_in_array == 0)
                     {
@@ -1520,9 +1764,21 @@ lua_plugin::protobuf_cmd2message(int cmd)
     return nullptr;
 }
 
+#define REGISTER_MSG(cmd, Type) \
+    this->message_factory[cmd] = []() { return std::make_shared<Type>(); }
+
 // 将C++与Lua需要交互的协议加进来
 void lua_plugin::init_message_factory()
 {
-    this->message_factory[ProtoCmd::PROTO_CMD_LUA_TEST] = []()
-    { return std::make_shared<ProtoLuaTest>(); };
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_LUA_TEST, ProtoLuaTest);
+
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_CS_REQ_EXAMPLE, ProtoCSReqExample);
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_CS_RES_EXAMPLE, ProtoCSResExample);
+
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION, ProtoTunnelWorker2OtherEventNewClientConnection);
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_CLOSE_CLIENT_CONNECTION, ProtoTunnelWorker2OtherEventCloseClientConnection);
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_TUNNEL_OTHERLUAVM2WORKER_CLOSE_CLIENT_CONNECTION, ProtoTunnelOtherLuaVM2WorkerCloseClientConnection);
+
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_UDP_SAFESTOP_REQ, ProtoUDPSafeStopReq);
+    REGISTER_MSG(ProtoCmd::PROTO_CMD_UDP_SAFESTOP_RES, ProtoUDPSafeStopRes);
 }

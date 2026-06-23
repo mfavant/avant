@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package avant;
+
+option go_package = "/proto_res";
+
+enum ProtoErrCode
+{
+    // 正确
+    OK                       = 0;
+    // 未知错误
+    ERR_UNKNOW               = 1;
+    // 服务已关闭
+    EERR_SERVICE_SAFESTOPED = 2;
+};

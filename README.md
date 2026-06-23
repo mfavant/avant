@@ -61,27 +61,22 @@ If some dependencies are already installed on the host, you may skip them.
 
 ```bash
 docker run -it ubuntu:latest bash
-
 apt-get update
-
 apt-get install -y \
     apt-utils \
-    cmake g++ make git \
+    cmake g++ make git nodejs npm\
     protobuf-compiler libprotobuf-dev \
     libssl-dev
-
 git clone https://github.com/crust-hub/avant.git
-
 cd avant/protocol && make
-
 cd ..
-
 mkdir -p build
 rm -rf ./build/*
-
 cd build
 cmake -DAVANT_JIT_VERSION=OFF ..
 make -j4
+cd ..
+node node ./generate_proto_lua.js ./protocol ./bin/lua/ProtoLua
 ```
 
 See: [Other Installing Third-Party Example](./install_third_party_example.md)

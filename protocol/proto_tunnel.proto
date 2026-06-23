@@ -50,11 +50,40 @@ message ProtoTunnelWebsocketBroadcast
 // PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION
 message ProtoTunnelWorker2OtherEventNewClientConnection
 {
-    uint64 gid = 3;
+    uint64 gid = 1;
 }
 
 // PROTO_CMD_TUNNEL_OTHER2WORKER_TEST
 message ProtoTunnelOther2WorkerTest
 {
     uint64 time = 1;
+}
+
+// PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM
+message ProtoTunnelWorker2OtherLuaVM
+{
+    uint64 gid = 1;
+    int32 workerIdx = 2;
+    ProtoPackage innerProtoPackage = 3;
+}
+
+// PROTO_CMD_TUNNEL_OTHERLUAVM2WORKERCONN
+message ProtoTunnelOtherLuaVM2WorkerConn
+{
+    uint64 gid = 1;
+    int32 workerIdx = 2;
+    ProtoPackage innerProtoPackage = 3;
+}
+
+// PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_CLOSE_CLIENT_CONNECTION
+message ProtoTunnelWorker2OtherEventCloseClientConnection
+{
+    uint64 gid = 1;
+}
+
+// PROTO_CMD_TUNNEL_OTHERLUAVM2WORKER_CLOSE_CLIENT_CONNECTION
+message ProtoTunnelOtherLuaVM2WorkerCloseClientConnection
+{
+    uint64 gid = 1;
+    int32 workerIdx = 2;
 }

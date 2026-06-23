@@ -1,0 +1,12 @@
+{
+  "workspace": {
+    "ignoreDir": [
+      "src",
+      "protocol",
+      "build",
+      "client",
+      "external",
+      "test"
+    ]
+  }
+}

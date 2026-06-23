@@ -14,8 +14,13 @@
 #include "workers/worker.h"
 #include <avant-log/logger.h>
 #include "proto/proto_util.h"
+#include "proto_res/proto_example.pb.h"
+#include "proto_res/proto_cmd.pb.h"
+#include "proto_res/proto_tunnel.pb.h"
 #include "utility/singleton.h"
 #include "app/lua_plugin.h"
+#include <vector>
+#include "global/tunnel_id.h"
 
 using namespace avant::app;
 
@@ -23,6 +28,7 @@ void websocket_app::on_main_init(avant::server::server &server_obj)
 {
     LOG_ERROR("websocket_app::on_main_init");
     utility::singleton<lua_plugin>::instance()->on_main_init(server_obj.get_config().get_lua_dir(),
+                                                             server_obj.get_config().get_app_id(),
                                                              server_obj.get_config().get_worker_cnt());
 }
 
@@ -57,15 +63,44 @@ void websocket_app::on_worker_tick(avant::workers::worker &worker_obj)
 void websocket_app::on_worker_tunnel(avant::workers::worker &worker_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
     int cmd = package.cmd();
-    if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_OTHER2WORKER_TEST)
+
+    // Other 线程的Lua虚拟机发给客户端连接的包
+    if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_OTHERLUAVM2WORKERCONN)
     {
-        ProtoTunnelOther2WorkerTest other2worker_test;
-        if (!proto::parse(other2worker_test, package))
+        ProtoTunnelOtherLuaVM2WorkerConn tunnelOtherLuaVM2WorkerConn;
+        if (!proto::parse(tunnelOtherLuaVM2WorkerConn, package))
         {
-            LOG_ERROR("proto::parse(other2worker_test, package) failed");
+            LOG_ERROR("proto::parse(tunnelOtherLuaVM2WorkerConn, package) failed");
             return;
         }
-        // LOG_ERROR("worker_id {} PROTO_CMD_TUNNEL_OTHER2WORKER_TEST time {}", worker_obj.get_worker_idx(), other2worker_test.time());
+        uint64_t gid = tunnelOtherLuaVM2WorkerConn.gid();
+        int worker_idx = tunnelOtherLuaVM2WorkerConn.workeridx();
+        int cmd = tunnelOtherLuaVM2WorkerConn.innerprotopackage().cmd();
+
+        if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_OTHERLUAVM2WORKER_CLOSE_CLIENT_CONNECTION)
+        {
+            avant::connection::connection *close_conn = worker_obj.worker_connection_mgr->get_conn_by_gid(gid);
+            if (close_conn)
+            {
+                auto close_websocket_ctx = dynamic_cast<avant::connection::websocket_ctx *>(close_conn->ctx_ptr.get());
+                if (close_websocket_ctx)
+                {
+                    close_websocket_ctx->set_conn_is_close(true);
+                    close_websocket_ctx->event_mod(nullptr, event::event_poller::RWE, false);
+                }
+            }
+            return;
+        }
+        else
+        {
+            worker_obj.send_client_forward_message(gid, {gid}, *tunnelOtherLuaVM2WorkerConn.mutable_innerprotopackage());
+        }
+
+        // LOG_ERROR("stream_app::on_worker_tunnel gid {} worker_idx {} real_worker_idx {} cmd {}", gid, worker_idx, worker_obj.get_worker_id(), cmd);
+    }
+    else if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_OTHER2WORKER_TEST)
+    {
+        LOG_ERROR("not exist handler {}", cmd);
     }
     else
     {
@@ -76,15 +111,49 @@ void websocket_app::on_worker_tunnel(avant::workers::worker &worker_obj, const P
 void websocket_app::on_new_connection(avant::connection::websocket_ctx &ctx)
 {
     // LOG_ERROR("websocket_app::on_new_connection");
+    ProtoTunnelWorker2OtherLuaVM worker2OtherLuaVMPkg;
+    worker2OtherLuaVMPkg.set_gid(ctx.get_conn_gid());
+    worker2OtherLuaVMPkg.set_workeridx(ctx.get_worker_idx());
+
+    {
+        ProtoPackage package;
+        ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
+        protoNewConn.set_gid(ctx.get_conn_gid());
+        avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION);
+        *worker2OtherLuaVMPkg.mutable_innerprotopackage() = package;
+    }
+
+    ProtoPackage resPackage;
+    ctx.tunnel_forward(
+        std::vector{avant::global::tunnel_id::get().get_other_tunnel_id()},
+        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM));
 }
 
 void websocket_app::on_close_connection(avant::connection::websocket_ctx &ctx)
 {
     // LOG_ERROR("websocket_app::on_close_connection");
+    ProtoTunnelWorker2OtherLuaVM worker2OtherLuaVMPkg;
+    worker2OtherLuaVMPkg.set_gid(ctx.get_conn_gid());
+    worker2OtherLuaVMPkg.set_workeridx(ctx.get_worker_idx());
+
+    {
+        ProtoPackage package;
+        ProtoTunnelWorker2OtherEventCloseClientConnection protoCloseConn;
+        protoCloseConn.set_gid(ctx.get_conn_gid());
+        avant::proto::pack_package(package, protoCloseConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_CLOSE_CLIENT_CONNECTION);
+        *worker2OtherLuaVMPkg.mutable_innerprotopackage() = package;
+    }
+
+    ProtoPackage resPackage;
+    ctx.tunnel_forward(
+        std::vector{avant::global::tunnel_id::get().get_other_tunnel_id()},
+        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM));
 }
 
 void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
 {
+    constexpr int max_package_num_per_loop = INT32_MAX;
+    int package_num_per_loop = 0;
     do
     {
         uint64_t all_data_len = ctx.get_recv_buffer_size();
@@ -226,6 +295,11 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
             if (frame.fin)
             {
                 on_process_frame(ctx, frame);
+                package_num_per_loop++;
+                if (package_num_per_loop >= max_package_num_per_loop)
+                {
+                    break;
+                }
             }
         }
     } while (true);
@@ -249,13 +323,37 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
 
 void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx, const websocket_frame &frame)
 {
-    // using tunnel to broadcast
-    ProtoTunnelWebsocketBroadcast websockBroadcast;
-    ProtoPackage package;
-    websockBroadcast.set_data(ctx.frame_payload_data);
+    // using tunnel to broadcast, 将此连接发的内容广播给其他所有连接
+    // {
+    //     ProtoTunnelWebsocketBroadcast websockBroadcast;
+    //     ProtoPackage package;
+    //     websockBroadcast.set_data(ctx.frame_payload_data);
+    //     ctx.frame_payload_data.clear();
+    //     ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{}, avant::proto::pack_package(package, websockBroadcast, ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST));
+    //     return;
+    // }
+
+    ProtoPackage protoPackage;
+    if (!protoPackage.ParseFromArray(ctx.frame_payload_data.c_str(), ctx.frame_payload_data.size()))
+    {
+        LOG_ERROR("!protoPackage.ParseFromArray failed gid {}", ctx.get_conn_gid());
+        ctx.frame_payload_data.clear();
+        ctx.set_conn_is_close(true);
+        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        return;
+    }
     ctx.frame_payload_data.clear();
 
-    ctx.worker_send_client_forward_message(ctx.get_conn_gid(), std::set<uint64_t>{}, avant::proto::pack_package(package, websockBroadcast, ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST));
+    // 将客户端连接发来的包 全部通过 ProtoTunnelWorker2OtherLuaVM 传给Other线程的Lua虚拟机
+    ProtoTunnelWorker2OtherLuaVM worker2OtherLuaVMPkg;
+    worker2OtherLuaVMPkg.set_gid(ctx.get_conn_gid());
+    worker2OtherLuaVMPkg.set_workeridx(ctx.get_worker_idx());
+
+    *worker2OtherLuaVMPkg.mutable_innerprotopackage() = protoPackage;
+    ProtoPackage resPackage;
+    ctx.tunnel_forward(
+        std::vector{avant::global::tunnel_id::get().get_other_tunnel_id()},
+        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM));
 }
 
 void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &ctx,
@@ -264,6 +362,7 @@ void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &
                                               const ProtoTunnelPackage &tunnel_package)
 {
     int cmd = message.innerprotopackage().cmd();
+
     if (cmd == ProtoCmd::PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST)
     {
         uint8_t first_byte = 0x80 | websocket_frame_type_2_n(websocket_frame_type::TEXT_FRAME);
@@ -274,11 +373,12 @@ void websocket_app::on_client_forward_message(avant::connection::websocket_ctx &
             return;
         }
         send_sync_package(ctx, first_byte, websocketBroadcast.data().c_str(), websocketBroadcast.data().size());
+        return;
     }
-    else
-    {
-        LOG_ERROR("not exist handler {}", cmd);
-    }
+
+    uint8_t first_byte = 0x80 | websocket_frame_type_2_n(websocket_frame_type::BINARY_FRAME);
+    std::string data = message.innerprotopackage().SerializeAsString();
+    send_sync_package(ctx, first_byte, data.c_str(), data.size());
 }
 
 int websocket_app::send_sync_package(avant::connection::websocket_ctx &ctx, uint8_t first_byte, const char *data, size_t data_len)

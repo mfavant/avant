@@ -6,14 +6,36 @@ option go_package = "/proto_res";
 
 enum ProtoCmd
 {
+    // 样例请求
     PROTO_CMD_CS_REQ_EXAMPLE = 0;
+    // 样例返回
     PROTO_CMD_CS_RES_EXAMPLE = 1;
+    // 主线程通知worker线程新的客户端文件描述符
     PROTO_CMD_TUNNEL_MAIN2WORKER_NEW_CLIENT = 2;
+    // 线程之间通信封装包
     PROTO_CMD_TUNNEL_PACKAGE = 3;
+    // 线程之间客户端转发数据
     PROTO_CMD_TUNNEL_CLIENT_FORWARD_MESSAGE = 4;
+    // websocket转发数据给所有客户端
     PROTO_CMD_TUNNEL_WEBSOCKET_BROADCAST = 5;
+    // worker线程通知other线程有新的客户端连接
     PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION = 6;
+    // other线程向worker发消息样例
     PROTO_CMD_TUNNEL_OTHER2WORKER_TEST = 7;
+    // lua与c++通信样例
     PROTO_CMD_LUA_TEST = 8;
+    // 进程间通信握手协议
     PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE = 9;
+    // worker发消息到other的lua虚拟机
+    PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM = 10;
+    // other线程虚拟机发消息给worker内的客户端连接
+    PROTO_CMD_TUNNEL_OTHERLUAVM2WORKERCONN = 11;
+    // worker线程通知other线程有客户端断开连接
+    PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_CLOSE_CLIENT_CONNECTION = 12;
+    // other线程通知worker线程把某个客户端连接主动断开
+    PROTO_CMD_TUNNEL_OTHERLUAVM2WORKER_CLOSE_CLIENT_CONNECTION = 13;
+    // 优雅停服请求
+    PROTO_CMD_UDP_SAFESTOP_REQ = 14;
+    // 优雅停服返回
+    PROTO_CMD_UDP_SAFESTOP_RES = 15;
 }

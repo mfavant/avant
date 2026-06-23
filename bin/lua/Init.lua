@@ -1,6 +1,12 @@
 package.path = avant.LuaDir .. "/?.lua;" .. package.path
-package.path = avant.LuaDir .. "/Player/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/Algorithm/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/Debug/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/Msg/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/Numeric/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/ProtoLua/?.lua;" .. package.path
+package.path = avant.LuaDir .. "/Time/?.lua;" .. package.path
 
+local avant = require("Avant")
 local Log = require("Log")
 
 function OnMainInit()
@@ -63,18 +69,21 @@ function OnOtherReload()
     Other:OnReload();
 end
 
-function OnLuaVMRecvMessage(isMainVM, isOtherVM, isWorkerVM, workerIdx, cmd, message)
-    -- Log:Error("avant.OnLuaVMRecvMessage " .. tostring(isMainVM) .. " " .. tostring(isOtherVM) .. " " ..
-    --               tostring(isWorkerVM) .. " " .. workerIdx .. " " .. cmd .. " ");
 
-    if isMainVM then
-        local Main = require("Main")
-        Main:OnLuaVMRecvMessage(cmd, message);
-    elseif isOtherVM then
-        local Other = require("Other")
-        Other:OnLuaVMRecvMessage(cmd, message);
-    elseif isWorkerVM then
-        local Worker = require("Worker")
-        Worker:OnLuaVMRecvMessage(workerIdx, cmd, message);
+---@param isMainVM boolean
+---@param isOtherVM boolean
+---@param isWorkerVM boolean
+---@param workerIdx integer
+---@param msg_type integer
+---@param cmd integer
+---@param message table
+---@param uint64_param1_string string
+---@param int64_param2_string string
+---@param str_param3 string
+function OnLuaVMRecvMessage(isMainVM, isOtherVM, isWorkerVM, workerIdx, msg_type, cmd, message, uint64_param1_string,
+                            int64_param2_string, str_param3)
+    local Other = require("Other")
+    if isOtherVM then
+        Other:OnLuaVMRecvMessage(msg_type, cmd, message, uint64_param1_string, int64_param2_string, str_param3);
     end
 end

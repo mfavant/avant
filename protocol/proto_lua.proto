@@ -4,6 +4,14 @@ package avant;
 
 option go_package = "/proto_res";
 
+enum ProtoLuaVMMsgType
+{
+    PROTO_LUA_VM_MSG_TYPE_NONE = 0;
+    PROTO_LUA_VM_MSG_TYPE_CLIENT = 1;
+    PROTO_LUA_VM_MSG_TYPE_IPC = 2;
+    PROTO_LUA_VM_MSG_TYPE_UDP = 3;
+}
+
 message ProtoLuaTestInner
 {
     double double_val = 1;

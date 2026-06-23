@@ -3,7 +3,7 @@ RUN mkdir -p /avant
 COPY . /avant
 WORKDIR /avant
 RUN apt update
-RUN apt install cmake g++ make git -y
+RUN apt install cmake g++ make git nodejs npm -y
 RUN apt install protobuf-compiler libprotobuf-dev  -y
 RUN apt install libssl-dev -y
 # AVANT_JIT_VERSION=ON
@@ -49,6 +49,10 @@ RUN cd protocol \
     && ls
 RUN echo "END=>building AVANT_JIT_VERSION=OFF"
 # AVANT_JIT_VERSION=OFF
+
+WORKDIR /avant
+RUN node ./generate_proto_lua.js ./protocol ./bin/lua/ProtoLua
+
 WORKDIR /avant/bin
 ENTRYPOINT ["/bin/bash", "-c"]
 CMD ["./avant && tail -f /dev/null"]

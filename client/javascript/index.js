@@ -3,13 +3,14 @@ const net = require("net")
 const WebSocket = require("ws")
 const dgram = require("dgram") // 引入 UDP 模块
 
-const IP = "www.mfavant.xyz"
-const PORT = 20025
-const UDP_IP = "www.mfavant.xyz"
-const UDP_PORT = 20027
+const IP = "127.0.0.1"
+const PORT = 20023
 
-const RPCIP = "www.mfavant.xyz"
-const RPCPORT = 20026
+const RPCIP = "127.0.0.1"
+const RPCPORT = 20024
+
+const UDP_IP = "127.0.0.1"
+const UDP_PORT = 20025
 
 const APPID = "0.0.0.369"
 

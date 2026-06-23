@@ -1,14 +1,5 @@
--- PlayerData.lua data define、load on init
-PlayerData = PlayerData or {};
+-- 创建Player类
+Player = Player or {};
+Player.__index = Player;
 
-PlayerData[1001] = {
-    id = 1001,
-    name = "Alice",
-    level = 10,
-    pos = {
-        x = 100,
-        y = 200
-    }
-};
-
-return PlayerData;
+return Player;
