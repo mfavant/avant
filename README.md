@@ -5,7 +5,7 @@
 A Network Messaging Framework for C++.
 
 - Language: C++ 20
-- Platform: Linux x86 ARM64 | MacOS(Apple Silicon) ARM64
+- Platform: Linux x86_64 ARM64 | MacOS(Apple Silicon) ARM64
 - Protocols: HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)
 - TLS/SSL: OpenSSL
 - Lua: Lua 5.5 | LuaJIT-2.1.ROLLING
