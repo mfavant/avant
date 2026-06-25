@@ -51,7 +51,7 @@ RUN echo "END=>building AVANT_JIT_VERSION=OFF"
 # AVANT_JIT_VERSION=OFF
 
 WORKDIR /avant
-RUN node ./generate_proto_lua.js ./protocol ./bin/lua/ProtoLua
+RUN make clean && make
 
 WORKDIR /avant/bin
 ENTRYPOINT ["/bin/bash", "-c"]

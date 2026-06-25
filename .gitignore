@@ -34,8 +34,6 @@
 *.out
 *.app
 
-
-Makefile
 build/Makefile
 src/Makefile 
 CMakeFiles
