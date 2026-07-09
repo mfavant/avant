@@ -11,12 +11,12 @@ WORKDIR /avant
 RUN echo "START=>building AVANT_JIT_VERSION=ON"
 RUN cd external/LuaJIT-2.1.ROLLING \
     && make clean \
-    && make -j3
+    && make -j$(nproc)
 
 # if macos
 # RUN cd external/LuaJIT-2.1.ROLLING \
 #     && make clean \
-#     && env MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion) make -j3
+#     && env MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion) make -j$(nproc)
 
 WORKDIR /avant
 RUN cd protocol \
@@ -27,7 +27,7 @@ RUN cd protocol \
     && rm -rf ./build/* \
     && cd build \
     && cmake -DAVANT_JIT_VERSION=ON .. \
-    && make -j3 \
+    && make -j$(nproc) \
     && cd .. \
     && cd bin \
     && ls
@@ -43,7 +43,7 @@ RUN cd protocol \
     && rm -rf ./build/* \
     && cd build \
     && cmake -DAVANT_JIT_VERSION=OFF .. \
-    && make -j3 \
+    && make -j$(nproc) \
     && cd .. \
     && cd bin \
     && ls
