@@ -59,7 +59,7 @@ message ProtoTunnelOther2WorkerTest
     uint64 time = 1;
 }
 
-// PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM
+// PROTO_CMD_TUNNEL_WORKER2OTHER_LUAVM
 message ProtoTunnelWorker2OtherLuaVM
 {
     uint64 gid = 1;

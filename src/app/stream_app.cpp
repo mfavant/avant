@@ -72,7 +72,7 @@ void stream_app::on_new_connection(avant::connection::stream_ctx &ctx)
     ProtoPackage resPackage;
     ctx.tunnel_forward(
         std::vector{avant::global::tunnel_id::get().get_other_tunnel_id()},
-        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM));
+        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_LUAVM));
 }
 
 void stream_app::on_close_connection(avant::connection::stream_ctx &ctx)
@@ -93,7 +93,7 @@ void stream_app::on_close_connection(avant::connection::stream_ctx &ctx)
     ProtoPackage resPackage;
     ctx.tunnel_forward(
         std::vector{avant::global::tunnel_id::get().get_other_tunnel_id()},
-        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM));
+        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_LUAVM));
 }
 
 void stream_app::on_process_connection(avant::connection::stream_ctx &ctx)
@@ -189,7 +189,7 @@ void stream_app::on_recv_package(avant::connection::stream_ctx &ctx, const Proto
     ProtoPackage resPackage;
     ctx.tunnel_forward(
         std::vector{avant::global::tunnel_id::get().get_other_tunnel_id()},
-        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM));
+        avant::proto::pack_package(resPackage, worker2OtherLuaVMPkg, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_LUAVM));
 }
 
 int stream_app::send_sync_package(avant::connection::stream_ctx &ctx, const ProtoPackage &package)

@@ -102,7 +102,7 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
 void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPackage &package, const ProtoTunnelPackage &tunnel_package)
 {
     // 从 worker 传到 other 线程 lua 虚拟机
-    if (package.cmd() == ProtoCmd::PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM)
+    if (package.cmd() == ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_LUAVM)
     {
         ProtoTunnelWorker2OtherLuaVM worker2OtherVMPackage;
         bool ret = avant::proto::parse(worker2OtherVMPackage, package);

@@ -27,7 +27,7 @@ enum ProtoCmd
     // 进程间通信握手协议
     PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE = 9;
     // worker发消息到other的lua虚拟机
-    PROOT_CMD_TUNNEL_WORKER2OTHER_LUAVM = 10;
+    PROTO_CMD_TUNNEL_WORKER2OTHER_LUAVM = 10;
     // other线程虚拟机发消息给worker内的客户端连接
     PROTO_CMD_TUNNEL_OTHERLUAVM2WORKERCONN = 11;
     // worker线程通知other线程有客户端断开连接
