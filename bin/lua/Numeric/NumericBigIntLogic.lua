@@ -6,7 +6,9 @@ NumericBigInt.__index = NumericBigInt;
 -- 注意：不要超过7，否则乘法可能会溢出Lua的double精度(2^53)
 local CHUNK_SIZE = 7;
 local BASE = 10 ^ CHUNK_SIZE;
+
 ---@diagnostic disable-next-line: access-invisible
+-- lua5.4 and lua5.1 for luajit
 local unpack = table.unpack or unpack;
 
 --- 构造一个新的NumericBigInt
@@ -98,11 +100,11 @@ function NumericBigInt:ToString()
     local parts = {}
     if self.sign == -1 then table.insert(parts, "-") end
 
-    -- 最高位不需要补零
-    table.insert(parts, tostring(self.chunks[#self.chunks]))
+    -- 最高位不需要补零，使用 %.0f 避免浮点数 .0 后缀
+    table.insert(parts, string.format("%.0f", self.chunks[#self.chunks]))
 
-    -- 剩下的块需要补前导零
-    local fmt = "%0" .. CHUNK_SIZE .. "d"
+    -- 剩下的块需要补前导零，使用 %.0f 替代 %d 以兼容 Lua 5.3+
+    local fmt = "%0" .. CHUNK_SIZE .. ".0f"
     for i = #self.chunks - 1, 1, -1 do
         table.insert(parts, string.format(fmt, self.chunks[i]))
     end
@@ -118,7 +120,7 @@ end
 
 --- 绝对值比较运算
 ---@param other NumericBigInt
----@return number 返回1表示self大于other返回-1表示self小于other返回0表示self大于other
+---@return number 返回1表示self大于other 返回-1表示self小于other 返回0表示self等于other
 function NumericBigInt:CompareAbs(other)
     if #self.chunks > #other.chunks then return 1 end
     if #self.chunks < #other.chunks then return -1 end
@@ -132,7 +134,7 @@ end
 
 --- 比较大小
 ---@param other NumericBigInt
----@return number 返回1表示self大于other返回-1表示self小于other返回0表示self大于other
+---@return number 返回1表示self大于other 返回-1表示self小于other 返回0表示self等于other
 function NumericBigInt:Compare(other)
     if self.sign ~= other.sign then return self.sign end
     return self.sign * self:CompareAbs(other)
@@ -168,7 +170,7 @@ function NumericBigInt:Trim()
 
     -- 如果 chunks 只剩下一个元素并且它的值为 0，则将 sign 设置为 1（表示非负数）
     if #self.chunks == 1 and self.chunks[1] == 0 then
-        self.sign = 1 -- 将符号重置为 1，通常 1 表示正数，0 表示负数
+        self.sign = 1 -- 将符号重置为 1，通常 1 表示正数，-1 表示负数
     end
 end
 
@@ -235,7 +237,7 @@ end
 ---@param other NumericBigInt
 ---@return NumericBigInt
 function NumericBigInt:__add(other)
-    local b = type(other) == "table" and other or NumericBigInt.new(other)
+    local b = NumericBigInt.new(other)
 
     if self.sign == b.sign then
         local res = self:AddAbs(b)
@@ -258,11 +260,10 @@ end
 ---@param other NumericBigInt
 ---@return NumericBigInt
 function NumericBigInt:__sub(other)
-    local b = type(other) == "table" and other or NumericBigInt.new(other)
-    b = b:Clone()
+    ---@type NumericBigInt
+    local b = NumericBigInt.new(other)
     b.sign = -b.sign
-    ---@diagnostic disable-next-line: return-type-mismatch
-    return self + b
+    return self:__add(b)
 end
 
 --- 返回符号位取返后结果
@@ -276,7 +277,7 @@ end
 --- 乘法 self*other
 ---@return NumericBigInt
 function NumericBigInt:__mul(other)
-    local b = type(other) == "table" and other or NumericBigInt.new(other)
+    local b = NumericBigInt.new(other)
 
     if self:IsZero() or b:IsZero() then
         return NumericBigInt.new(0)
@@ -356,7 +357,7 @@ end
 ---@return NumericBigInt
 function NumericBigInt:__div(other)
     ---@type NumericBigInt
-    local divisor = type(other) == "table" and other or NumericBigInt.new(other)
+    local divisor = NumericBigInt.new(other)
 
     -- 除数为 0
     if divisor:IsZero() then
@@ -426,7 +427,7 @@ end
 ---@param other NumericBigInt
 ---@return NumericBigInt
 function NumericBigInt:__mod(other)
-    local divisor = type(other) == "table" and other or NumericBigInt.new(other)
+    local divisor = NumericBigInt.new(other)
 
     if divisor:IsZero() then
         error("Modulo by zero")
@@ -491,7 +492,7 @@ end
 ---@return NumericBigInt
 function NumericBigInt:GCD(other)
     local a = self:Abs()
-    local b = (type(other) == "table" and other or NumericBigInt.new(other)):Abs()
+    local b = NumericBigInt.new(other):Abs()
 
     while not b:IsZero() do
         local temp = b
