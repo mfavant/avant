@@ -1,11 +1,3 @@
-make
-cd protocol && make
-cd ..
-
-cd external/LuaJIT-2.1.ROLLING
-pwd
-make clean
-
 # 1. 获取操作系统类型
 OS_NAME=$(uname -s)
 
@@ -19,12 +11,20 @@ else
     exit 1
 fi
 
+make
+cd protocol && make
+cd ..
+
+cd external/LuaJIT-2.1.ROLLING
+pwd
 # 3. 根据系统执行不同的 make 命令
 if [ "$OS_NAME" == "Darwin" ]; then
-    echo "Detected macOS, starting build..."
+    echo "Detected macOS, starting clean..."
+    env MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion) make clean
     env MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion) make -j$JOBS
 elif [ "$OS_NAME" == "Linux" ]; then
-    echo "Detected Linux, starting build..."
+    echo "Detected Linux, starting clean..."
+    make clean
     make -j$JOBS
 fi
 
