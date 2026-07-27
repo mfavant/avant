@@ -1,38 +1,38 @@
 ---@class NumericBigInt
-NumericBigInt = NumericBigInt or {};
-NumericBigInt.__index = NumericBigInt;
+NumericBigInt = NumericBigInt or {}
+NumericBigInt.__index = NumericBigInt
 
 -- 配置:每块存储7位数字
 -- 注意：不要超过7，否则乘法可能会溢出Lua的double精度(2^53)
-local CHUNK_SIZE = 7;
-local BASE = 10 ^ CHUNK_SIZE;
+local CHUNK_SIZE = 7
+local BASE = 10 ^ CHUNK_SIZE
 
 ---@diagnostic disable-next-line: access-invisible
 -- lua5.4 and lua5.1 for luajit
-local unpack = table.unpack or unpack;
+local unpack = table.unpack or unpack
 
 --- 构造一个新的NumericBigInt
----@param value NumericBigInt|string|number
+---@param value NumericBigInt | string | number
 ---@return NumericBigInt
 function NumericBigInt.new(value)
-    local self = setmetatable({}, NumericBigInt);
+    local self = setmetatable({}, NumericBigInt)
 
     -- 传入的是一个NumbericBigInt
     if type(value) == "table" and value.__is_bigint then
         -- 浅拷贝
-        self.chunks = { unpack(value.chunks) };
-        self.sign = value.sign;
+        self.chunks = { unpack(value.chunks) }
+        self.sign = value.sign
     elseif type(value) == "string" then -- 传入的是一个string
-        self:FromString(value);
-    elseif type(value) == "number" then --传入的是一个number
-        self:FromNumber(math.floor(value));
-    else                                -- 其他按0处理
-        self.chunks = { 0 };
-        self.sign = 1;
+        self:FromString(value)
+    elseif type(value) == "number" then -- 传入的是一个number
+        self:FromNumber(math.floor(value))
+    else -- 其他按0处理
+        self.chunks = { 0 }
+        self.sign = 1
     end
 
-    self.__is_bigint = true;
-    return self;
+    self.__is_bigint = true
+    return self
 end
 
 --- 字符串转为NumbericBigInt
@@ -42,9 +42,9 @@ function NumericBigInt:FromString(str)
     -- 删除所有空格
     str = str:gsub("%s+", "")
     if str == "" then
-        self.chunks = { 0 };
-        self.sign = 1;
-        return;
+        self.chunks = { 0 }
+        self.sign = 1
+        return
     end
 
     -- 处理符号
@@ -76,8 +76,8 @@ end
 ---@return nil
 function NumericBigInt:FromNumber(num)
     if num == 0 then
-        self.chunks = { 0 };
-        self.sign = 1;
+        self.chunks = { 0 }
+        self.sign = 1
         return
     end
 
@@ -115,7 +115,7 @@ end
 --- 原表tostring方法
 ---@return string
 function NumericBigInt:__tostring()
-    return self:ToString();
+    return self:ToString()
 end
 
 --- 绝对值比较运算
@@ -183,7 +183,7 @@ end
 --- 拷贝
 ---@return NumericBigInt
 function NumericBigInt:Clone()
-    return NumericBigInt.new(self);
+    return NumericBigInt.new(self)
 end
 
 --- 两者绝对值相加 abs(self)+abs(other)
@@ -312,7 +312,7 @@ end
 
 --- 计算self/num
 ---@param num number
----@return NumericBigInt,number 返回结果和余数
+---@return NumericBigInt, number 返回结果和余数
 function NumericBigInt:DivSmall(num)
     -- 检查除数是否为 0，避免除零错误
     if num == 0 then
@@ -404,7 +404,7 @@ function NumericBigInt:__div(other)
         while low <= high do
             local mid = math.floor((low + high) / 2)
             ---@type NumericBigInt
-            local temp = divisor:__mul(NumericBigInt.new(mid));
+            local temp = divisor:__mul(NumericBigInt.new(mid))
 
             if temp:Compare(remainder) <= 0 then
                 q = mid
@@ -415,7 +415,7 @@ function NumericBigInt:__div(other)
         end
 
         table.insert(quotient.chunks, 1, q)
-        remainder = remainder:__sub(divisor:__mul(NumericBigInt.new(q)));
+        remainder = remainder:__sub(divisor:__mul(NumericBigInt.new(q)))
     end
 
     quotient.sign = resSign
@@ -440,8 +440,8 @@ function NumericBigInt:__mod(other)
     end
 
     ---@type NumericBigInt
-    local quotient = self:__div(divisor);
-    return self:__sub((quotient:__mul(divisor)));
+    local quotient = self:__div(divisor)
+    return self:__sub((quotient:__mul(divisor)))
 end
 
 --- 幂运算
@@ -496,7 +496,7 @@ function NumericBigInt:GCD(other)
 
     while not b:IsZero() do
         local temp = b
-        b = a:__mod(b);
+        b = a:__mod(b)
         a = temp
     end
 
@@ -520,7 +520,7 @@ function NumericBigInt:ShiftLeft(n)
 
     -- 部分位移
     if partialShift > 0 then
-        res = res:__mul(NumericBigInt.new(10 ^ partialShift));
+        res = res:__mul(NumericBigInt.new(10 ^ partialShift))
     end
 
     return res
@@ -548,7 +548,7 @@ function NumericBigInt:ShiftRight(n)
 
     -- 部分位移
     if partialShift > 0 then
-        res = res:__div(NumericBigInt.new(10 ^ partialShift));
+        res = res:__div(NumericBigInt.new(10 ^ partialShift))
     end
 
     res:Trim()
@@ -609,24 +609,24 @@ if not ... then -- 如果是直接运行而非被 require
     print("\n--- shift 测试 ---")
     local j = NumericBigInt.new("123456789")
     print("j =", j)
-    print("j << 5 =", j:ShiftLeft(5))  -- * 10^5
+    print("j << 5 =", j:ShiftLeft(5)) -- * 10^5
     print("j >> 5 =", j:ShiftRight(5)) -- / 10^5
 
-    print("1==1 =", NumericBigInt.new("1") == NumericBigInt.new("1"));
-    print("1~=1 =", NumericBigInt.new("1") ~= NumericBigInt.new("1"));
-    print("1>=1 =", NumericBigInt.new("1") >= NumericBigInt.new("1"));
-    print("1<=1 =", NumericBigInt.new("1") <= NumericBigInt.new("1"));
-    print("1>=2 =", NumericBigInt.new("1") >= NumericBigInt.new("2"));
-    print("1<=2 =", NumericBigInt.new("1") <= NumericBigInt.new("2"));
-    print("1>1 =", NumericBigInt.new("1") > NumericBigInt.new("1"));
-    print("1<1 =", NumericBigInt.new("1") < NumericBigInt.new("1"));
-    print("1>2 =", NumericBigInt.new("1") > NumericBigInt.new("2"));
-    print("1<2 =", NumericBigInt.new("1") < NumericBigInt.new("2"));
+    print("1==1 =", NumericBigInt.new("1") == NumericBigInt.new("1"))
+    print("1~=1 =", NumericBigInt.new("1") ~= NumericBigInt.new("1"))
+    print("1>=1 =", NumericBigInt.new("1") >= NumericBigInt.new("1"))
+    print("1<=1 =", NumericBigInt.new("1") <= NumericBigInt.new("1"))
+    print("1>=2 =", NumericBigInt.new("1") >= NumericBigInt.new("2"))
+    print("1<=2 =", NumericBigInt.new("1") <= NumericBigInt.new("2"))
+    print("1>1 =", NumericBigInt.new("1") > NumericBigInt.new("1"))
+    print("1<1 =", NumericBigInt.new("1") < NumericBigInt.new("1"))
+    print("1>2 =", NumericBigInt.new("1") > NumericBigInt.new("2"))
+    print("1<2 =", NumericBigInt.new("1") < NumericBigInt.new("2"))
 
-    print("NumericBigInt.new(2.132)", NumericBigInt.new(2.132));
-    print("NumericBigInt.new(-2.132)", NumericBigInt.new(-2.132));
+    print("NumericBigInt.new(2.132)", NumericBigInt.new(2.132))
+    print("NumericBigInt.new(-2.132)", NumericBigInt.new(-2.132))
 
     print("\n=== 测试结束 ===")
 end
 
-return NumericBigInt;
+return NumericBigInt

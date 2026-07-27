@@ -11,7 +11,7 @@ end
 function TimeMgr.GetMS()
     local seconds, milliseconds, nanoseconds = avant.HighresTime()
     local integer_part, number_part = math.modf(milliseconds)
-    return integer_part;
+    return integer_part
 end
 
 ---@return number 返回秒时间戳
@@ -20,4 +20,4 @@ function TimeMgr.GetS()
     return seconds
 end
 
-return TimeMgr;
+return TimeMgr

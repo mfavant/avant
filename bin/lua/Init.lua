@@ -11,79 +11,80 @@ local Log = require("Log")
 
 function OnMainInit()
     local Main = require("Main")
-    Main:OnInit();
+    Main:OnInit()
 end
 
 function OnMainStop()
     local Main = require("Main")
-    Main:OnStop();
+    Main:OnStop()
 end
 
 function OnMainTick()
     local Main = require("Main")
-    Main:OnTick();
+    Main:OnTick()
 end
 
 function OnMainReload()
     local Main = require("Main")
-    Main:OnReload();
+    Main:OnReload()
 end
 
 function OnWorkerInit(workerIdx)
     local Worker = require("Worker")
-    Worker:OnInit(workerIdx);
+    Worker:OnInit(workerIdx)
 end
 
 function OnWorkerStop(workerIdx)
     local Worker = require("Worker")
-    Worker:OnStop(workerIdx);
+    Worker:OnStop(workerIdx)
 end
 
 function OnWorkerTick(workerIdx)
     local Worker = require("Worker")
-    Worker:OnTick(workerIdx);
+    Worker:OnTick(workerIdx)
 end
 
 function OnWorkerReload(workerIdx)
     local Worker = require("Worker")
-    Worker:OnReload(workerIdx);
+    Worker:OnReload(workerIdx)
 end
 
 function OnOtherInit()
     local Other = require("Other")
-    Other:OnInit();
+    Other:OnInit()
 end
 
 function OnOtherStop()
     local Other = require("Other")
-    Other:OnStop();
+    Other:OnStop()
 end
 
 function OnOtherTick()
     local Other = require("Other")
-    Other:OnTick();
+    Other:OnTick()
 end
 
 function OnOtherReload()
     local Other = require("Other")
-    Other:OnReload();
+    Other:OnReload()
 end
 
-
----@param isMainVM boolean
----@param isOtherVM boolean
----@param isWorkerVM boolean
----@param workerIdx integer
----@param msg_type integer
----@param cmd integer
----@param message table
+---@param isMainVM             boolean
+---@param isOtherVM            boolean
+---@param isWorkerVM           boolean
+---@param workerIdx            integer
+---@param msg_type             integer
+---@param cmd                  integer
+---@param message              table
 ---@param uint64_param1_string string
----@param int64_param2_string string
----@param str_param3 string
-function OnLuaVMRecvMessage(isMainVM, isOtherVM, isWorkerVM, workerIdx, msg_type, cmd, message, uint64_param1_string,
-                            int64_param2_string, str_param3)
+---@param int64_param2_string  string
+---@param str_param3           string
+function OnLuaVMRecvMessage(
+    isMainVM, isOtherVM, isWorkerVM, workerIdx, msg_type, cmd, message, uint64_param1_string, int64_param2_string,
+    str_param3
+)
     local Other = require("Other")
     if isOtherVM then
-        Other:OnLuaVMRecvMessage(msg_type, cmd, message, uint64_param1_string, int64_param2_string, str_param3);
+        Other:OnLuaVMRecvMessage(msg_type, cmd, message, uint64_param1_string, int64_param2_string, str_param3)
     end
 end

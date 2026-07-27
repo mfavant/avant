@@ -53,4 +53,4 @@ MsgHandlerFromClient[ProtoLua_ProtoCmd.PROTO_CMD_CS_REQ_EXAMPLE] = function (
     MsgHandler:Send2Client(clientGID, workerIdx, ProtoLua_ProtoCmd.PROTO_CMD_CS_RES_EXAMPLE, t)
 end
 
-return MsgHandlerFromClient;
+return MsgHandlerFromClient

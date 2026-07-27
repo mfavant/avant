@@ -1,2 +1,2 @@
-MsgHandler = MsgHandler or {};
-return MsgHandler;
+MsgHandler = MsgHandler or {}
+return MsgHandler

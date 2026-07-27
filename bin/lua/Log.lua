@@ -1,31 +1,31 @@
-local Log = {};
+local Log = {}
 
 ---@diagnostic disable-next-line: access-invisible
 -- lua5.4 and lua5.1 for luajit
-local unpack = table.unpack or unpack;
+local unpack = table.unpack or unpack
 
 function Log:Error(...)
-    local args = { ... };
+    local args = { ... }
     if #args == 0 then
-        return;
+        return
     end
 
-    local formatString = table.remove(args, 1);
+    local formatString = table.remove(args, 1)
     if not formatString then
-        return;
+        return
     end
 
-    local info = debug.getinfo(2, "Sl");
+    local info = debug.getinfo(2, "Sl")
     if info == nil then
-        return;
+        return
     end
 
-    local source = info.source;
-    local line = info.currentline;
+    local source = info.source
+    local line = info.currentline
 
-    local message = string.format(formatString, unpack(args));
+    local message = string.format(formatString, unpack(args))
 
-    avant.Logger(string.format("[%s:%d] %s", source, line, message));
+    avant.Logger(string.format("[%s:%d] %s", source, line, message))
 end
 
-return Log;
+return Log
