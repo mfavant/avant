@@ -51,6 +51,8 @@ message ProtoTunnelWebsocketBroadcast
 message ProtoTunnelWorker2OtherEventNewClientConnection
 {
     uint64 gid = 1;
+    string ip = 2;
+    int32 port = 3;
 }
 
 // PROTO_CMD_TUNNEL_OTHER2WORKER_TEST

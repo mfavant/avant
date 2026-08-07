@@ -65,6 +65,12 @@ void stream_app::on_new_connection(avant::connection::stream_ctx &ctx)
         ProtoPackage package;
         ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
         protoNewConn.set_gid(ctx.get_conn_gid());
+        std::pair<std::string, int> ip_port;
+        if (0 == ctx.get_ip_port(ip_port))
+        {
+            protoNewConn.set_ip(ip_port.first);
+            protoNewConn.set_port(ip_port.second);
+        }
         avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION);
         *worker2OtherLuaVMPkg.mutable_innerprotopackage() = package;
     }

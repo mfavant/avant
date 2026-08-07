@@ -144,6 +144,12 @@ void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_
         ProtoPackage package;
         ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
         protoNewConn.set_gid(ctx.get_conn_gid());
+        std::pair<std::string, int> ip_port;
+        if (0 == ctx.get_ip_port(ip_port))
+        {
+            protoNewConn.set_ip(ip_port.first);
+            protoNewConn.set_port(ip_port.second);
+        }
         ctx.tunnel_forward(std::vector<int>{avant::global::tunnel_id::get().get_other_tunnel_id()},
                            avant::proto::pack_package(package, protoNewConn, ProtoCmd::PROTO_CMD_TUNNEL_WORKER2OTHER_EVENT_NEW_CLIENT_CONNECTION));
     }
