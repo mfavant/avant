@@ -666,3 +666,13 @@ void websocket_ctx::set_conn_is_close(bool val)
 {
     this->conn_ptr->is_close = val;
 }
+
+int websocket_ctx::get_ip_port(std::pair<std::string, int> &res) const
+{
+    if (this->conn_ptr == nullptr)
+    {
+        return -1;
+    }
+
+    return this->conn_ptr->socket_obj.get_realtime_ip_port(res);
+}

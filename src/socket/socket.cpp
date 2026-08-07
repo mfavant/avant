@@ -496,3 +496,54 @@ void socket::set_ssl_accepted(bool accepted)
 {
     m_ssl_accepted = accepted;
 }
+
+int socket::get_realtime_ip_port(std::pair<std::string, int> &res)
+{
+    if (this->m_sockfd < 0)
+    {
+        return -1;
+    }
+
+    struct sockaddr_storage client_addr{};
+    socklen_t addr_len = sizeof(client_addr);
+
+    if (getpeername(this->m_sockfd, (struct sockaddr *)&client_addr, &addr_len) == -1)
+    {
+        return -1;
+    }
+
+    if (client_addr.ss_family == AF_INET)
+    {
+        struct sockaddr_in *s = (struct sockaddr_in *)&client_addr;
+
+        char ip_str[INET6_ADDRSTRLEN + 1] = {'\0'};
+
+        if (inet_ntop(AF_INET, &s->sin_addr, ip_str, INET6_ADDRSTRLEN) == NULL)
+        {
+            return -1;
+        }
+
+        res.first = ip_str;
+        res.second = ntohs(s->sin_port);
+    }
+    else if (client_addr.ss_family == AF_INET6)
+    {
+        struct sockaddr_in6 *s = (struct sockaddr_in6 *)&client_addr;
+
+        char ip_str[INET6_ADDRSTRLEN + 1] = {'\0'};
+
+        if (inet_ntop(AF_INET6, &s->sin6_addr, ip_str, INET6_ADDRSTRLEN) == NULL)
+        {
+            return -1;
+        }
+
+        res.first = ip_str;
+        res.second = ntohs(s->sin6_port);
+    }
+    else
+    {
+        return -1;
+    }
+
+    return 0;
+}

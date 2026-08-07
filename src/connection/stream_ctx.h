@@ -20,6 +20,8 @@ namespace avant::connection
 
         void on_event(uint32_t event) override;
 
+        virtual int get_ip_port(std::pair<std::string, int> &res) const override;
+
     private:
         void try_send_flush();
 

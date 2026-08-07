@@ -311,7 +311,12 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             return;
         }
 
-        // LOG_DEBUG("HttpUrl {}", url.c_str());
+        if constexpr (false)
+        {
+            std::pair<std::string, int> ip_port;
+            ctx.get_ip_port(ip_port);
+            LOG_DEBUG("HttpUrl {} ClientIPPort {} : {}", url.c_str(), ip_port.first.c_str(), ip_port.second);
+        }
 
         auto find_res = url.find("..");
         if (std::string::npos != find_res)

@@ -58,7 +58,12 @@ namespace avant::socket
         inline void set_fd(int fd)
         {
             this->m_sockfd = fd;
+            this->m_ip = "";
+            this->m_port = 0;
         }
+
+        int get_realtime_ip_port(std::pair<std::string, int> &res);
+
         [[nodiscard]]
         SSL *get_ssl_instance();
         void set_ssl_instance(SSL *ssl_instance);

@@ -246,3 +246,13 @@ void ipc_stream_ctx::on_event(uint32_t event)
 
     return;
 }
+
+int ipc_stream_ctx::get_ip_port(std::pair<std::string, int> &res) const
+{
+    if (this->conn_ptr == nullptr)
+    {
+        return -1;
+    }
+
+    return this->conn_ptr->socket_obj.get_realtime_ip_port(res);
+}

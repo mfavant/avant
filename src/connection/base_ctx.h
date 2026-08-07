@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <string>
 
 namespace avant::connection
 {
@@ -21,12 +22,13 @@ namespace avant::connection
 
         inline bool get_app_layer_notified()
         {
-
             return this->app_layer_notified;
         }
 
         virtual void on_close() = 0;
         virtual void on_event(uint32_t event) = 0;
+
+        virtual int get_ip_port(std::pair<std::string, int> &res) const = 0;
 
     private:
         // Indicates whether the context has been notified to the application layer

@@ -27,6 +27,8 @@ namespace avant::connection
         void add_header(const std::string &key, const std::string &value);
         int send_data(const std::string &data, bool flush = true);
 
+        virtual int get_ip_port(std::pair<std::string, int> &res) const override;
+
     private:
         void try_send_flush();
 

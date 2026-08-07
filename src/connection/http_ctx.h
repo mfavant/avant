@@ -54,6 +54,8 @@ namespace avant::connection
             return this->worker_ptr->get_worker_idx(std::forward<Args>(args)...);
         }
 
+        virtual int get_ip_port(std::pair<std::string, int> &res) const override;
+
     public:
         static std::shared_ptr<llhttp_settings_t> settings;
         static void init_http_settings();
