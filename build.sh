@@ -15,7 +15,7 @@ make
 cd protocol && make
 cd ..
 
-cd external/LuaJIT-2.1.ROLLING
+cd external/LuaJIT-2.1
 pwd
 # 3. 根据系统执行不同的 make 命令
 if [ "$OS_NAME" == "Darwin" ]; then

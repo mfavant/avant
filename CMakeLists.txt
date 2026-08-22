@@ -56,14 +56,14 @@ include_directories(${PROJECT_SOURCE_DIR}/protocol)
 include_directories(${PROJECT_SOURCE_DIR}/external)
 
 if(AVANT_JIT_VERSION)
-    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/dynasm/)
-    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/dynasm/)
-    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/src/)
-    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/src/)
-    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/host/)
-    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/host/)
-    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/jit/)
-    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/jit/)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/dynasm/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/dynasm/)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/src/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/src/)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/host/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/host/)
+    message(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/jit/)
+    include_directories(${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/jit/)
 endif()
 
 # for cpp file
@@ -127,7 +127,7 @@ endif()
 if(AVANT_JIT_VERSION)
     target_link_libraries(${PROJECT_NAME} 
         ${APPLE_SPEC_LIB}
-        ${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1.ROLLING/src/libluajit.a 
+        ${PROJECT_SOURCE_DIR}/external/LuaJIT-2.1/src/libluajit.a 
         pthread 
         dl 
         protobuf::libprotobuf

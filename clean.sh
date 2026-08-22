@@ -5,7 +5,7 @@ cd protocol
 make clean
 pwd
 cd ..
-cd external/LuaJIT-2.1.ROLLING
+cd external/LuaJIT-2.1
 pwd
 if [ "$OS_NAME" == "Darwin" ]; then
     echo "Detected macOS, starting clean..."

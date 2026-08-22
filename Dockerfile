@@ -9,12 +9,12 @@ RUN apt install libssl-dev -y
 # AVANT_JIT_VERSION=ON
 WORKDIR /avant
 RUN echo "START=>building AVANT_JIT_VERSION=ON"
-RUN cd external/LuaJIT-2.1.ROLLING \
+RUN cd external/LuaJIT-2.1 \
     && make clean \
     && make -j$(nproc)
 
 # if macos
-# RUN cd external/LuaJIT-2.1.ROLLING \
+# RUN cd external/LuaJIT-2.1 \
 #     && make clean \
 #     && env MACOSX_DEPLOYMENT_TARGET=$(sw_vers -productVersion) make -j$(nproc)
 

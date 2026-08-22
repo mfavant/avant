@@ -23,7 +23,7 @@ Avant is a modular C++20 network messaging framework supporting HTTP(S), WebSock
   - `global/` — Cross-cutting globals (`tunnel_id.cpp/h` — manages worker tunnel IDs for IPC)
   - `main.cpp` — Entry point: creates `avant::system::system`, calls `init()`
 - `protocol/` — `.proto` definitions (`proto_cmd`, `proto_example`, `proto_ipc_stream`, `proto_lua`, `proto_message_head`, `proto_tunnel`), compiled output to `protocol/proto_res/`
-- `external/` — Third-party libraries built as shared objects: `llhttp`, `avant-buffer`, `avant-inifile`, `avant-ipc` (UDP component), `avant-json`, `avant-log`, `avant-timer`, `avant-xml`, `avant-zlib`, `avant-libengine`, `avant-redis`, `avant-sql`, `lua` (Lua 5.5), `LuaJIT-2.1.ROLLING`, `zlib`
+- `external/` — Third-party libraries built as shared objects: `llhttp`, `avant-buffer`, `avant-inifile`, `avant-ipc` (UDP component), `avant-json`, `avant-log`, `avant-timer`, `avant-xml`, `avant-zlib`, `avant-libengine`, `avant-redis`, `avant-sql`, `lua` (Lua 5.5), `LuaJIT-2.1`, `zlib`
   - Note: `avant-redis` and `avant-sql` are present but not currently wired into the CMake build.
 - `test/` — Standalone test files (compiled manually, not integrated into CMake)
 - `bin/` — Output directory for the `avant` binary and runtime config (`bin/config/main.ini`, `bin/lua/Init.lua`, `bin/config/ipc.json`)
@@ -52,7 +52,7 @@ cmake -DAVANT_JIT_VERSION=ON ..   # or OFF for Lua 5.5 (default)
 make -j4
 ```
 
-- `AVANT_JIT_VERSION=ON` — compile with LuaJIT (requires building LuaJIT from `external/LuaJIT-2.1.ROLLING`)
+- `AVANT_JIT_VERSION=ON` — compile with LuaJIT (requires building LuaJIT from `external/LuaJIT-2.1`)
 - `AVANT_JIT_VERSION=OFF` — compile with standard Lua 5.5 from `external/lua`
 
 Binary is output to `bin/avant`.

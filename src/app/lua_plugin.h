@@ -7,7 +7,7 @@
 #include "workers/other.h"
 
 #ifdef AVANT_JIT_VERSION
-#include "LuaJIT-2.1.ROLLING/src/lua.hpp"
+#include "LuaJIT-2.1/src/lua.hpp"
 #elif defined(AVANT_NO_JIT_VERSION)
 extern "C"
 {

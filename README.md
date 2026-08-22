@@ -8,7 +8,7 @@ A Network Messaging Framework for C++.
 - Platform: Linux x86_64 ARM64 | MacOS(Apple Silicon) ARM64
 - Protocols: HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)
 - TLS/SSL: OpenSSL
-- Lua: Lua 5.5 | LuaJIT-2.1.ROLLING
+- Lua: Lua 5.5.1 Release | LuaJIT v2.1 1ee778a4e37122d8ca7d5733c590a47dafd6b15c
 
 ## Overview
 
