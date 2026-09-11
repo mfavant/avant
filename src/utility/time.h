@@ -7,9 +7,11 @@ namespace avant::utility
     class time
     {
     public:
-        uint64_t get_milliseconds();
-        uint64_t get_seconds();
+        uint64_t get_milliseconds() const;
+        uint64_t get_seconds() const;
         void update();
-        std::chrono::system_clock::time_point m_time;
+
+    private:
+        std::chrono::system_clock::time_point m_time{};
     };
 }
