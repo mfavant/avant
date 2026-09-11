@@ -2,50 +2,49 @@
 
 using namespace avant::utility;
 
-vec_str_buffer::vec_str_buffer()
+const char *vec_str_buffer::get_read_ptr() const
 {
-}
-
-vec_str_buffer::~vec_str_buffer()
-{
-}
-
-const char *vec_str_buffer::get_read_ptr()
-{
-    return data.c_str();
+    return m_data.data();
 }
 
 void vec_str_buffer::reserve(size_t bytes)
 {
-    if (bytes <= data.size() || bytes <= before_reserve_bytes)
+    if (bytes <= m_data.capacity())
     {
         return;
     }
-    data.reserve(bytes);
-    before_reserve_bytes = bytes;
+    m_data.reserve(bytes);
 }
 
 void vec_str_buffer::move_read_ptr_n(size_t n)
 {
-    data.erase(0, n);
+    if (n > m_data.size())
+    {
+        n = m_data.size();
+    }
+    m_data.erase(0, n);
 }
 
 void vec_str_buffer::append(const char *bytes, size_t n)
 {
-    data.append(bytes, n);
+    if (bytes == nullptr)
+    {
+        return;
+    }
+    m_data.append(bytes, n);
 }
 
 void vec_str_buffer::clear()
 {
-    data.clear();
+    m_data.clear();
 }
 
-bool vec_str_buffer::empty()
+bool vec_str_buffer::empty() const
 {
-    return data.empty();
+    return m_data.empty();
 }
 
-size_t vec_str_buffer::size()
+size_t vec_str_buffer::size() const
 {
-    return data.size();
+    return m_data.size();
 }
