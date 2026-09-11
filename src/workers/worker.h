@@ -56,6 +56,7 @@ namespace avant::workers
         std::shared_ptr<avant::connection::connection_mgr> worker_connection_mgr{nullptr};
 
     private:
+        std::unordered_set<int> m_closed_fd{}; // recording closed-fd in every loop
         std::unordered_set<int> m_timeout_fd{};
         avant::timer::timer_manager m_conn_timeout_timer_manager;
         avant::utility::time m_worker_loop_time;

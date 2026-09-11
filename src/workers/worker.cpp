@@ -78,9 +78,10 @@ void worker::operator()()
             break;
         }
 
+        this->m_closed_fd.clear();
         this->m_worker_loop_time.update();
         uint64_t now_time_stamp = this->m_worker_loop_time.get_seconds();
-        std::unordered_set<uint64_t> timeout_fd_copy;
+        std::unordered_set<int> timeout_fd_copy;
 
         // conn timeout timer manager
         {
@@ -104,6 +105,9 @@ void worker::operator()()
 
         for (int i = 0; i < num; i++)
         {
+            // Linux 下 epoll this->epoller.m_events 元素 同一个fd不会出现两次
+            // MacOS 下 kqueue this->epoller.m_events 元素 同一个fd不会出现两次 甚至 ERR 事件先遍历到 后面还可能遍历到可读可写事件
+            // 为了解决此问题 引入了 this->m_closed_fd
             int evented_fd = this->epoller.get_fd_from_event(&this->epoller.m_events[i]);
             if (evented_fd < 0)
             {
@@ -261,6 +265,9 @@ void worker::close_client_fd(int fd)
         }
 
         this->epoller.del(fd, nullptr, 0);
+
+        // release_connection 背后会有 connection ctx socket 调用 ::close
+        // 在这里不用直接调用 ::close
         int iret = this->worker_connection_mgr->release_connection(fd);
         if (iret != 0)
         {
@@ -269,9 +276,13 @@ void worker::close_client_fd(int fd)
     }
     else
     {
+        // 如果走到这里大概率程序有BUG
         LOG_ERROR("worker close_client_fd conn_ptr is null, ::close {}", fd);
         ::close(fd);
     }
+
+    // 在本次循环中 已经将fd close掉了
+    this->m_closed_fd.insert(fd);
 
     this->worker_connection_num.fetch_sub(1);
     this->curr_connection_num->fetch_sub(1);
@@ -282,8 +293,20 @@ void worker::on_client_event(int fd, uint32_t event)
     auto conn = this->worker_connection_mgr->get_conn(fd);
     if (!conn)
     {
-        LOG_ERROR("worker_connection_mgr->get_conn failed type {}", (int)this->type);
-        close_client_fd(fd);
+        // 对于 MacOS 可能会出问题，这里会传入fd和事件，但是却找不到 conn
+        // 这是由于 循环中 epoller wait 在 kqueue 下，返回事件数组 一个fd 可能有多个事件
+        // ERR 事件可能先遍历到了 然后 跑了 下面的 conn->ctx_ptr->on_event(event); 里面进行了 conn_ptr->is_close = true;
+        // 并且直接调用了 close_client_fd(fd); 同一个循环中 然后又遍历到了 可读或可写 事件，然后到这里直接报错
+        if (this->m_closed_fd.find(fd) == this->m_closed_fd.end())
+        {
+            LOG_ERROR("worker_connection_mgr->get_conn failed type {}", (int)this->type);
+            close_client_fd(fd);
+        }
+        // else
+        // {
+        //     LOG_ERROR("不用担心 没事 this->m_closed_fd 能解决");
+        // }
+
         return;
     }
 
