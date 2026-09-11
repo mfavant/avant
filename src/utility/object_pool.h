@@ -37,7 +37,7 @@ namespace avant
              */
             void release(T *t);
 
-            uint space();
+            size_t space();
 
         private:
             std::unordered_set<T *> m_set{};
@@ -74,24 +74,40 @@ namespace avant
         int object_pool<T>::init(size_t max_size, bool block, ARGS &&...args)
         {
             std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_objects)
+            {
+                // init is one-shot; refuse to clobber an existing pool.
+                return -1;
+            }
             m_objects = (T *)::malloc(sizeof(T) * max_size);
             if (!m_objects)
             {
+                m_objects = nullptr;
                 return -1;
             }
             m_max_size = 0;
-            for (size_t i = 0; i < max_size; ++i)
+            try
             {
-                auto ptr = new (&m_objects[i]) T(std::forward<ARGS>(args)...);
-                if (ptr)
+                for (size_t i = 0; i < max_size; ++i)
                 {
+                    auto *ptr = new (&m_objects[i]) T(std::forward<ARGS>(args)...);
                     m_max_size++;
                     m_set.insert(ptr);
                 }
-                else
+            }
+            catch (const std::exception &)
+            {
+                // T's constructor may throw; tear down what was built and free
+                // the block so init() failure does not leak.
+                for (size_t i = 0; i < m_max_size; ++i)
                 {
-                    return -2;
+                    m_objects[i].~T();
                 }
+                free(m_objects);
+                m_objects = nullptr;
+                m_max_size = 0;
+                m_set.clear();
+                return -2;
             }
             m_block = block;
             return 0;
@@ -105,7 +121,8 @@ namespace avant
             {
                 while (m_set.empty())
                 {
-                    m_condition.wait(lock);
+                    m_condition.wait(lock, [this]
+                                     { return !m_set.empty(); });
                 }
             }
             else
@@ -134,14 +151,10 @@ namespace avant
         }
 
         template <typename T>
-        uint object_pool<T>::space()
+        size_t object_pool<T>::space()
         {
-            uint space = 0;
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                space = m_set.size();
-            }
-            return space;
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return m_set.size();
         }
     }
 }
