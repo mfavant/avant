@@ -44,7 +44,7 @@ namespace avant::utility::base64
     // two sets of base64 characters needs to be chosen.
     // They differ in their last two characters.
     //
-    static const char *base64_chars[2] = {
+    static constexpr const char *base64_chars[2] = {
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"
         "0123456789"
@@ -126,6 +126,10 @@ namespace avant::utility::base64
 
     std::string base64_encode(unsigned char const *bytes_to_encode, size_t in_len, bool url)
     {
+        if (bytes_to_encode == nullptr || in_len == 0)
+        {
+            return std::string();
+        }
 
         size_t len_encoded = (in_len + 2) / 3 * 4;
 
@@ -149,7 +153,7 @@ namespace avant::utility::base64
 
         while (pos < in_len)
         {
-            ret.push_back(base64_chars_[(bytes_to_encode[pos + 0] & 0xfc) >> 2]);
+            ret.push_back(base64_chars_[(bytes_to_encode[pos + 0] & 0x000000fcu) >> 2]);
 
             if (pos + 1 < in_len)
             {
@@ -266,6 +270,10 @@ namespace avant::utility::base64
 
     std::string base64_decode(std::string const &s, bool remove_linebreaks)
     {
+        if (s.length() < 4)
+        {
+            return std::string();
+        }
         return decode(s, remove_linebreaks);
     }
 
