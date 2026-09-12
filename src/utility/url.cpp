@@ -155,7 +155,9 @@ bool avant::utility::operator==(const url &a, const url &b)
            a.port == b.port &&
            a.path == b.path &&
            a.query == b.query &&
-           a.fragment == b.fragment;
+           a.fragment == b.fragment &&
+           a.ipv6_host == b.ipv6_host &&
+           a.secure == b.secure;
 }
 
 bool avant::utility::operator!=(const url &a, const url &b)
@@ -200,7 +202,17 @@ bool avant::utility::operator<(const url &a, const url &b)
     if (b.query < a.query)
         return false;
 
-    return a.fragment < b.fragment;
+    if (a.fragment < b.fragment)
+        return true;
+    if (b.fragment < a.fragment)
+        return false;
+
+    if (a.ipv6_host < b.ipv6_host)
+        return true;
+    if (b.ipv6_host < a.ipv6_host)
+        return false;
+
+    return a.secure < b.secure;
 }
 
 std::string url::to_string() const
@@ -215,7 +227,7 @@ url::operator std::string() const
 
 std::string_view url::capture_up_to(const std::string_view right_delimiter, const std::string &error_message /*= ""*/)
 {
-    this->right_position = this->parse_target.find_first_of(right_delimiter, this->left_position);
+    this->right_position = this->parse_target.find(right_delimiter, this->left_position);
 
     if (this->right_position == std::string_view::npos)
     {
@@ -234,8 +246,8 @@ std::string_view url::capture_up_to(const std::string_view right_delimiter, cons
 
 bool url::move_before(const std::string_view right_delimiter)
 {
-    size_t position = this->parse_target.find_first_of(right_delimiter, this->left_position);
-    if (position != std::string::npos)
+    size_t position = this->parse_target.find(right_delimiter, this->left_position);
+    if (position != std::string_view::npos)
     {
         this->left_position = position;
         return true;
@@ -245,8 +257,8 @@ bool url::move_before(const std::string_view right_delimiter)
 
 bool url::exists_forward(const std::string_view right_delimiter)
 {
-    size_t position = this->parse_target.find_first_of(right_delimiter, this->left_position);
-    if (position != std::string::npos)
+    size_t position = this->parse_target.find(right_delimiter, this->left_position);
+    if (position != std::string_view::npos)
     {
         return true;
     }
@@ -261,6 +273,20 @@ void url::from_string(const std::string &s)
     this->left_position = 0;
     this->right_position = 0;
     this->only_path_query_fragment = false;
+    this->authority_present = false;
+    this->authority.clear();
+    this->user_info.clear();
+    this->scheme.clear();
+    this->username.clear();
+    this->password.clear();
+    this->host.clear();
+    this->port.clear();
+    this->path.clear();
+    this->query.clear();
+    this->fragment.clear();
+    this->ipv6_host = false;
+    this->secure = false;
+    this->query_parameters.clear();
 
     if (s.empty())
     {
@@ -277,7 +303,7 @@ void url::from_string(const std::string &s)
         this->scheme = this->capture_up_to(":", "Expected : in url");
         std::transform(this->scheme.begin(), this->scheme.end(),
                        this->scheme.begin(), [](std::string_view::value_type c)
-                       { return std::tolower(c); });
+                       { return static_cast<char>(std::tolower(c)); });
         this->left_position += this->scheme.size() + 1; // skip ":"
 
         // authority
@@ -290,16 +316,42 @@ void url::from_string(const std::string &s)
 
     if (this->authority_present || this->only_path_query_fragment)
     {
-        this->authority = this->capture_up_to("/");
-        bool path_exists = true;
-        if (this->move_before("/"))
+        // authority 必须终止于最先出现的 '/'、'?' 或 '#' 之一（字符集合语义，
+        // 这里直接用 find_first_of）。原代码只按 '/' 截断，导致
+        // "http://host?query" 的 authority 被污染成 "host?query"。
+        size_t authority_end = this->parse_target.find_first_of("/?#", this->left_position);
+        this->right_position = authority_end;
+
+        if (authority_end == std::string_view::npos)
         {
-            path_exists = true;
+            this->authority = this->parse_target.substr(this->left_position);
+        }
+        else
+        {
+            this->authority = this->parse_target.substr(this->left_position,
+                                                        authority_end - this->left_position);
         }
 
-        if (this->exists_forward("?")) // exist query
+        // path 是否存在取决于 authority 的终止符是否为 '/'
+        bool path_exists = (authority_end != std::string_view::npos &&
+                            this->parse_target[authority_end] == '/');
+        if (path_exists)
         {
-            this->path = this->capture_up_to("?");
+            this->left_position = authority_end; // path 从 '/' 开始
+        }
+
+        // query 分隔符必须出现在 fragment 分隔符之前（RFC 3986：首个 '#' 之后全部属于 fragment）
+        size_t query_pos = this->parse_target.find('?', this->left_position);
+        size_t fragment_pos = this->parse_target.find('#', this->left_position);
+        bool has_query = (query_pos != std::string_view::npos &&
+                          (fragment_pos == std::string_view::npos || query_pos < fragment_pos));
+
+        if (has_query) // exist query
+        {
+            if (path_exists)
+            {
+                this->path = this->capture_up_to("?");
+            }
             this->move_before("?");
             this->left_position += 1; // skip "?"
 
@@ -319,10 +371,13 @@ void url::from_string(const std::string &s)
         {
             if (this->exists_forward("#")) // exist fragment
             {
-                this->path = this->capture_up_to("#");
+                if (path_exists)
+                {
+                    this->path = this->capture_up_to("#");
+                }
                 this->move_before("#");
-                this->left_position += 1; // skip "#"
-                this->fragment = this->capture_up_to("#");
+                this->left_position += 1;                  // skip "#"
+                this->fragment = this->capture_up_to("#"); // 首个 '#' 之后全部
             }
             else // no fragment
             {
@@ -335,6 +390,7 @@ void url::from_string(const std::string &s)
     }
     else
     {
+        // 无 authority 的 opaque URI（如 mailto:user@example.com）：整体归入 path
         this->path = this->capture_up_to("#");
     }
 
@@ -355,13 +411,21 @@ void url::from_string(const std::string &s)
         // no user_info
     }
 
-    // detect ipv6
-    if (this->exists_forward("["))
+    // detect ipv6 用 move_before 精确定位 '['
+    if (this->move_before("["))
     {
         this->left_position += 1; // skip "["
         this->host = this->capture_up_to("]", "malformed ipv6");
-        this->left_position += 1; // skip "]"
+        this->left_position = this->right_position + 1; // skip "]"
         this->ipv6_host = true;
+
+        // ']' 之后允许出现 ":port"，如 "[::1]:8080"。原代码会静默丢弃端口。
+        if (this->exists_forward(":"))
+        {
+            this->move_before(":");
+            this->left_position += 1; // skip ":"
+            this->port = this->capture_up_to("#");
+        }
     }
     else
     {
@@ -374,7 +438,7 @@ void url::from_string(const std::string &s)
         }
         else // no port
         {
-            this->port = this->capture_up_to(":");
+            this->host = this->capture_up_to(":");
         }
     }
 
@@ -395,6 +459,54 @@ void url::from_string(const std::string &s)
         this->username = this->capture_up_to(":");
     }
 
+    // 填充 query_parameters 。键值均做 URL 解码，
+    // application/x-www-form-urlencoded 约定 '+' 表示空格；
+    // 某一段解码失败时保留原文，避免丢参数。
+    if (!this->query.empty())
+    {
+        size_t begin = 0;
+        while (begin != std::string::npos && begin < this->query.size())
+        {
+            size_t end = this->query.find('&', begin);
+            std::string pair = (end == std::string::npos)
+                                   ? this->query.substr(begin)
+                                   : this->query.substr(begin, end - begin);
+
+            if (!pair.empty())
+            {
+                std::string key;
+                std::string value;
+                size_t eq = pair.find('=');
+                if (eq == std::string::npos)
+                {
+                    key = pair; // 只有 key 没有 '=' 的参数，value 记为空
+                }
+                else
+                {
+                    key = pair.substr(0, eq);
+                    value = pair.substr(eq + 1);
+                }
+
+                std::replace(key.begin(), key.end(), '+', ' ');
+                std::replace(value.begin(), value.end(), '+', ' ');
+
+                std::string decoded_key;
+                std::string decoded_value;
+                if (this->unescape_path(key, decoded_key) &&
+                    this->unescape_path(value, decoded_value))
+                {
+                    this->query_parameters.emplace(decoded_key, decoded_value);
+                }
+                else
+                {
+                    this->query_parameters.emplace(key, value);
+                }
+            }
+
+            begin = (end == std::string::npos) ? std::string::npos : end + 1;
+        }
+    }
+
     // update secure
     if (this->scheme == "ssh" || this->scheme == "https" || this->port == "443")
     {
@@ -402,10 +514,8 @@ void url::from_string(const std::string &s)
     }
     if (this->scheme == "postgres" || this->scheme == "postgresql")
     {
-        this->parse_target = this->query;
-        this->left_position = 0;
-        this->right_position = 0;
-        if (this->exists_forward("ssl=true"))
+        auto it = this->query_parameters.find("ssl");
+        if (it != this->query_parameters.end() && it->second == "true")
         {
             this->secure = true;
         }
