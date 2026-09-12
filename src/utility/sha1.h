@@ -23,11 +23,12 @@
 #ifndef SHA1_HPP
 #define SHA1_HPP
 
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
-#include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 namespace avant::utility
@@ -40,7 +41,7 @@ namespace avant::utility
         void update(std::istream &is);
         std::string final();
         static std::string from_file(const std::string &filename);
-        std::string to_binary(const std::string &str);
+        static std::string to_binary(const std::string &str);
 
     private:
         uint32_t digest[5];
@@ -67,12 +68,16 @@ namespace avant::utility
 
     inline static uint32_t rol(const uint32_t value, const size_t bits)
     {
+        if (bits == 0 || bits >= 32)
+        {
+            return value;
+        }
         return (value << bits) | (value >> (32 - bits));
     }
 
     inline static uint32_t blk(const uint32_t block[BLOCK_INTS], const size_t i)
     {
-        return rol(block[(i + 13) & 15] ^ block[(i + 8) & 15] ^ block[(i + 2) & 15] ^ block[i], 1);
+        return rol(block[(i + 13) % BLOCK_INTS] ^ block[(i + 8) % BLOCK_INTS] ^ block[(i + 2) % BLOCK_INTS] ^ block[i], 1);
     }
 
     /*
@@ -313,13 +318,34 @@ namespace avant::utility
         return checksum.final();
     }
 
+    inline static uint32_t hex_nibble(char c)
+    {
+        if (c >= '0' && c <= '9')
+        {
+            return static_cast<uint32_t>(c - '0');
+        }
+        if (c >= 'a' && c <= 'f')
+        {
+            return static_cast<uint32_t>(c - 'a' + 10);
+        }
+        if (c >= 'A' && c <= 'F')
+        {
+            return static_cast<uint32_t>(c - 'A' + 10);
+        }
+        throw std::runtime_error("SHA1::to_binary: invalid hex digit");
+    }
+
     inline std::string SHA1::to_binary(const std::string &str)
     {
-        std::string sha1_binary;
-        for (size_t i = 0; i < str.length(); i += 2)
+        if (str.size() % 2 != 0)
         {
-            std::string byteString = str.substr(i, 2);
-            char byte = static_cast<char>(strtol(byteString.c_str(), nullptr, 16));
+            throw std::runtime_error("SHA1::to_binary: odd-length hex string");
+        }
+        std::string sha1_binary;
+        sha1_binary.reserve(str.size() / 2);
+        for (size_t i = 0; i < str.size(); i += 2)
+        {
+            char byte = static_cast<char>(hex_nibble(str[i]) << 4 | hex_nibble(str[i + 1]));
             sha1_binary += byte;
         }
         return sha1_binary;
