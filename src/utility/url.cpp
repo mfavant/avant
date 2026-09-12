@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <stdexcept>
+#include <climits>
 
 using avant::utility::url;
 
@@ -40,7 +41,19 @@ unsigned short url::get_port() const
 {
     if (this->port.size() > 0)
     {
-        return std::atoi(this->port.c_str());
+        long long value = 0;
+        try
+        {
+            value = std::stoll(this->port, nullptr, 10);
+        }
+        catch (const std::exception &)
+        {
+            // non-numeric / overflow: fall through to the scheme default
+        }
+        if (value > 0 && value <= USHRT_MAX)
+        {
+            return static_cast<unsigned short>(value);
+        }
     }
     if (this->scheme == "https")
         return 443;
@@ -204,10 +217,16 @@ std::string_view url::capture_up_to(const std::string_view right_delimiter, cons
 {
     this->right_position = this->parse_target.find_first_of(right_delimiter, this->left_position);
 
-    if (right_position == std::string::npos && error_message.size())
+    if (this->right_position == std::string_view::npos)
     {
-        throw std::runtime_error(error_message);
+        if (error_message.size())
+        {
+            throw std::runtime_error(error_message);
+        }
+        // delimiter absent: take the rest of the target
+        return this->parse_target.substr(this->left_position);
     }
+
     std::string_view captured = this->parse_target.substr(this->left_position, this->right_position - this->left_position);
 
     return captured;
@@ -398,96 +417,37 @@ bool url::unescape_path(const std::string &in, std::string &out)
     out.clear();
     out.reserve(in.size());
 
+    const auto hex_nibble = [](char c) -> int
+    {
+        if (c >= '0' && c <= '9')
+            return c - '0';
+        if (c >= 'a' && c <= 'f')
+            return c - 'a' + 10;
+        if (c >= 'A' && c <= 'F')
+            return c - 'A' + 10;
+        return -1;
+    };
+
     for (size_t i = 0; i < in.size(); ++i)
     {
-        switch (in[i])
+        if (in[i] == '%')
         {
-        case '%':
-        {
-            if (i + 3 <= in.size())
-            {
-                unsigned int value = 0;
-                for (size_t j = i + 1; j < i + 3; ++j)
-                {
-                    switch (in[j])
-                    {
-                    case '0':
-                    case '1':
-                    case '2':
-                    case '3':
-                    case '4':
-                    case '5':
-                    case '6':
-                    case '7':
-                    case '8':
-                    case '9':
-                        value += in[j] - '0';
-                        break;
-
-                    case 'a':
-                    case 'b':
-                    case 'c':
-                    case 'd':
-                    case 'e':
-                    case 'f':
-                        value += in[j] - 'a' + 10;
-                        break;
-
-                    case 'A':
-                    case 'B':
-                    case 'C':
-                    case 'D':
-                    case 'E':
-                    case 'F':
-                        value += in[j] - 'A' + 10;
-                        break;
-
-                    default:
-                        return false;
-                    }
-
-                    if (j == i + 1)
-                        value = value << 4;
-                }
-
-                out += static_cast<char>(value);
-                i += 2;
-            }
-            else
+            if (i + 3 > in.size())
             {
                 return false;
             }
+            const int hi = hex_nibble(in[i + 1]);
+            const int lo = hex_nibble(in[i + 2]);
+            if (hi < 0 || lo < 0)
+            {
+                return false;
+            }
+            out += static_cast<char>((hi << 4) | lo);
+            i += 2;
         }
-        break;
-
-        case '-':
-        case '_':
-        case '.':
-        case '!':
-        case '~':
-        case '*':
-        case '\'':
-        case '(':
-        case ')':
-        case ':':
-        case '@':
-        case '&':
-        case '=':
-        case '+':
-        case '$':
-        case ',':
-        case '/':
-        case ';':
+        else
         {
             out += in[i];
-        }
-        break;
-
-        default:
-        {
-            out += in[i];
-        }
-        break;
         }
     }
 
