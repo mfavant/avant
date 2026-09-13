@@ -53,8 +53,8 @@ void worker::operator()()
 
     hooks::init::on_worker_init(*this);
 
-    this->m_worker_loop_time.update();
-    this->m_latest_tick_time = this->m_worker_loop_time.get_seconds();
+    this->m_worker_loop_time.update_monotonic();
+    this->m_latest_tick_time_monotonic = this->m_worker_loop_time.get_monotonic_seconds();
 
     int num = -1;
     while (true)
@@ -79,16 +79,17 @@ void worker::operator()()
         }
 
         this->m_closed_fd.clear();
-        this->m_worker_loop_time.update();
-        uint64_t now_time_stamp = this->m_worker_loop_time.get_seconds();
+        this->m_worker_loop_time.update_monotonic();
+        uint64_t now_time_stamp_monotonic = this->m_worker_loop_time.get_monotonic_seconds();
         std::unordered_set<int> timeout_fd_copy;
 
         // conn timeout timer manager
         {
-            if (this->m_latest_tick_time > now_time_stamp || now_time_stamp - this->m_latest_tick_time >= 1)
+            // per 1 seconds
+            if (this->m_latest_tick_time_monotonic != now_time_stamp_monotonic)
             {
-                this->m_latest_tick_time = now_time_stamp;
-                this->m_conn_timeout_timer_manager.check_and_handle(now_time_stamp);
+                this->m_latest_tick_time_monotonic = now_time_stamp_monotonic;
+                this->m_conn_timeout_timer_manager.check_and_handle(now_time_stamp_monotonic);
                 if (!this->m_timeout_fd.empty())
                 {
                     for (auto fd : this->m_timeout_fd)
@@ -715,8 +716,10 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
 
         // creating a timeout timer for the connection
         {
+            // 连接超时计时器 fd 创建 conn 后到通知 app 层 on_new_connection 之间时间间隔超过一定时间将超时处理
+            // 如 SSL 开启下 握手时间过长 则服务器主动断开链接
             std::shared_ptr<avant::timer::timer> new_timeout_timer = std::make_shared<avant::timer::timer>(conn->get_gid(),
-                                                                                                           this->m_latest_tick_time,
+                                                                                                           this->m_latest_tick_time_monotonic,
                                                                                                            1,
                                                                                                            5, // timeout 5 s
                                                                                                            [this, fd](avant::timer::timer &timer_instance) -> void

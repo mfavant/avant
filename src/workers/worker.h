@@ -59,8 +59,9 @@ namespace avant::workers
         std::unordered_set<int> m_closed_fd{}; // recording closed-fd in every loop
         std::unordered_set<int> m_timeout_fd{};
         avant::timer::timer_manager m_conn_timeout_timer_manager;
+
         avant::utility::time m_worker_loop_time;
-        uint64_t m_latest_tick_time{0};
+        uint64_t m_latest_tick_time_monotonic{0};
 
         avant::server::server *m_server;
 
