@@ -20,6 +20,7 @@ using std::vector;
 namespace fs = std::filesystem;
 namespace utility = avant::utility;
 
+// 为了返回目录内容用代码拼接出 HTML
 class avant_html_loader
 {
 public:
@@ -42,20 +43,26 @@ public:
     }
 };
 
+// 为 http_ctx 存储对话信息 以便每次 callback 能访问到交互状态
 struct avant_http_app_reponse
 {
     enum type
     {
-        DIR = 0,
-        FD = 1,
-        NONE = 2,
+        DIR = 0,  // 响应文件夹内容
+        FD = 1,   // 响应普通文件内容
+        NONE = 2, // 未知
     };
 
     void *ptr{nullptr};
     type ptr_type{NONE};
+
+    // for compressor
     z_stream strm{};
     bool use_gzip{false};
     bool gzip_initialized{false};
+
+    // for http range
+    int64_t range_left{-1};
 
     typedef std::tuple<std::string, size_t> DIR_TYPE;
     typedef FILE FD_TYPE;
@@ -94,8 +101,12 @@ struct avant_http_range
 {
     int64_t start;
     int64_t end;
+
+    // true when the start part is absent, i.e. the suffix form "-N"
+    bool start_empty{false};
 };
 
+// 解析出 HTTP 请求头里的 Range 内容
 bool avant_parse_range_header(const std::string &range_header,
                               std::vector<avant_http_range> &ranges)
 {
@@ -130,12 +141,13 @@ bool avant_parse_range_header(const std::string &range_header,
             return false;
         }
 
-        ranges.push_back({start, end});
+        ranges.push_back({start, end, start_str.empty()});
     }
 
     return !ranges.empty();
 }
 
+// HTTP 当 socket 建立连接后，HTTPS 则是 TLS 握手就绪后 调用 on_new_connection
 void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_alive_call)
 {
     // send new_connection protocol to other thread
@@ -156,9 +168,10 @@ void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_
     // LOG_DEBUG("http_app new socket gid {}", ctx.get_conn_gid());
 }
 
+// 被调用的时机是 服务器接收完HTTP请求发送 Header Bod 后只调用 绑定毁掉函数
 void http_app::process_connection(avant::connection::http_ctx &ctx)
 {
-    // load callback
+    // 在处理完一个 HTTP 请求后调用
     ctx.destory_callback = [](avant::connection::http_ctx &ctx) -> void
     {
         if (ctx.ptr)
@@ -172,12 +185,20 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         }
     };
 
+    // 接收完 HTTP Request 的 Header 与 Body 后 响应客户端前 调用 处理请求内容与响应内容逻辑
     ctx.process_callback = [](avant::connection::http_ctx &ctx) -> void
     {
         static auto return_404 = [](avant::connection::http_ctx &ctx) -> void
         {
             std::string response = "HTTP/1.1 404 Not Found\r\nServer: avant\r\n";
-            response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            if (ctx.keep_alive)
+            {
+                response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            }
+            else
+            {
+                response += "Connection: close\r\n";
+            }
             response += "Content-Type: text/plain; charset=UTF-8\r\n";
             response += "Content-Length: 3\r\n";
             response += "\r\n";
@@ -189,7 +210,14 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         static auto return_500 = [](avant::connection::http_ctx &ctx) -> void
         {
             std::string response = "HTTP/1.1 500 Internal Server Error\r\nServer: avant\r\n";
-            response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            if (ctx.keep_alive)
+            {
+                response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            }
+            else
+            {
+                response += "Connection: close\r\n";
+            }
             response += "Content-Type: text/plain; charset=UTF-8\r\n";
             response += "Content-Length: 3\r\n";
             response += "\r\n";
@@ -295,7 +323,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             }
         }
 
-        if constexpr (false)
+        if constexpr (false) // 这里是纯粹了HTTP压力测试写的
         {
             ctx.keep_alive = header_exist_keep_live;
             const char *response = "HTTP/1.1 200 OK\r\nServer: avant\r\nConnection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: 5\r\n\r\nHELLO";
@@ -307,6 +335,30 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
         {
             ctx.keep_alive = header_exist_keep_live; // app not use keep_alive
         }
+
+        // 非 GET 与 HEAD 请求 直接强制断开连接即使客户端
+        if (ctx.method != "GET" && ctx.method != "HEAD")
+        {
+            std::string response = "HTTP/1.1 405 Method Not Allowed\r\nServer: avant\r\n";
+            response += "Allow: GET, HEAD\r\n";
+            if (ctx.keep_alive)
+            {
+                response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            }
+            else
+            {
+                response += "Connection: close\r\n";
+            }
+            response += "Content-Type: text/plain; charset=UTF-8\r\n";
+            response += "Content-Length: 3\r\n";
+            response += "\r\n";
+            response += "405";
+            ctx.send_buffer_append(response.c_str(), response.size());
+            ctx.set_response_end(true);
+            return;
+        }
+
+        const bool is_http_head_method = (ctx.method == "HEAD");
 
         std::string url;
         if (!utility::url::unescape_path(ctx.url, url))
@@ -324,6 +376,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             LOG_DEBUG("HttpUrl {} ClientIPPort {} : {}", url.c_str(), ip_port.first.c_str(), ip_port.second);
         }
 
+        // 防止有人攻击在 URL 里添加 ..
         auto find_res = url.find("..");
         if (std::string::npos != find_res)
         {
@@ -333,6 +386,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             return;
         }
 
+        // URL 解析出 路径部分
         try
         {
             utility::url url_obj(url);
@@ -346,6 +400,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             return;
         }
 
+        // 根默认访问 index.html
         if (url == "" || url == "/")
         {
             url = "/index.html";
@@ -355,7 +410,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
         fs::path t_path = prefix + url;
 
-        if (fs::exists(t_path) && fs::is_regular_file(t_path))
+        if (fs::exists(t_path) && fs::is_regular_file(t_path)) // 是普通文件且存在
         {
             auto generate_etag_for_regular_file = [](const fs::path &t_path, std::string &out_etag, std::string &out_http_date) -> bool
             {
@@ -388,25 +443,133 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 LOG_ERROR("generate_etag_for_regular_file failed {}", t_path.c_str());
             }
 
-            // std::cout << "now_etag: " << now_etag << std::endl;
-            // std::cout << "now_last_modify_date: " << now_last_modify_date << std::endl;
-
-            // std::cout << "header_if_range: " << header_if_range << std::endl;
-            for (const auto &range_item : header_ranges)
+            struct stat st;
+            if (stat(t_path.c_str(), &st) != 0)
             {
-                // std::cout << "range_item: " << range_item.start << "-" << range_item.end << std::endl;
+                LOG_ERROR("stat failed {}", t_path.c_str());
+                return_500(ctx);
+                ctx.set_response_end(true);
+                return;
+            }
+            const int64_t file_size = static_cast<int64_t>(st.st_size);
+
+            auto return_416 = [&ctx, &now_etag, file_size]() -> void
+            {
+                std::string response = "HTTP/1.1 416 Range Not Satisfiable\r\nServer: avant\r\n";
+                if (ctx.keep_alive)
+                {
+                    response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+                }
+                else
+                {
+                    response += "Connection: close\r\n";
+                }
+                response += "Content-Range: bytes */" + std::to_string(file_size) + "\r\n";
+                if (now_etag.size() > 0)
+                {
+                    response += "ETag: " + now_etag + "\r\n";
+                }
+                response += "Content-Length: 0\r\n";
+                response += "\r\n";
+                ctx.send_buffer_append(response.c_str(), response.size());
+                ctx.set_response_end(true);
+            };
+
+            // Resolve the byte range requested by the client (H5 video player seeks via Range).
+            // range_start/range_end hold the *effective* range only when a partial (206)
+            // response is served: the suffix form "-N" resolves to [file_size-N, file_size-1]
+            // (a suffix that covers the whole file falls through to a 200 full file), and an
+            // explicit end beyond EOF clamps to file_size-1. partial_response stays false for
+            // a 200 so the head uses chunked encoding with no Content-Range.
+            bool partial_response = false;
+            int64_t range_start = 0;
+            int64_t range_end = file_size - 1;
+            {
+                bool range_valid = false;
+
+                if (!header_ranges.empty())
+                {
+                    if (header_if_range.size() > 0 && now_etag.size() > 0 &&
+                        header_if_range != now_etag)
+                    {
+                        LOG_DEBUG("If-Range[{}] != ETag[{}], ignoring Range", header_if_range.c_str(), now_etag.c_str());
+                    }
+                    else if (header_ranges.size() > 1)
+                    {
+                        // Multiple ranges would require a multipart/byteranges body;
+                        // degrade to the full 200 instead (RFC 7233 allows ignoring Range).
+                        LOG_DEBUG("multi-range request, ignoring Range and serving the full file");
+                    }
+                    else
+                    {
+                        const avant_http_range &r = header_ranges.front();
+                        if (file_size == 0)
+                        {
+                            return_416();
+                            return;
+                        }
+                        else if (r.start_empty)
+                        {
+                            // Suffix form "-N": the last N bytes.
+                            if (r.end <= 0) // "bytes=-0" / "bytes=-" is unsatisfiable
+                            {
+                                return_416();
+                                return;
+                            }
+                            if (r.end >= file_size)
+                            {
+                                // The suffix covers the whole (or more than) the representation:
+                                // answer with the entire file as 200, NOT a 206 (RFC 7233 3.1).
+                            }
+                            else
+                            {
+                                range_start = file_size - r.end;
+                                range_end = file_size - 1;
+                                range_valid = true;
+                            }
+                        }
+                        else
+                        {
+                            // Explicit form: "N-M" or "N-".
+                            if (r.start < 0 || r.start >= file_size ||
+                                (r.end != -1 && r.end < r.start))
+                            {
+                                // Range start out of bounds, or start > end (unsatisfiable).
+                                return_416();
+                                return;
+                            }
+                            range_valid = true;
+                            range_start = r.start;
+                            range_end = (r.end == -1) ? (file_size - 1) : r.end;
+                            if (range_end > file_size - 1)
+                            {
+                                range_end = file_size - 1;
+                            }
+                        }
+                    }
+                }
+
+                if (range_valid)
+                {
+                    partial_response = true;
+                }
             }
 
-            // 命中缓存
-            if (header_cache_control != "no-cache" && ((now_etag.size() > 0 &&
-                                                        header_if_none_match.size() > 0 &&
-                                                        now_etag == header_if_none_match) ||
-                                                       (now_last_modify_date.size() > 0 &&
-                                                        header_if_modified_since.size() > 0 &&
-                                                        now_last_modify_date == header_if_modified_since)))
+            // 命中缓存 (only when no range request is being served)
+            if (!partial_response &&
+                header_cache_control != "no-cache" &&
+                ((now_etag.size() > 0 && header_if_none_match.size() > 0 && now_etag == header_if_none_match) ||
+                 (now_last_modify_date.size() > 0 && header_if_modified_since.size() > 0 && now_last_modify_date == header_if_modified_since)))
             {
                 std::string response = "HTTP/1.1 304 Not Modified\r\nServer: avant\r\n";
-                response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+                if (ctx.keep_alive)
+                {
+                    response += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+                }
+                else
+                {
+                    response += "Connection: close\r\n";
+                }
                 response += "Content-Length: 0\r\n";
                 response += "\r\n";
                 ctx.send_buffer_append(response.c_str(), response.size());
@@ -423,6 +586,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 return;
             }
 
+            // 请求处理结束后 资源 response_ptr 由 ctx.destory_callback 调用 进行释放 无需手动处理
             ctx.ptr = response_ptr;
             response_ptr->ptr_type = avant_http_app_reponse::FD;
 
@@ -436,9 +600,11 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 mime_type = "application/octet-stream";
             }
 
-            // checking mine_type for use_gzip, default using use_gzip
+            // checking mine_type for use_gzip, default using use_gzip.
+            // ranged responses must not be compressed (Content-Range refers to raw bytes,
+            // and video/audio bytes are already compressed and won't benefit).
             {
-                response_ptr->use_gzip = client_support_gzip &&
+                response_ptr->use_gzip = !partial_response && client_support_gzip &&
                                          (mime_type.find("text/") == 0 ||
                                           mime_type.find("application/javascript") == 0 ||
                                           mime_type.find("application/json") == 0 ||
@@ -463,28 +629,53 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                     if (ret != Z_OK)
                     {
                         LOG_ERROR("deflateInit2 failed: {}", ret);
-                        delete response_ptr;
                         return_500(ctx);
                         ctx.set_response_end(true);
                         return;
                     }
+                    // gzip_initialized 设置为 true 是 avant_http_app_reponse 调用 deflateEnd 的关键
                     response_ptr->gzip_initialized = true;
                 }
             }
 
-            response_ptr->ptr = ::fopen(t_path.c_str(), "r");
+            // "rb": raw bytes; the ranged path streams them verbatim into Content-Range
+            response_ptr->ptr = ::fopen(t_path.c_str(), "rb");
             if (response_ptr->ptr == NULL)
             {
-                LOG_ERROR("fopen({}, r) failed", t_path.c_str());
+                LOG_ERROR("fopen({}, rb) failed", t_path.c_str());
                 return_500(ctx);
                 ctx.set_response_end(true);
                 return;
             }
 
-            ::fseek((FILE *)response_ptr->ptr, 0, SEEK_SET);
+            // range_left must be set before seeking: the write callback early-returns for
+            // HEAD without touching it, and seeks must not happen for a bodyless response.
+            response_ptr->range_left = (partial_response && !is_http_head_method)
+                                           ? (range_end - range_start + 1)
+                                           : -1;
+            if (partial_response && !is_http_head_method)
+            {
+                if (::fseek((FILE *)response_ptr->ptr, (long)range_start, SEEK_SET) != 0)
+                {
+                    LOG_ERROR("fseek to range_start[{}] failed", (long long)range_start);
+                    return_500(ctx);
+                    ctx.set_response_end(true);
+                    return;
+                }
+            }
 
-            std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
-            response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            std::string response_head = "HTTP/1.1 " +
+                                        std::string(partial_response ? "206 Partial Content" : "200 OK") + "\r\n" +
+                                        "Server: avant\r\n";
+            if (ctx.keep_alive)
+            {
+                response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            }
+            else
+            {
+                response_head += "Connection: close\r\n";
+            }
+            response_head += "Accept-Ranges: bytes\r\n";
             if (now_etag.size() > 0)
             {
                 response_head += std::string("ETag: ") + now_etag + "\r\n";
@@ -494,34 +685,71 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 response_head += std::string("Last-Modified: ") + now_last_modify_date + "\r\n";
             }
             response_head += "Content-Type: " + mime_type + "\r\n";
-            if (response_ptr->use_gzip)
+            if (response_ptr->use_gzip && !partial_response)
             {
                 response_head += "Content-Encoding: gzip\r\n";
             }
-            response_head += "Transfer-Encoding: chunked\r\n\r\n";
+            if (partial_response)
+            {
+                response_head += "Content-Range: bytes " + std::to_string(range_start) + "-" +
+                                 std::to_string(range_end) + "/" + std::to_string(file_size) + "\r\n";
+                response_head += "Content-Length: " + std::to_string(range_end - range_start + 1) + "\r\n";
+            }
+            else
+            {
+                response_head += "Transfer-Encoding: chunked\r\n";
+            }
+            response_head += "\r\n";
 
             ctx.send_buffer_append(response_head.c_str(), response_head.size());
 
-            // Write when the contents of the buffer have been sent write_end_callback will be executed,
-            // and the response must be set response_end to true, then write after write_end_callback will be continuously recalled
-            ctx.write_end_callback = [](connection::http_ctx &ctx) -> void
+            // The event loop (http_ctx) invokes write_end_callback every time the send buffer
+            // drains. Ranged responses stream raw bytes (Content-Length) and stop when
+            // range_left hits 0. Full responses stream chunked until EOF, and gzip ones also
+            // flush the deflate trailer on EOF.
+            ctx.write_end_callback = [is_http_head_method, partial_response](connection::http_ctx &ctx) -> void
             {
-                constexpr int buffer_size = 1024000; // 1000KB
+                constexpr int buffer_size = 1024000;                  // 1000KB
+                constexpr int compress_buffer_size = 2 * buffer_size; // 2000KB
+
+                if (is_http_head_method) // HEAD 请求只响应 HTTP Response Header
+                {
+                    ctx.set_response_end(true);
+                    return;
+                }
 
                 std::vector<char> buf(buffer_size);
-                constexpr int compress_buffer_size = 2 * buffer_size; // 2000KB
                 std::vector<char> compress_buf(compress_buffer_size);
 
                 avant_http_app_reponse *resp = (avant_http_app_reponse *)ctx.ptr;
 
+                int want = buffer_size;
+                if (partial_response && resp->range_left < want)
+                {
+                    want = (int)resp->range_left;
+                }
+
                 int len = ::fread(buf.data(),
                                   sizeof(char),
-                                  buffer_size,
-                                  (avant_http_app_reponse::FD_TYPE *)((avant_http_app_reponse *)ctx.ptr)->ptr);
+                                  want,
+                                  (FILE *)resp->ptr);
 
                 if (len > 0)
                 {
-                    if (resp->use_gzip)
+                    if (partial_response)
+                    {
+                        if (resp->range_left < len)
+                        {
+                            len = (int)resp->range_left;
+                        }
+                        ctx.send_buffer_append(buf.data(), len);
+                        resp->range_left -= len;
+                        if (resp->range_left <= 0)
+                        {
+                            ctx.set_response_end(true);
+                        }
+                    }
+                    else if (resp->use_gzip)
                     {
                         // using gzip
                         resp->strm.avail_in = len;
@@ -562,6 +790,12 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 }
                 else
                 {
+                    if (partial_response) // 用的 Content-Length
+                    {
+                        ctx.set_response_end(true);
+                        return;
+                    }
+                    // 用的 Transfer-Encoding: chunked
                     ctx.send_buffer_append("0\r\n\r\n", 5);
                     ctx.set_response_end(true);
                 }
@@ -570,7 +804,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
             return;
         }
-        else if (fs::exists(t_path) && fs::is_directory(t_path))
+        else if (fs::exists(t_path) && fs::is_directory(t_path)) // 是目录且存在
         {
             auto response_ptr = new (std::nothrow) avant_http_app_reponse;
             if (!response_ptr)
@@ -616,7 +850,14 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             std::get<1>(*dir_type_ptr) = 0;
 
             std::string response_head = "HTTP/1.1 200 OK\r\nServer: avant\r\n";
-            response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            if (ctx.keep_alive)
+            {
+                response_head += "Connection: keep-alive\r\nKeep-Alive: timeout=60, max=10000\r\n";
+            }
+            else
+            {
+                response_head += "Connection: close\r\n";
+            }
             response_head += "Content-Type: text/html; charset=UTF-8\r\n";
             response_head += "Content-Length: " + std::to_string(std::get<0>(*dir_type_ptr).size());
             response_head += "\r\n\r\n";
@@ -647,7 +888,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             ctx.write_end_callback(ctx);
             return;
         }
-        else
+        else // 请求想访问的内容不存在
         {
             return_404(ctx);
             ctx.set_response_end(true);
@@ -656,11 +897,15 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
     };
 }
 
+// 调用 on_body_before 时，这个HTTP请求还未被 http_app::process_connection 处理过
+// 在每次 http parser 解析到 HTTP 请求 Body 内容来临时都会调用 on_body_before
+// 返回非 0 调用此请求 Body 不符合规定 放弃处理 连接会断开
 int http_app::on_body_before(avant::connection::http_ctx &ctx, const char *at, size_t length)
 {
     constexpr size_t max_body_size = 2048000;
     size_t body_size = ctx.get_recv_body_size();
 
+    // 防止客户端请求过大的 HTTP Body
     if (body_size + length > max_body_size)
     {
         LOG_ERROR("body_size[{}] + length[{}] > max_body_size[{}]", body_size, length, max_body_size);
@@ -670,15 +915,21 @@ int http_app::on_body_before(avant::connection::http_ctx &ctx, const char *at, s
     return 0;
 }
 
+// 在每次 http parser 解析到 HTTP 请求 Body 内容来临 调用 http_app::on_body_before 后就会调用 http_app::on_body
+// 肯定是 在 ctx 的 conn 里 append 了 length 字节 然后再调用 http_app::on_body
+// 返回非 0 调用此请求 Body 不符合规定 放弃处理 连接会断开
 int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
 {
     constexpr size_t max_body_size = 2048000;
 
+    // recv buffer 中目前存了多少内容
     size_t recv_buffer_size = ctx.get_recv_buffer_size();
+    // 已经接受了多少 Http Request Body 内容
     size_t body_size = ctx.get_recv_body_size();
 
     // processing http request body data
     {
+        // 暂时 Body 内容不做处理 直接清空
         ctx.clear_recv_buffer();
     }
 
