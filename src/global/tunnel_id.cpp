@@ -4,7 +4,7 @@ using namespace avant::global;
 
 std::shared_ptr<tunnel_id> tunnel_id::ptr;
 
-int tunnel_id::init(size_t worker_cnt)
+int tunnel_id::init(int worker_cnt)
 {
     if (tunnel_id::ptr)
     {

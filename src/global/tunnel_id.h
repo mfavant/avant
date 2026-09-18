@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <cstdint>
+#include <cassert>
 #include <vector>
 #include "proto_res/proto_tunnel.pb.h"
 
@@ -9,10 +10,11 @@ namespace avant::global
     class tunnel_id
     {
     public:
-        static int init(size_t worker_cnt);
+        static int init(int worker_cnt);
 
         static inline tunnel_id &get()
         {
+            assert(tunnel_id::ptr);
             return *tunnel_id::ptr.get();
         }
 
@@ -22,15 +24,12 @@ namespace avant::global
             return ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + worker_idx;
         }
 
-        inline int get_worker_all_tunnel_id(std::vector<int> &vec_worker_id) const
+        inline void get_worker_all_tunnel_id(std::vector<int> &vec_worker_id) const
         {
-            int size = 0;
             for (int i = get_worker_tunnel_id_min(); i <= get_worker_tunnel_id_max(); ++i)
             {
                 vec_worker_id.push_back(i);
-                ++size;
             }
-            return size;
         }
 
         inline int get_worker_tunnel_id_min() const
@@ -53,12 +52,12 @@ namespace avant::global
             return ProtoTunnelID::PROTO_TUNNEL_ID_OTHER;
         }
 
-        inline int hash_gid_2_worker_tunnel_id(uint64_t gid)
+        inline int hash_gid_2_worker_tunnel_id(uint64_t gid) const
         {
             return get_worker_tunnel_id(gid & 0x1FF);
         }
 
-        inline bool is_tunnel_id(int id)
+        inline bool is_tunnel_id(int id) const
         {
             if (get_worker_tunnel_id_min() <= id && id <= get_worker_tunnel_id_max())
             {
@@ -75,13 +74,13 @@ namespace avant::global
             return false;
         }
 
-        inline bool is_worker_tunnel_id(int id)
+        inline bool is_worker_tunnel_id(int id) const
         {
             return (get_worker_tunnel_id_min() <= id && id <= get_worker_tunnel_id_max());
         }
 
     private:
-        size_t m_worker_cnt;
+        int m_worker_cnt;
         static std::shared_ptr<tunnel_id> ptr;
     };
 }
