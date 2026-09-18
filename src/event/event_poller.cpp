@@ -2,9 +2,7 @@
 
 using namespace avant::event;
 
-event_poller::event_poller() : m_epfd(-1),
-                               m_max_connections(0),
-                               m_events(nullptr)
+event_poller::event_poller() : m_epfd(-1)
 {
 }
 
@@ -51,6 +49,8 @@ int event_poller::create(int max_connections)
 
     if (!m_events)
     {
+        ::close(m_epfd);
+        m_epfd = -1;
         return -2;
     }
 

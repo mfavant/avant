@@ -153,7 +153,7 @@ namespace avant::event
                  * @brief epoll句柄
                  *
                  */
-                int m_epfd{0};
+                int m_epfd{-1};
                 /**
                  * @brief 最大连接数，epoll_event最大数量
                  *
