@@ -35,7 +35,11 @@ uint64_t proto::toh64_from_buffer(const void *buffer)
 std::string &proto::pack_package(std::string &data, const ProtoPackage &package)
 {
     data.clear();
-    (void)package.SerializeToString(&data);
+    if (!package.SerializeToString(&data))
+    {
+        data.clear();
+        return data;
+    }
     uint64_t len = proto::ton64(data.size());
     data.insert(0, (char *)&len, sizeof(len));
     return data;

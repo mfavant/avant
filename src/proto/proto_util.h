@@ -16,18 +16,21 @@ namespace avant::proto
         ProtoPackage message;
 
         std::string body_str;
-        body_str.resize(t.ByteSizeLong());
-        (void)t.SerializeToString(&body_str);
+        if (!t.SerializeToString(&body_str))
+        {
+            return data;
+        }
 
         message.set_cmd(cmd);
         message.set_protocol(body_str);
 
-        uint64_t len = 0;
-        if (message.SerializeToString(&data))
+        if (!message.SerializeToString(&data))
         {
-            len = proto::ton64(data.size());
+            data.clear();
+            return data;
         }
 
+        uint64_t len = proto::ton64(data.size());
         data.insert(0, (char *)&len, sizeof(len));
 
         return data;
@@ -39,7 +42,12 @@ namespace avant::proto
         std::string body_str;
         body_str.resize(t.ByteSizeLong());
 
-        (void)t.SerializeToString(&body_str);
+        if (!t.SerializeToString(&body_str))
+        {
+            package.set_cmd(cmd);
+            package.set_protocol("");
+            return package;
+        }
 
         package.set_cmd(cmd);
         package.set_protocol(body_str);
