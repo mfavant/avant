@@ -20,10 +20,9 @@ namespace avant::socket
         avant::socket::socket &get_other_socket();
 
     private:
-        static constexpr int m_me_idx{0};
-        static constexpr int m_other_idx{1};
-        static constexpr int m_fd_size{2};
-        int m_fd[m_fd_size]{0};
-        avant::socket::socket m_socket_obj[m_fd_size];
+        static constexpr int M_ME_IDX{0};
+        static constexpr int M_OTHER_IDX{1};
+        static constexpr int M_FD_SIZE{2};
+        avant::socket::socket m_socket_obj[M_FD_SIZE];
     };
 };

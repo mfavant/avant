@@ -17,41 +17,54 @@ socket_pair::~socket_pair()
 
 int socket_pair::init()
 {
-    int iret = socketpair(AF_UNIX, SOCK_STREAM, 0, m_fd);
+    int fd[M_FD_SIZE]{-1};
+    int iret = socketpair(AF_UNIX, SOCK_STREAM, 0, fd);
     if (iret != 0)
     {
         return iret;
     }
-    m_socket_obj[m_me_idx].set_fd(m_fd[m_me_idx]); // socket_obj auto ::close
-    m_socket_obj[m_me_idx].set_non_blocking();
-    m_socket_obj[m_me_idx].set_recv_buffer(65535);
-    m_socket_obj[m_me_idx].set_send_buffer(65535);
-    m_socket_obj[m_me_idx].close_callback = nullptr;
+    m_socket_obj[M_ME_IDX].set_fd(fd[M_ME_IDX]); // socket_obj auto ::close
+    if (!m_socket_obj[M_ME_IDX].set_non_blocking())
+    {
+        LOG_ERROR("socket_pair me endpoint set_non_blocking failed");
+        m_socket_obj[M_ME_IDX].close();
+        return -1;
+    }
+    m_socket_obj[M_ME_IDX].set_recv_buffer(65535);
+    m_socket_obj[M_ME_IDX].set_send_buffer(65535);
+    m_socket_obj[M_ME_IDX].close_callback = nullptr;
 
-    m_socket_obj[m_other_idx].set_fd(m_fd[m_other_idx]);
-    m_socket_obj[m_other_idx].set_non_blocking();
-    m_socket_obj[m_other_idx].set_recv_buffer(65535);
-    m_socket_obj[m_other_idx].set_send_buffer(65535);
-    m_socket_obj[m_me_idx].close_callback = nullptr;
+    m_socket_obj[M_OTHER_IDX].set_fd(fd[M_OTHER_IDX]);
+    if (!m_socket_obj[M_OTHER_IDX].set_non_blocking())
+    {
+        LOG_ERROR("socket_pair other endpoint set_non_blocking failed");
+        m_socket_obj[M_ME_IDX].close();
+        m_socket_obj[M_OTHER_IDX].close();
+        return -1;
+    }
+    // note: if either set_non_blocking fails, the paired fd is auto-closed by the socket destructors
+    m_socket_obj[M_OTHER_IDX].set_recv_buffer(65535);
+    m_socket_obj[M_OTHER_IDX].set_send_buffer(65535);
+    m_socket_obj[M_OTHER_IDX].close_callback = nullptr;
     return iret;
 }
 
 int socket_pair::get_me()
 {
-    return m_fd[m_me_idx];
+    return m_socket_obj[M_ME_IDX].get_fd();
 }
 
 int socket_pair::get_other()
 {
-    return m_fd[m_other_idx];
+    return m_socket_obj[M_OTHER_IDX].get_fd();
 }
 
 avant::socket::socket &socket_pair::get_me_socket()
 {
-    return std::ref(m_socket_obj[m_me_idx]);
+    return m_socket_obj[M_ME_IDX];
 }
 
 avant::socket::socket &socket_pair::get_other_socket()
 {
-    return std::ref(m_socket_obj[m_other_idx]);
+    return m_socket_obj[M_OTHER_IDX];
 }
