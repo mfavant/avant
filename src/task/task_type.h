@@ -1,5 +1,5 @@
 #pragma once
-#include <string>
+#include <string_view>
 
 namespace avant::task
 {
@@ -10,5 +10,5 @@ namespace avant::task
         WEBSOCKET_TASK,
         NONE
     };
-    task_type str2task_type(std::string str);
+    task_type str2task_type(std::string_view str);
 }

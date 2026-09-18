@@ -2,7 +2,7 @@
 
 using namespace avant;
 
-task::task_type task::str2task_type(std::string str)
+task::task_type task::str2task_type(std::string_view str)
 {
     if (str == "HTTP_TASK")
     {
