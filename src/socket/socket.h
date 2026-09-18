@@ -3,6 +3,7 @@
 #include <functional>
 #include <openssl/ssl.h>
 #include <arpa/inet.h>
+#include <unistd.h>
 
 namespace avant::socket
 {
@@ -16,9 +17,9 @@ namespace avant::socket
         socket(const socket &) = delete;
         socket &operator=(const socket &) = delete;
 
-        socket(socket &&other);
+        socket(socket &&other) noexcept;
 
-        socket &operator=(socket &&other);
+        socket &operator=(socket &&other) noexcept;
 
         bool bind(const std::string &ip, int port);
 
@@ -57,9 +58,17 @@ namespace avant::socket
         int get_fd();
         inline void set_fd(int fd)
         {
-            this->m_sockfd = fd;
+            if (this->m_sockfd >= 0)
+            {
+                ::close(this->m_sockfd);
+            }
+            this->m_sockfd = (fd >= 0) ? fd : -1;
             this->m_ip = "";
             this->m_port = 0;
+        }
+        inline bool is_valid_sockfd() const
+        {
+            return m_sockfd >= 0;
         }
 
         int get_realtime_ip_port(std::pair<std::string, int> &res);
@@ -73,7 +82,7 @@ namespace avant::socket
     protected:
         std::string m_ip{};
         int m_port{0};
-        int m_sockfd{0};
+        int m_sockfd{-1};
         SSL *m_ssl_instance{nullptr};
         bool m_ssl_accepted{false};
 

@@ -22,22 +22,22 @@ using avant::socket::socket;
 using namespace avant::utility;
 using std::string;
 
-socket::socket() : m_port(0), m_sockfd(0)
+socket::socket() : m_port(0), m_sockfd(-1)
 {
 }
 
-socket::socket(const string &ip, int port) : m_ip(ip), m_port(port), m_sockfd(0)
+socket::socket(const string &ip, int port) : m_ip(ip), m_port(port), m_sockfd(-1)
 {
 }
 
-socket::socket(avant::socket::socket &&other)
+socket::socket(avant::socket::socket &&other) noexcept
 {
     this->m_ip = other.m_ip;
     other.m_ip.clear();
     this->m_port = other.m_port;
     other.m_port = 0;
     this->m_sockfd = other.m_sockfd;
-    other.m_sockfd = 0;
+    other.m_sockfd = -1;
     this->m_ssl_accepted = other.m_ssl_accepted;
     other.m_ssl_accepted = false;
     this->m_ssl_instance = other.m_ssl_instance;
@@ -47,7 +47,7 @@ socket::socket(avant::socket::socket &&other)
     other.close_callback = nullptr;
 }
 
-avant::socket::socket &socket::operator=(socket &&other)
+avant::socket::socket &socket::operator=(socket &&other) noexcept
 {
     if (this == &other)
     {
@@ -59,7 +59,7 @@ avant::socket::socket &socket::operator=(socket &&other)
     this->m_port = other.m_port;
     other.m_port = 0;
     this->m_sockfd = other.m_sockfd;
-    other.m_sockfd = 0;
+    other.m_sockfd = -1;
     this->m_ssl_accepted = other.m_ssl_accepted;
     other.m_ssl_accepted = false;
     this->m_ssl_instance = other.m_ssl_instance;
@@ -108,7 +108,11 @@ bool socket::bind(const string &ip, int port)
         // family
         sockaddr.sin_family = AF_INET;
         // addr
-        sockaddr.sin_addr.s_addr = inet_addr(ip.c_str());
+        if (inet_pton(AF_INET, ip.c_str(), &sockaddr.sin_addr) <= 0)
+        {
+            LOG_ERROR("Invalid IPV4 address {}", ip.c_str());
+            return false;
+        }
         // port
         sockaddr.sin_port = htons(port);
         // bind
@@ -169,7 +173,11 @@ bool socket::connect(const string &ip, int port)
         // family
         sockaddr.sin_family = AF_INET;
         // addr
-        sockaddr.sin_addr.s_addr = inet_addr(ip.c_str());
+        if (inet_pton(AF_INET, ip.c_str(), &sockaddr.sin_addr) <= 0)
+        {
+            LOG_ERROR("Invalid IPV4 address");
+            return false;
+        }
         // port
         sockaddr.sin_port = htons(port);
         if (::connect(m_sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0)
@@ -201,16 +209,22 @@ bool socket::close()
 
     if (m_ssl_instance)
     {
-        SSL_shutdown(m_ssl_instance);
+        if (SSL_shutdown(m_ssl_instance) != 1)
+        {
+            LOG_WARN("socket SSL_shutdown not completed on close sockfd {}", this->m_sockfd);
+        }
         SSL_free(m_ssl_instance);
         m_ssl_instance = nullptr;
     }
     m_ssl_accepted = false;
 
-    if (m_sockfd > 0)
+    if (m_sockfd >= 0)
     {
-        ::close(m_sockfd);
-        m_sockfd = 0;
+        if (::close(m_sockfd) < 0)
+        {
+            LOG_ERROR("socket close fd {} error: errno={} errstr={}", m_sockfd, errno, strerror(errno));
+        }
+        m_sockfd = -1;
     }
     close_callback = nullptr;
     m_ip.clear();
