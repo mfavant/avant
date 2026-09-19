@@ -7,18 +7,15 @@ using avant::connection::connection;
 
 connection::traffic_data::traffic_data(const std::chrono::time_point<std::chrono::steady_clock> &timestamp,
                                        size_t bytes) : bytes(bytes),
-                                                       timestamp(timestamp)
-{
-}
-
-connection::traffic_data::~traffic_data()
+                                                        timestamp(timestamp)
 {
 }
 
 connection::connection()
+    : fd(-1)
 {
-    this->recv_buffer.reserve(10240);
-    this->send_buffer.reserve(10240);
+    this->recv_buffer.reserve(10 * 1024);
+    this->send_buffer.reserve(10 * 1024);
 }
 
 connection::~connection()
@@ -50,12 +47,14 @@ void connection::on_release()
     this->socket_obj.close();
     this->closed_flag = true;
     this->fd = -1;
+    this->gid = 0;
+    this->is_close = false;
     this->is_ready = false;
     this->traffic_sent_data_list.clear();
     this->traffic_recv_data_list.clear();
 }
 
-uint64_t connection::get_gid()
+uint64_t connection::get_gid() const
 {
     return this->gid;
 }
