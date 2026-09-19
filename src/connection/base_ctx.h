@@ -10,6 +10,11 @@ namespace avant::connection
         base_ctx();
         virtual ~base_ctx();
 
+        base_ctx(const base_ctx &) = delete;
+        base_ctx &operator=(const base_ctx &) = delete;
+        base_ctx(base_ctx &&) = delete;
+        base_ctx &operator=(base_ctx &&) = delete;
+
         inline void clear_app_layer_notified()
         {
             this->app_layer_notified = false;
