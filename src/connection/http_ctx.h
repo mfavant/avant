@@ -45,12 +45,20 @@ namespace avant::connection
         template <typename... Args>
         int tunnel_forward(Args &&...args)
         {
+            if (this->worker_ptr == nullptr)
+            {
+                return -1;
+            }
             return this->worker_ptr->tunnel_forward(std::forward<Args>(args)...);
         }
 
         template <typename... Args>
         int get_worker_idx(Args &&...args)
         {
+            if (this->worker_ptr == nullptr)
+            {
+                return -1;
+            }
             return this->worker_ptr->get_worker_idx(std::forward<Args>(args)...);
         }
 

@@ -314,6 +314,11 @@ void http_ctx::on_close()
 
 void http_ctx::on_event(uint32_t event)
 {
+    if (this->conn_ptr == nullptr || this->worker_ptr == nullptr)
+    {
+        return;
+    }
+
     socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)
@@ -344,6 +349,7 @@ void http_ctx::on_event(uint32_t event)
             {
                 LOG_ERROR("{}", e.what());
             }
+            this->destory_callback = nullptr;
         }
         this->worker_ptr->close_client_fd(socket_ptr->get_fd());
         return;
