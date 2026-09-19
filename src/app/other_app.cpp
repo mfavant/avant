@@ -146,6 +146,8 @@ void other_app::on_other_tunnel(avant::workers::other &other_obj, const ProtoPac
 
 void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx &ctx)
 {
+    LOG_ERROR("on_new_connection_remote2this gid {}", ctx.get_conn_gid());
+
     // ipc auth
     // this <-- connect -- remote
     // this -- whoami --> remote
@@ -158,6 +160,12 @@ void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx 
         ctx.send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, res, ProtoCmd::PROTO_CMD_IPC_STREAM_AUTH_HANDSHAKE)));
     }
     // LOG_ERROR("other_app on_new_connection {}", ctx.get_conn_gid());
+}
+
+
+void other_app::on_new_connection_this2remote(avant::connection::ipc_stream_ctx &ctx)
+{
+    LOG_ERROR("on_new_connection_this2remote gid {}", ctx.get_conn_gid());
 }
 
 void other_app::on_close_connection(avant::connection::ipc_stream_ctx &ctx)

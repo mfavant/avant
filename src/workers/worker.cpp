@@ -274,6 +274,10 @@ void worker::close_client_fd(int fd)
         {
             LOG_ERROR("worker_connection_mgr->release_connection({}) failed", fd);
         }
+        else
+        {
+            conn_ptr = nullptr;
+        }
     }
     else
     {

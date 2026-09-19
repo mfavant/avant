@@ -485,6 +485,10 @@ void other::close_ipc_client_fd(int fd)
         {
             LOG_ERROR("ipc_connection_mgr->release_connection({}) failed", fd);
         }
+        else
+        {
+            conn_ptr = nullptr;
+        }
 
         auto this2remote_gid2appid_iter = this->m_this2remote_gid2appid.find(gid);
         if (this2remote_gid2appid_iter != this->m_this2remote_gid2appid.end())

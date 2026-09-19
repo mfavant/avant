@@ -38,24 +38,40 @@ namespace avant::connection
         template <typename... Args>
         void event_mod(Args &&...args)
         {
+            if (this->conn_ptr == nullptr || this->worker_ptr == nullptr)
+            {
+                return;
+            }
             this->worker_ptr->epoller.mod(this->conn_ptr->socket_obj.get_fd(), std::forward<Args>(args)...);
         }
 
         template <typename... Args>
         int worker_send_client_forward_message(Args &&...args)
         {
+            if (this->worker_ptr == nullptr)
+            {
+                return -1;
+            }
             return this->worker_ptr->send_client_forward_message(std::forward<Args>(args)...);
         }
 
         template <typename... Args>
         int tunnel_forward(Args &&...args)
         {
+            if (this->worker_ptr == nullptr)
+            {
+                return -1;
+            }
             return this->worker_ptr->tunnel_forward(std::forward<Args>(args)...);
         }
 
         template <typename... Args>
         int get_worker_idx(Args &&...args)
         {
+            if (this->worker_ptr == nullptr)
+            {
+                return -1;
+            }
             return this->worker_ptr->get_worker_idx(std::forward<Args>(args)...);
         }
 

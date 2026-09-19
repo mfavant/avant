@@ -24,10 +24,19 @@ void ipc_stream_ctx::on_create(connection &conn_obj, workers::other &other_obj)
     bool err = false;
     try
     {
-        this->set_app_layer_notified();
         if (this->other_ptr->is_remote2this(this->conn_ptr->get_gid()))
         {
+            this->set_app_layer_notified();
             avant::app::other_app::on_new_connection_remote2this(*this);
+        }
+        else if(this->other_ptr->is_this2remote(this->conn_ptr->get_gid()))
+        {
+            this->set_app_layer_notified();
+            avant::app::other_app::on_new_connection_this2remote(*this);
+        }
+        else
+        {
+            LOG_ERROR("ipc_ctx gid is not remote2this and this2remote gid {}", this->conn_ptr->get_gid());
         }
     }
     catch (const std::exception &e)
@@ -139,6 +148,11 @@ void ipc_stream_ctx::try_send_flush()
 
 void ipc_stream_ctx::on_event(uint32_t event)
 {
+    if (this->conn_ptr == nullptr || this->other_ptr == nullptr)
+    {
+        return;
+    }
+
     avant::socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)

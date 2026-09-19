@@ -40,10 +40,14 @@ namespace avant::connection
         template <typename... Args>
         void event_mod(Args &&...args)
         {
+            if (this->conn_ptr == nullptr || this->other_ptr == nullptr)
+            {
+                return;
+            }
             this->other_ptr->epoller.mod(this->conn_ptr->socket_obj.get_fd(), std::forward<Args>(args)...);
         }
 
-        inline const workers::other *get_other_ptr()
+        inline const workers::other *get_other_ptr() const
         {
             return this->other_ptr;
         }

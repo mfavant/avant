@@ -57,6 +57,11 @@ void stream_ctx::on_close()
 
 void stream_ctx::on_event(uint32_t event)
 {
+    if (this->conn_ptr == nullptr || this->worker_ptr == nullptr)
+    {
+        return;
+    }
+
     avant::socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)
