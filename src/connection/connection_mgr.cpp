@@ -1,4 +1,5 @@
 #include "connection/connection_mgr.h"
+#include <cstddef>
 
 using avant::connection::connection_mgr;
 using namespace avant::connection;
@@ -9,24 +10,22 @@ connection_mgr::connection_mgr()
 
 connection_mgr::~connection_mgr()
 {
-    if (connection_pool)
-    {
-        delete[] connection_pool;
-    }
+    // connection_pool is a unique_ptr<connection[]>; releases the array on destruction.
 }
 
-int connection_mgr::init(size_t pool_max_size)
+int connection_mgr::init(size_t pool_capacity)
 {
-    connection *connection_arr = new (std::nothrow) connection[pool_max_size + 1];
+    connection *connection_arr = new (std::nothrow) connection[pool_capacity + 1];
     if (!connection_arr)
     {
         return -1;
     }
-    connection_pool = connection_arr;
-    for (size_t i = 0; i < pool_max_size + 1; i++)
+    connection_pool.reset(connection_arr);
+    for (size_t i = 0; i < pool_capacity + 1; i++)
     {
         unused_set.insert(i);
     }
+    this->pool_capacity = pool_capacity + 1;
     return 0;
 }
 
@@ -94,7 +93,7 @@ int connection_mgr::release_connection(int fd)
     return 0;
 }
 
-avant::connection::connection *connection_mgr::get_conn(int fd)
+connection *connection_mgr::get_conn(int fd) const
 {
     auto fd2gid_iter = fd2gid.find(fd);
     if (fd2gid_iter == fd2gid.end())
@@ -109,7 +108,7 @@ avant::connection::connection *connection_mgr::get_conn(int fd)
     return &connection_pool[gid2index_iter->second];
 }
 
-avant::connection::connection *connection_mgr::get_conn_by_gid(uint64_t gid)
+connection *connection_mgr::get_conn_by_gid(uint64_t gid) const
 {
     auto gid2index_iter = gid2index.find(gid);
     if (gid2index_iter == gid2index.end())
@@ -119,12 +118,17 @@ avant::connection::connection *connection_mgr::get_conn_by_gid(uint64_t gid)
     return &connection_pool[gid2index_iter->second];
 }
 
-uint64_t connection_mgr::size()
+size_t connection_mgr::size() const
 {
     return fd2gid.size();
 }
 
-connection *connection_mgr::get_conn_by_idx(uint64_t idx)
+size_t connection_mgr::get_pool_capacity() const
+{
+    return this->pool_capacity;
+}
+
+connection *connection_mgr::get_conn_by_idx(size_t idx) const
 {
     auto iter = fd2gid.begin();
     std::advance(iter, idx);
