@@ -2,6 +2,8 @@
 #include "app/websocket_app.h"
 #include "server/server.h"
 #include <stdexcept>
+#include <algorithm>
+#include <cctype>
 #include <avant-log/logger.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -262,6 +264,11 @@ void websocket_ctx::on_close()
 
 void websocket_ctx::on_event(uint32_t event)
 {
+    if (this->conn_ptr == nullptr || this->worker_ptr == nullptr)
+    {
+        return;
+    }
+
     socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
     connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)
@@ -366,7 +373,7 @@ void websocket_ctx::on_event(uint32_t event)
                          oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
                 {
                     len = 0;
-                    break;
+                    continue;
                 }
                 else if (len > 0)
                 {
@@ -418,13 +425,22 @@ void websocket_ctx::on_event(uint32_t event)
         // handshake
         if (!this->is_connected && this->is_upgrade && this->http_processed)
         {
+            // HTTP field names are case-insensitive (RFC 7230 §3.2); compare case-insensitively
+            // so clients that send lowercase/mixed-case keys still complete the upgrade.
             for (const auto &[header_field, header_values] : this->headers)
             {
-                if (header_field == "Sec-WebSocket-Key" && header_values.size() >= 1)
+                if (header_values.size() < 1)
+                {
+                    continue;
+                }
+                std::string lower = header_field;
+                std::transform(lower.begin(), lower.end(), lower.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (lower == "sec-websocket-key")
                 {
                     this->sec_websocket_key = header_values[0];
                 }
-                else if (header_field == "Sec-WebSocket-Version" && header_values.size() >= 1)
+                else if (lower == "sec-websocket-version")
                 {
                     this->sec_websocket_version = header_values[0];
                 }
@@ -482,7 +498,8 @@ void websocket_ctx::on_event(uint32_t event)
 
     if (!this->is_connected)
     {
-        LOG_ERROR("!this->is_connected");
+        // Normal transient state while the client is still mid-handshake; not an error.
+        LOG_DEBUG("!this->is_connected");
         event_mod(nullptr, event::event_poller::RWE, false);
         return;
     }
