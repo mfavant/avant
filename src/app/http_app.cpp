@@ -736,7 +736,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
                 if (len > 0)
                 {
-                    if (partial_response)
+                    if (partial_response) // Range 范围请求 用的 Content-Length
                     {
                         if (resp->range_left < len)
                         {
@@ -790,14 +790,45 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
                 }
                 else
                 {
-                    if (partial_response) // 用的 Content-Length
+                    if (partial_response) // Range 范围请求 用的 Content-Length
                     {
                         ctx.set_response_end(true);
-                        return;
                     }
-                    // 用的 Transfer-Encoding: chunked
-                    ctx.send_buffer_append("0\r\n\r\n", 5);
-                    ctx.set_response_end(true);
+                    else if (resp->use_gzip) // 用的 Transfer-Encoding: chunked + gzip
+                    {
+                        resp->strm.avail_in = 0;
+                        resp->strm.next_in = Z_NULL;
+                        resp->strm.avail_out = compress_buffer_size;
+                        resp->strm.next_out = (Bytef *)compress_buf.data();
+
+                        int ret = deflate(&resp->strm, Z_FINISH);
+                        if (ret == Z_STREAM_END)
+                        {
+                            int finish_compressed_data_len = compress_buffer_size - resp->strm.avail_out;
+                            if (finish_compressed_data_len > 0)
+                            {
+                                std::stringstream ss;
+                                ss << std::hex << finish_compressed_data_len;
+                                std::string chunk_size = ss.str() + "\r\n";
+
+                                ctx.send_buffer_append(chunk_size.c_str(), chunk_size.size());
+                                ctx.send_buffer_append(compress_buf.data(), finish_compressed_data_len);
+                                ctx.send_buffer_append("\r\n", 2);
+                            }
+                            ctx.send_buffer_append("0\r\n\r\n", 5);
+                        }
+                        else
+                        {
+                            LOG_ERROR("deflate Z_FINISH failed with {}", ret);
+                        }
+                        ctx.set_response_end(true);
+                    }
+                    else
+                    {
+                        // 用的 Transfer-Encoding: chunked
+                        ctx.send_buffer_append("0\r\n\r\n", 5);
+                        ctx.set_response_end(true);
+                    }
                 }
             };
             ctx.write_end_callback(ctx);
@@ -922,10 +953,10 @@ int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
 {
     constexpr size_t max_body_size = 2048000;
 
-    // recv buffer 中目前存了多少内容
-    size_t recv_buffer_size = ctx.get_recv_buffer_size();
-    // 已经接受了多少 Http Request Body 内容
-    size_t body_size = ctx.get_recv_body_size();
+    // 已经接受了多少 Http Request Body 内容（clear 前的累计值）
+    const size_t body_size = ctx.get_recv_body_size();
+    // recv buffer 中目前存了多少内容（clear 前）
+    const size_t recv_buffer_size = ctx.get_recv_buffer_size();
 
     // processing http request body data
     {
@@ -935,8 +966,8 @@ int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
 
     if (body_size > max_body_size)
     {
-        LOG_ERROR("recv_buffer_size {} length {} body_size {}", recv_buffer_size, length, body_size);
-        LOG_ERROR("http_app::on_body body_size > {}", max_body_size);
+        LOG_ERROR("http_app::on_body body_size[{}] + length[{}] > max_body_size[{}], recv_buffer_size[{}] (pre-clear)",
+                  body_size, length, max_body_size, recv_buffer_size);
         return -1;
     }
 
