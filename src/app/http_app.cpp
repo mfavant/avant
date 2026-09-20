@@ -964,7 +964,7 @@ int http_app::on_body(avant::connection::http_ctx &ctx, size_t length)
         ctx.clear_recv_buffer();
     }
 
-    if (body_size > max_body_size)
+    if (body_size + length > max_body_size)
     {
         LOG_ERROR("http_app::on_body body_size[{}] + length[{}] > max_body_size[{}], recv_buffer_size[{}] (pre-clear)",
                   body_size, length, max_body_size, recv_buffer_size);
