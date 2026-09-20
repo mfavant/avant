@@ -15,9 +15,9 @@ namespace avant::system
         // init avant system
         int init();
 
-        static void signal_term(int sig);
-        static void signal_usr1(int sig);
-        static void signal_int(int sig);
+        static void signal_term(int);
+        static void signal_usr1(int);
+        static void signal_int(int);
 
     private:
         int set_sys_limits();

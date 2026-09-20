@@ -32,7 +32,7 @@ namespace avant::server
         server();
         ~server();
 
-        void start();
+        int start();
         [[nodiscard]] SSL_CTX *get_ssl_ctx();
 
         void config(const system::config_mgr &config_mgr);
@@ -48,9 +48,7 @@ namespace avant::server
         void cmd_reload();
 
     private:
-        bool on_stop();
-        bool is_stop();
-        void on_start();
+        int on_start();
 
         void on_start_load_ipc_json_file();
 
@@ -76,7 +74,7 @@ namespace avant::server
 
         avant::json::json m_ipc_json;
 
-        volatile bool stop_flag{false};
+        std::atomic<bool> stop_flag{false};
 
         SSL_CTX *m_ssl_context{nullptr};
         std::shared_ptr<avant::socket::server_socket> m_server_listen_socket;

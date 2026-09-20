@@ -173,7 +173,7 @@ void other::operator()()
             }
         }
 
-        if (this->to_stop)
+        if (this->to_stop.load())
         {
             break;
         }
@@ -219,15 +219,15 @@ void other::operator()()
             else
             {
                 LOG_ERROR("unknow fd event");
-                this->to_stop = true;
+                this->to_stop.store(true);
                 break;
             }
         }
     }
 
     LOG_ERROR("other::operator() end");
-    this->to_stop = true;
-    this->is_stoped = true;
+    this->to_stop.store(true);
+    this->is_stoped.store(true);
     hooks::stop::on_other_stop(*this);
 }
 
@@ -324,7 +324,7 @@ void other::try_send_flush_tunnel()
                 oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
-                this->to_stop = true;
+                this->to_stop.store(true);
             }
             else
             {
@@ -370,7 +370,7 @@ void other::on_tunnel_event(uint32_t event)
                     oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
-                    this->to_stop = true;
+                    this->to_stop.store(true);
                 }
                 break;
             }

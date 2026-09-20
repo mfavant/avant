@@ -1,5 +1,6 @@
 // other thread, support ipc
 #pragma once
+#include <atomic>
 #include <iostream>
 #include <memory>
 #include "socket/socket_pair.h"
@@ -56,8 +57,8 @@ namespace avant::workers
         void ipc_client_to_connect();
 
     public:
-        bool to_stop{false};
-        bool is_stoped{false};
+        std::atomic<bool> to_stop{false};
+        std::atomic<bool> is_stoped{false};
 
         avant::socket::socket_pair *main_other_tunnel{nullptr};
         avant::json::json ipc_json;

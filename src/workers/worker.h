@@ -34,8 +34,8 @@ namespace avant::workers
 
         void operator()();
 
-        bool to_stop{false};
-        bool is_stoped{false};
+        std::atomic<bool> to_stop{false};
+        std::atomic<bool> is_stoped{false};
 
         int worker_idx{-1};
         size_t max_client_num{0};

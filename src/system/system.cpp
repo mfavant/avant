@@ -79,10 +79,10 @@ int system::init()
     }
     m_server_ptr.reset(new_server);
     m_server_ptr->config(m_config_mgr); // copy config_mgr to server object
-    m_server_ptr->start();              // main thread loop
+    int start_ret = m_server_ptr->start(); // main thread loop
 
-    LOG_ERROR("m_server_ptr->start() return");
-    return 0;
+    LOG_ERROR("m_server_ptr->start() return ret={}", start_ret);
+    return start_ret;
 }
 
 int system::set_sys_limits()
@@ -199,19 +199,26 @@ void system::create_daemon()
     }
 }
 
-void system::signal_term(int sig)
+void system::signal_term(int)
 {
-    avant_global_system_ptr->m_server_ptr->to_stop();
+    if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr)
+    {
+        avant_global_system_ptr->m_server_ptr->to_stop();
+    }
 }
 
-void system::signal_usr1(int sig)
+void system::signal_usr1(int)
 {
-    avant_global_system_ptr->m_server_ptr->cmd_reload();
+    if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr)
+    {
+        avant_global_system_ptr->m_server_ptr->cmd_reload();
+    }
 }
 
-void system::signal_int(int sig)
+void system::signal_int(int)
 {
-    if (!avant_global_system_ptr->m_config_mgr.get_daemon())
+    if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr &&
+        !avant_global_system_ptr->m_config_mgr.get_daemon())
     {
         avant_global_system_ptr->m_server_ptr->to_stop();
     }

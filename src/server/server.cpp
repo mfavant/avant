@@ -67,7 +67,7 @@ server::~server()
     }
 }
 
-void server::start()
+int server::start()
 {
     LOG_ERROR("server::start ...");
 
@@ -83,14 +83,14 @@ void server::start()
         if (!ssl_method)
         {
             LOG_ERROR("TLS_server_method() failed");
-            return;
+            return -1;
         }
 
         m_ssl_context = SSL_CTX_new(ssl_method);
         if (!m_ssl_context)
         {
             LOG_ERROR("SSL_CTX_new(ssl_method) error");
-            return;
+            return -1;
         }
         // 设置最低版本协议
         SSL_CTX_set_min_proto_version(m_ssl_context, TLS1_2_VERSION);
@@ -111,7 +111,7 @@ void server::start()
         if (1 != i_ret)
         {
             LOG_ERROR("SSL_CTX_use_certificate_chain_file error: {}", ERR_error_string(ERR_get_error(), nullptr));
-            return;
+            return -1;
         }
         // 加载私钥
         std::string key_pem_path = this->m_config_mgr.get_key_pem();
@@ -119,14 +119,14 @@ void server::start()
         if (1 != i_ret)
         {
             LOG_ERROR("SSL_CTX_use_PrivateKey_file error: {}", ERR_error_string(ERR_get_error(), nullptr));
-            return;
+            return -1;
         }
         // 验证私钥和证书匹配
         i_ret = SSL_CTX_check_private_key(m_ssl_context);
         if (1 != i_ret)
         {
             LOG_ERROR("SSL_CTX_check_private_key error: {}", ERR_error_string(ERR_get_error(), nullptr));
-            return;
+            return -1;
         }
     }
 
@@ -134,19 +134,19 @@ void server::start()
     if (0 != i_ret)
     {
         LOG_ERROR("avant::global::tunnel_id::init({}) failed return {}", this->m_config_mgr.get_worker_cnt(), i_ret);
-        return;
+        return -1;
     }
 
     if (this->m_config_mgr.get_max_client_cnt() <= 0 || this->m_config_mgr.get_max_client_cnt() > 8388607)
     {
         LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > 8388607 {}", this->m_config_mgr.get_max_client_cnt());
-        return;
+        return -1;
     }
 
     if (this->m_config_mgr.get_worker_cnt() <= 0 || this->m_config_mgr.get_worker_cnt() > 511)
     {
         LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > 511 {}", this->m_config_mgr.get_worker_cnt());
-        return;
+        return -1;
     }
 
     {
@@ -172,7 +172,7 @@ void server::start()
         LOG_ERROR("m_ipc_json_path {}", this->m_config_mgr.get_ipc_json_path().c_str());
     }
 
-    on_start();
+    return on_start();
 }
 
 task_type server::get_task_type()
@@ -185,32 +185,18 @@ void server::config(const system::config_mgr &config_mgr)
     this->m_config_mgr = config_mgr;
 }
 
-bool server::is_stop()
-{
-    return stop_flag;
-}
-
-bool server::on_stop()
-{
-    if (stop_flag)
-    {
-        return true; // main process close
-    }
-    return false;
-}
-
 void server::to_stop()
 {
-    if (stop_flag)
+    if (stop_flag.load())
     {
         return;
     }
     // main thread stop_flag
-    stop_flag = true;
+    stop_flag.store(true);
     // worker thread stop_flag
     for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
     {
-        m_workers[i].to_stop = true;
+        m_workers[i].to_stop.store(true);
     }
 }
 
@@ -249,7 +235,7 @@ void server::on_start_load_ipc_json_file()
     }
 }
 
-void server::on_start()
+int server::on_start()
 {
     // load ipc json
     on_start_load_ipc_json_file();
@@ -266,7 +252,7 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_config_mgr.get_max_client_cnt() + 10), iret);
-            return;
+            return -1;
         }
     }
 
@@ -276,7 +262,7 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("m_main_connection_mgr.init({}) failed[{}]", (this->m_config_mgr.get_worker_cnt() * 4), iret);
-            return;
+            return -1;
         }
     }
 
@@ -286,7 +272,7 @@ void server::on_start()
         if (!m_curr_connection_num)
         {
             LOG_ERROR("new std::atomic<int> m_curr_connection_num err");
-            return;
+            return -1;
         }
     }
 
@@ -296,7 +282,7 @@ void server::on_start()
         if (!m_main_worker_tunnel)
         {
             LOG_ERROR("new socket_pair err");
-            return;
+            return -1;
         }
         // init tunnel
         for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
@@ -305,7 +291,7 @@ void server::on_start()
             if (iret != 0)
             {
                 LOG_ERROR("m_main_worker_tunnel[{}] init failed", i);
-                return;
+                return -1;
             }
         }
         for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
@@ -313,7 +299,7 @@ void server::on_start()
             if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, event::event_poller::RWE, false))
             {
                 LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed {}", errno);
-                return;
+                return -1;
             }
             // main alloc connection for tunnel
             {
@@ -321,7 +307,7 @@ void server::on_start()
                 if (iret != 0)
                 {
                     LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_worker_tunnel return {}", iret);
-                    return;
+                    return -1;
                 }
                 connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_worker_tunnel[i].get_me());
                 tunnel_conn->recv_buffer.reserve(10485760); // 10MB
@@ -340,7 +326,7 @@ void server::on_start()
         if (!worker_arr)
         {
             LOG_ERROR("new worker::worker failed");
-            return;
+            return -1;
         }
 
         for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
@@ -363,7 +349,7 @@ void server::on_start()
             if (!new_connection_mgr)
             {
                 LOG_ERROR("new (std::nothrow) connection::connection_mgr failed");
-                return;
+                return -1;
             }
             std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
 
@@ -371,28 +357,28 @@ void server::on_start()
             if (iret != 0)
             {
                 LOG_ERROR("new_connection_mgr->init({}) failed", worker_max_client_cnt);
-                return;
+                return -1;
             }
             m_workers[worker_idx].worker_connection_mgr = new_connection_mgr_shared_ptr;
             iret = m_workers[worker_idx].epoller.create(worker_max_client_cnt);
             if (iret != 0)
             {
                 LOG_ERROR("m_epoller.create(%d) iret[{}]", worker_max_client_cnt, iret);
-                return;
+                return -1;
             }
 
             // tunnel to worker_epoller
             if (0 != m_workers[worker_idx].epoller.add(m_workers[worker_idx].main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
             {
                 LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
-                return;
+                return -1;
             }
             // worker alloc connection for tunnel
             iret = m_workers[worker_idx].worker_connection_mgr->alloc_connection(m_workers[worker_idx].main_worker_tunnel->get_other(), server_gen_gid());
             if (iret != 0)
             {
                 LOG_ERROR("worker_connection_mgr.alloc_connection return {}", iret);
-                return;
+                return -1;
             }
             connection::connection *tunnel_conn = m_workers[worker_idx].worker_connection_mgr->get_conn(m_workers[worker_idx].main_worker_tunnel->get_other());
             tunnel_conn->recv_buffer.reserve(10485760); // 10MB
@@ -407,12 +393,12 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("main m_main_other_tunnel failed iret={}", iret);
-            return;
+            return -1;
         }
         if (0 != m_epoller.add(m_main_other_tunnel.get_me(), nullptr, event::event_poller::RWE, false))
         {
             LOG_ERROR("main_epoller.add m_main_other_tunnel.get_me() failed {}", errno);
-            return;
+            return -1;
         }
         // main alloc connection for tunnel
         {
@@ -420,7 +406,7 @@ void server::on_start()
             if (iret != 0)
             {
                 LOG_ERROR("m_main_connection_mgr.alloc_connection for m_main_other_tunnel return {}", iret);
-                return;
+                return -1;
             }
             connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_other_tunnel.get_me());
             tunnel_conn->recv_buffer.reserve(10485760); // 10MB
@@ -436,7 +422,7 @@ void server::on_start()
         if (!m_other)
         {
             LOG_ERROR("new workers::other failed");
-            return;
+            return -1;
         }
         m_other->main_other_tunnel = &m_main_other_tunnel;
         m_other->ipc_json = this->m_ipc_json;
@@ -445,7 +431,7 @@ void server::on_start()
         if (!new_connection_mgr)
         {
             LOG_ERROR("new (std::nothrow) connection::connection_mgr failed");
-            return;
+            return -1;
         }
 
         std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
@@ -454,21 +440,21 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("new_connection_mgr->init failed");
-            return;
+            return -1;
         }
         m_other->ipc_connection_mgr = new_connection_mgr_shared_ptr;
         iret = m_other->epoller.create(this->m_config_mgr.get_max_ipc_conn_num());
         if (iret != 0)
         {
             LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_config_mgr.get_max_ipc_conn_num()), iret);
-            return;
+            return -1;
         }
 
         // tunnel to other_epoller
         if (0 != m_other->epoller.add(m_other->main_other_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
         {
             LOG_ERROR("m_other->epoller.add(m_other->main_other_tunnel->get_other() failed");
-            return;
+            return -1;
         }
 
         // other alloc connection for tunnel
@@ -476,7 +462,7 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("ipc_connection_mgr->alloc_connection return {}", iret);
-            return;
+            return -1;
         }
         connection::connection *tunnel_conn = m_other->ipc_connection_mgr->get_conn(m_other->main_other_tunnel->get_other());
         tunnel_conn->recv_buffer.reserve(10485760); // 10MB
@@ -487,7 +473,7 @@ void server::on_start()
         if (iret != 0)
         {
             LOG_ERROR("m_other->init_call_by_server() return {}", iret);
-            return;
+            return -1;
         }
     }
 
@@ -499,7 +485,7 @@ void server::on_start()
         if (!listen_socket)
         {
             LOG_ERROR("new listen socket object failed");
-            return;
+            return -1;
         }
         this->m_server_listen_socket.reset(listen_socket);
 
@@ -507,12 +493,12 @@ void server::on_start()
         if (0 > this->m_server_listen_socket->get_fd())
         {
             LOG_ERROR("listen_socket failed get_fd() < 0");
-            return;
+            return -1;
         }
         if (0 != m_epoller.add(this->m_server_listen_socket->get_fd(), nullptr, event::event_poller::RWE, false))
         {
             LOG_ERROR("listen_socket m_epoller add failed");
-            return;
+            return -1;
         }
     }
 
@@ -573,23 +559,23 @@ void server::on_start()
                     // int curr_connection_num = m_curr_connection_num->load();
                     // LOG_ERROR("curr_connection_num {}", curr_connection_num);
 
-                    if (stop_flag)
+                    if (stop_flag.load())
                     {
                         bool flag = true;
                         // checking all worker stoped
                         for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
                         {
-                            if (!m_workers[i].is_stoped)
+                            if (!m_workers[i].is_stoped.load())
                             {
                                 flag = false;
                             }
                         }
                         if (flag)
                         {
-                            m_other->to_stop = true;
+                            m_other->to_stop.store(true);
                         }
                         // checking other thread stoped
-                        if (!m_other->is_stoped)
+                        if (!m_other->is_stoped.load())
                         {
                             flag = false;
                         }
@@ -668,6 +654,7 @@ void server::on_start()
     {
         hooks::stop::on_main_stop(*this);
     }
+    return 0;
 }
 
 // 32bit(timestamp) 23bit(m_gid_seq) 9bit(worker_idx)

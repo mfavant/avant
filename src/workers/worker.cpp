@@ -73,7 +73,7 @@ void worker::operator()()
             }
         }
 
-        if (this->to_stop)
+        if (this->to_stop.load())
         {
             break;
         }
@@ -134,8 +134,8 @@ void worker::operator()()
         }
     }
     LOG_ERROR("worker::operator() end worker[{}]", this->get_worker_idx());
-    this->to_stop = true;
-    this->is_stoped = true;
+    this->to_stop.store(true);
+    this->is_stoped.store(true);
     hooks::stop::on_worker_stop(*this);
 }
 
@@ -192,7 +192,7 @@ void worker::on_tunnel_event(uint32_t event)
                     oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     LOG_ERROR("worker::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
-                    this->to_stop = true;
+                    this->to_stop.store(true);
                 }
                 break;
             }
@@ -352,7 +352,7 @@ void worker::try_send_flush_tunnel()
                 oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 LOG_ERROR("worker::try_send_flush_tunnel tunnel_conn oper_errno {}", oper_errno);
-                this->to_stop = true;
+                this->to_stop.store(true);
             }
             else
             {
