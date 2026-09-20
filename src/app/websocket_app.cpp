@@ -203,7 +203,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
                 break;
             }
 
-            frame.fin = data[index] & 0x80;
+            frame.fin = (data[index] & 0x80) != 0;
             frame.opcode = data[index] & 0x0F;
             index++;
         }

@@ -19,13 +19,9 @@ namespace global = avant::global;
 class avant_authenticated_ipc_pair
 {
 public:
-    avant_authenticated_ipc_pair()
-    {
-        this->other_obj = nullptr;
-    }
     std::unordered_map<uint64_t, std::string> gid2appid;
     std::unordered_map<std::string, uint64_t> appid2gid;
-    avant::workers::other *other_obj;
+    avant::workers::other *other_obj{nullptr};
 };
 
 static avant_authenticated_ipc_pair authenticated_ipc_pair;
@@ -33,7 +29,7 @@ static avant_authenticated_ipc_pair authenticated_ipc_pair;
 void other_app::on_other_init(avant::workers::other &other_obj)
 {
     LOG_ERROR("other_app::on_other_init()");
-    if (!authenticated_ipc_pair.other_obj)
+    if (authenticated_ipc_pair.other_obj == nullptr)
     {
         authenticated_ipc_pair.other_obj = &other_obj;
     }
@@ -331,7 +327,6 @@ void other_app::other_lua_send_ipc_package(const std::string &app_id, int cmd, g
     }
 
     ProtoPackage resPackage;
-    resPackage.set_cmd((avant::ProtoCmd)cmd);
     std::string data;
     int ret = ipc_stream_ctx->send_data(avant::proto::pack_package(data, avant::proto::pack_package(resPackage, message, (avant::ProtoCmd)cmd)));
     if (ret != 0)
@@ -346,9 +341,9 @@ void other_app::on_udp_server_recvfrom(avant::workers::other &other_obj, const c
                                        const struct sockaddr_storage &addr,
                                        socklen_t addr_len)
 {
-    if (!other_obj.udp_svr_component.get())
+    if (!other_obj.udp_svr_component.get() || len <= 0)
     {
-        LOG_ERROR("other udp_svr_component message_callback recv udp_svr_component is nullptr len {}", len);
+        LOG_ERROR("other udp_svr_component message_callback recv invalid udp_svr_component or len {}", len);
         return;
     }
     ProtoPackage package;
