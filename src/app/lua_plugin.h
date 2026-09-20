@@ -3,6 +3,7 @@
 #include <memory>
 #include <unordered_map>
 #include <functional>
+#include <vector>
 #include "proto/proto_util.h"
 #include "workers/other.h"
 
@@ -105,8 +106,8 @@ namespace avant::app
         lua_State *lua_state{nullptr};
         bool lua_state_be_reload{false};
 
-        lua_State **worker_lua_state{nullptr};
-        bool *worker_lua_state_be_reload{nullptr};
+        std::vector<lua_State *> worker_lua_state;
+        std::vector<bool> worker_lua_state_be_reload;
         int worker_lua_cnt{0};
 
         lua_State *other_lua_state{nullptr};
