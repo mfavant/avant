@@ -136,7 +136,7 @@ void lua_plugin::free_main_lua()
 
 void lua_plugin::free_worker_lua()
 {
-    for (int i = 0; i < this->worker_lua_state.size(); i++)
+    for (int i = 0; i < (int)this->worker_lua_state.size(); i++)
     {
         free_worker_lua(i);
     }
@@ -163,7 +163,7 @@ void lua_plugin::free_other_lua()
 void lua_plugin::reload()
 {
     this->lua_state_be_reload = true;
-    for (int i = 0; i < this->worker_lua_state_be_reload.size(); i++)
+    for (int i = 0; i < (int)this->worker_lua_state_be_reload.size(); i++)
     {
         this->worker_lua_state_be_reload[i] = true;
     }
@@ -431,7 +431,7 @@ void lua_plugin::exe_OnLuaVMRecvMessage(lua_State *lua_state,
     }
     else
     {
-        for (int i = 0; i < lua_plugin_ptr->worker_lua_state.size(); i++)
+        for (int i = 0; i < (int)lua_plugin_ptr->worker_lua_state.size(); i++)
         {
             if (lua_state == lua_plugin_ptr->worker_lua_state[i])
             {
