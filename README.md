@@ -1,4 +1,4 @@
-# Avant
+# avant
 
 [![Docker Image CI](https://github.com/mfavant/avant/actions/workflows/docker-image.yml/badge.svg)](https://github.com/mfavant/avant/actions/workflows/docker-image.yml)
 
