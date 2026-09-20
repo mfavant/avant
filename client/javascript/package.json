@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "protobufjs": "^7.4.0",
+    "protobufjs": "^8.8.0",
     "ws": "^8.18.3"
   }
 }
