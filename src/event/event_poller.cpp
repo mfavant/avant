@@ -59,6 +59,10 @@ int event_poller::create(int max_connections)
 
 int event_poller::wait(int millisecond)
 {
+    if (m_epfd < 0 || m_events == nullptr)
+    {
+        return -999;
+    }
 #ifdef __linux__
     return epoll_wait(m_epfd, m_events, m_max_connections + 1, millisecond);
 #elif defined(__APPLE__)
@@ -77,6 +81,10 @@ int event_poller::wait(int millisecond)
 #ifdef __linux__
 int event_poller::ctrl(int fd, uint32_t events, int op, bool et /*=false*/)
 {
+    if (m_epfd < 0)
+    {
+        return -999;
+    }
     struct epoll_event ev;
     // ev.data.ptr = ptr; epoll_event.data is a union
     ev.data.fd = fd;
@@ -103,6 +111,10 @@ int event_poller::ctrl(int fd, uint32_t events, int op, bool et /*=false*/)
 
 int event_poller::add(int fd, uint32_t events, bool et /*=false*/)
 {
+    if (m_epfd < 0)
+    {
+        return -999;
+    }
 #ifdef __linux__
     if (et)
     {
@@ -158,6 +170,10 @@ int event_poller::add(int fd, uint32_t events, bool et /*=false*/)
 
 int event_poller::mod(int fd, uint32_t events, bool et /*=false*/)
 {
+    if (m_epfd < 0)
+    {
+        return -999;
+    }
 #ifdef __linux__
     if (et)
     {
@@ -257,10 +273,12 @@ int event_poller::mod(int fd, uint32_t events, bool et /*=false*/)
 int event_poller::del(int fd)
 {
     auto iter = fd_curr_reg_event.find(fd);
-    if (iter != fd_curr_reg_event.end())
+    if (iter == fd_curr_reg_event.end())
     {
-        fd_curr_reg_event.erase(iter);
+        // never registered, nothing to remove
+        return 0;
     }
+    fd_curr_reg_event.erase(iter);
 
 #ifdef __linux__
     return ctrl(fd, 0, EPOLL_CTL_DEL, false);

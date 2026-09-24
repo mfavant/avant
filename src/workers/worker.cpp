@@ -519,14 +519,18 @@ void worker::on_tunnel_process(ProtoPackage &message)
         // checking target Gid
         if (message.targetgid().empty()) // broadcase all client conn
         {
-            uint64_t all_conn_in_this_worker = this->worker_connection_mgr->live_count();
-            for (size_t i = 0; i < all_conn_in_this_worker; i++)
+            const auto &gid2index = this->worker_connection_mgr->get_gid2index();
+            for (const auto &gid_index : gid2index)
             {
-                // maybe here conn_ptr is tunnel conn、ssl not ready、already marked close
-                auto conn_ptr = this->worker_connection_mgr->get_conn_by_idx(i);
+                auto conn_ptr = this->worker_connection_mgr->get_conn_by_idx(gid_index.second);
                 if (!conn_ptr)
                 {
-                    break;
+                    LOG_ERROR("worker_connection_mgr get_conn_by_idx({}) failed", gid_index.second);
+                    continue;
+                }
+                if (conn_ptr->get_closed_flag() || conn_ptr->get_is_close())
+                {
+                    continue;
                 }
                 this->handle_tunnel_client_forward_message(conn_ptr, message, tunnelPackage);
             }

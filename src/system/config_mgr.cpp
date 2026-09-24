@@ -84,14 +84,14 @@ int config_mgr::init(const std::string &file_path)
     const std::string const_ipc_json_path = this->m_ini["ipc"]["ipc_json_path"];
     this->m_ipc_json_path = const_ipc_json_path;
 
-    if (this->m_ini.has("server", "app_id") && this->m_app_id.empty())
+    if (this->m_app_id.empty())
     {
-        std::cerr << std::format("config_mgr::init [server]app_id is empty") << std::endl;
+        std::cerr << std::format("config_mgr::init [server]app_id is missing or empty") << std::endl;
         return -1;
     }
-    if (this->m_ini.has("server", "ip") && this->m_ip.empty())
+    if (this->m_ip.empty())
     {
-        std::cerr << std::format("config_mgr::init [server]ip is empty") << std::endl;
+        std::cerr << std::format("config_mgr::init [server]ip is missing or empty") << std::endl;
         return -1;
     }
     if (this->m_port <= 0 || this->m_port > PORT_MAX)
@@ -119,12 +119,12 @@ int config_mgr::init(const std::string &file_path)
         std::cerr << std::format("config_mgr::init [server]accept_per_tick {} must be > 0", this->m_accept_per_tick) << std::endl;
         return -1;
     }
-    if (this->m_ini.has("server", "task_type") && this->m_task_type.empty())
+    if (this->m_task_type.empty())
     {
-        std::cerr << std::format("config_mgr::init [server]task_type is empty") << std::endl;
+        std::cerr << std::format("config_mgr::init [server]task_type is missing or empty") << std::endl;
         return -1;
     }
-    if (this->m_ini.has("server", "task_type") && avant::task::str2task_type(this->m_task_type) == avant::task::task_type::NONE)
+    if (avant::task::str2task_type(this->m_task_type) == avant::task::task_type::NONE)
     {
         std::cerr << std::format("config_mgr::init [server]task_type {} not recognized", this->m_task_type) << std::endl;
         return -1;

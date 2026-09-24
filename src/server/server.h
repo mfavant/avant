@@ -68,6 +68,9 @@ namespace avant::server
     private:
         system::config_mgr m_config_mgr;
 
+        int m_worker_cnt{0};
+        int m_max_ipc_conn_num{0};
+
         avant::utility::time m_server_loop_time;
         uint64_t m_latest_tick_time{0};
         uint64_t m_gid_seq{0};

@@ -56,6 +56,119 @@ int server::start()
 {
     LOG_ERROR("server::start ...");
 
+    if (this->m_config_mgr.get_max_client_cnt() <= 0 || this->m_config_mgr.get_max_client_cnt() > this->m_config_mgr.CLIENT_CNT_MAX)
+    {
+        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > CLIENT_CNT_MAX {}", this->m_config_mgr.get_max_client_cnt());
+        return -1;
+    }
+
+    if (this->m_config_mgr.get_worker_cnt() <= 0 || this->m_config_mgr.get_worker_cnt() > this->m_config_mgr.WORKER_NUM_MAX)
+    {
+        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > WORKER_NUM_MAX {}", this->m_config_mgr.get_worker_cnt());
+        return -1;
+    }
+
+    if (this->m_config_mgr.get_max_ipc_conn_num() <= 0 || this->m_config_mgr.get_max_ipc_conn_num() > this->m_config_mgr.CLIENT_CNT_MAX)
+    {
+        LOG_ERROR("m_max_ipc_conn_num <= 0 || m_max_ipc_conn_num > CLIENT_CNT_MAX {}", this->m_config_mgr.get_max_ipc_conn_num());
+        return -1;
+    }
+
+    {
+        LOG_ERROR("m_app_id {}", this->m_config_mgr.get_app_id().c_str());
+        LOG_ERROR("m_ip {}", this->m_config_mgr.get_ip().c_str());
+        LOG_ERROR("m_port {}", this->m_config_mgr.get_port());
+        LOG_ERROR("m_worker_cnt {}", this->m_config_mgr.get_worker_cnt());
+        LOG_ERROR("m_max_client_cnt {}", this->m_config_mgr.get_max_client_cnt());
+        LOG_ERROR("m_epoll_wait_time {}", this->m_config_mgr.get_epoll_wait_time());
+        LOG_ERROR("m_accept_per_tick {}", this->m_config_mgr.get_accept_per_tick());
+        LOG_ERROR("m_http_static_dir {}", this->m_config_mgr.get_http_static_dir());
+        LOG_ERROR("m_lua_dir {}", this->m_config_mgr.get_lua_dir());
+        LOG_ERROR("m_task_type {}", this->m_config_mgr.get_task_type().c_str());
+        LOG_ERROR("m_use_ssl {}", this->m_config_mgr.get_use_ssl());
+        LOG_ERROR("m_crt_pem {}", this->m_config_mgr.get_crt_pem().c_str());
+        LOG_ERROR("m_key_pem {}", this->m_config_mgr.get_key_pem().c_str());
+        LOG_ERROR("m_daemon {}", this->m_config_mgr.get_daemon());
+        LOG_ERROR("m_log_level {}", this->m_config_mgr.get_log_level());
+        LOG_ERROR("m_other_udp_svr_ip {}", this->m_config_mgr.get_other_udp_svr_ip().c_str());
+        LOG_ERROR("m_other_udp_svr_port {}", this->m_config_mgr.get_other_udp_svr_port());
+        LOG_ERROR("m_other_udp_svr_max_loop {}", this->m_config_mgr.get_other_udp_svr_max_loop());
+        LOG_ERROR("m_max_ipc_conn_num {}", this->m_config_mgr.get_max_ipc_conn_num());
+        LOG_ERROR("m_ipc_json_path {}", this->m_config_mgr.get_ipc_json_path().c_str());
+    }
+
+    return on_start();
+}
+
+task_type server::get_task_type()
+{
+    return str2task_type(this->m_config_mgr.get_task_type());
+}
+
+void server::config(const system::config_mgr &config_mgr)
+{
+    this->m_config_mgr = config_mgr;
+}
+
+void server::to_stop()
+{
+    if (stop_flag.load())
+    {
+        return;
+    }
+    // main thread stop_flag
+    stop_flag.store(true);
+    // worker thread stop_flag
+    if (m_workers)
+    {
+        for (int i = 0; i < m_worker_cnt; i++)
+        {
+            m_workers[i].to_stop.store(true);
+        }
+    }
+    if (m_other)
+    {
+        m_other->to_stop.store(true);
+    }
+}
+
+SSL_CTX *server::get_ssl_ctx()
+{
+    return m_ssl_context;
+}
+
+void server::on_start_load_ipc_json_file()
+{
+    // load ipc json
+    {
+        const std::filesystem::path file_path(this->m_config_mgr.get_ipc_json_path());
+        std::ifstream file_stream(file_path);
+        if (!file_stream)
+        {
+            LOG_ERROR("could not open file {}", this->m_config_mgr.get_ipc_json_path().c_str());
+            throw std::runtime_error(std::string("could not open file ") + this->m_config_mgr.get_ipc_json_path());
+        }
+        std::stringstream buffer;
+        buffer << file_stream.rdbuf();
+        this->m_ipc_json.parse(buffer.str());
+        file_stream.close();
+    }
+
+    // Print ipc.json file content using LOG
+    auto json_iter = this->m_ipc_json.begin();
+    int counter = 0;
+    for (; json_iter != this->m_ipc_json.end(); json_iter++)
+    {
+        auto &json_item = *json_iter;
+        std::string app_id = json_item["app_id"].as_string();
+        std::string ip = json_item["ip"].as_string();
+        int port = json_item["port"].as_integer();
+        LOG_ERROR("IPC JSON {} app_id[{}] ip[{}] port[{}]", counter++, app_id.c_str(), ip.c_str(), port);
+    }
+}
+
+int server::on_start()
+{
     // init OpenSSL CTX
     if (this->m_config_mgr.get_use_ssl())
     {
@@ -115,113 +228,17 @@ int server::start()
         }
     }
 
-    int i_ret = tunnel_id::init(this->m_config_mgr.get_worker_cnt());
-    if (0 != i_ret)
+    // snapshot config counts once; workers/other threads must not read m_config_mgr
+    this->m_worker_cnt = this->m_config_mgr.get_worker_cnt();
+    this->m_max_ipc_conn_num = this->m_config_mgr.get_max_ipc_conn_num();
+
+    // init global tunnel id table (validated positive in start())
+    if (0 != tunnel_id::init(this->m_worker_cnt))
     {
-        LOG_ERROR("avant::global::tunnel_id::init({}) failed return {}", this->m_config_mgr.get_worker_cnt(), i_ret);
+        LOG_ERROR("avant::global::tunnel_id::init({}) failed", this->m_worker_cnt);
         return -1;
     }
 
-    if (this->m_config_mgr.get_max_client_cnt() <= 0 || this->m_config_mgr.get_max_client_cnt() > this->m_config_mgr.CLIENT_CNT_MAX)
-    {
-        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > CLIENT_CNT_MAX {}", this->m_config_mgr.get_max_client_cnt());
-        return -1;
-    }
-
-    if (this->m_config_mgr.get_worker_cnt() <= 0 || this->m_config_mgr.get_worker_cnt() > this->m_config_mgr.WORKER_NUM_MAX)
-    {
-        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > WORKER_NUM_MAX {}", this->m_config_mgr.get_worker_cnt());
-        return -1;
-    }
-
-    {
-        LOG_ERROR("m_app_id {}", this->m_config_mgr.get_app_id().c_str());
-        LOG_ERROR("m_ip {}", this->m_config_mgr.get_ip().c_str());
-        LOG_ERROR("m_port {}", this->m_config_mgr.get_port());
-        LOG_ERROR("m_worker_cnt {}", this->m_config_mgr.get_worker_cnt());
-        LOG_ERROR("m_max_client_cnt {}", this->m_config_mgr.get_max_client_cnt());
-        LOG_ERROR("m_epoll_wait_time {}", this->m_config_mgr.get_epoll_wait_time());
-        LOG_ERROR("m_accept_per_tick {}", this->m_config_mgr.get_accept_per_tick());
-        LOG_ERROR("m_http_static_dir {}", this->m_config_mgr.get_http_static_dir());
-        LOG_ERROR("m_lua_dir {}", this->m_config_mgr.get_lua_dir());
-        LOG_ERROR("m_task_type {}", this->m_config_mgr.get_task_type().c_str());
-        LOG_ERROR("m_use_ssl {}", this->m_config_mgr.get_use_ssl());
-        LOG_ERROR("m_crt_pem {}", this->m_config_mgr.get_crt_pem().c_str());
-        LOG_ERROR("m_key_pem {}", this->m_config_mgr.get_key_pem().c_str());
-        LOG_ERROR("m_daemon {}", this->m_config_mgr.get_daemon());
-        LOG_ERROR("m_log_level {}", this->m_config_mgr.get_log_level());
-        LOG_ERROR("m_other_udp_svr_ip {}", this->m_config_mgr.get_other_udp_svr_ip().c_str());
-        LOG_ERROR("m_other_udp_svr_port {}", this->m_config_mgr.get_other_udp_svr_port());
-        LOG_ERROR("m_other_udp_svr_max_loop {}", this->m_config_mgr.get_other_udp_svr_max_loop());
-        LOG_ERROR("m_max_ipc_conn_num {}", this->m_config_mgr.get_max_ipc_conn_num());
-        LOG_ERROR("m_ipc_json_path {}", this->m_config_mgr.get_ipc_json_path().c_str());
-    }
-
-    return on_start();
-}
-
-task_type server::get_task_type()
-{
-    return str2task_type(this->m_config_mgr.get_task_type());
-}
-
-void server::config(const system::config_mgr &config_mgr)
-{
-    this->m_config_mgr = config_mgr;
-}
-
-void server::to_stop()
-{
-    if (stop_flag.load())
-    {
-        return;
-    }
-    // main thread stop_flag
-    stop_flag.store(true);
-    // worker thread stop_flag
-    for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
-    {
-        m_workers[i].to_stop.store(true);
-    }
-}
-
-SSL_CTX *server::get_ssl_ctx()
-{
-    return m_ssl_context;
-}
-
-void server::on_start_load_ipc_json_file()
-{
-    // load ipc json
-    {
-        const std::filesystem::path file_path(this->m_config_mgr.get_ipc_json_path());
-        std::ifstream file_stream(file_path);
-        if (!file_stream)
-        {
-            LOG_ERROR("could not open file {}", this->m_config_mgr.get_ipc_json_path().c_str());
-            throw std::runtime_error(std::string("could not open file ") + this->m_config_mgr.get_ipc_json_path());
-        }
-        std::stringstream buffer;
-        buffer << file_stream.rdbuf();
-        this->m_ipc_json.parse(buffer.str());
-        file_stream.close();
-    }
-
-    // Print ipc.json file content using LOG
-    auto json_iter = this->m_ipc_json.begin();
-    int counter = 0;
-    for (; json_iter != this->m_ipc_json.end(); json_iter++)
-    {
-        auto &json_item = *json_iter;
-        std::string app_id = json_item["app_id"].as_string();
-        std::string ip = json_item["ip"].as_string();
-        int port = json_item["port"].as_integer();
-        LOG_ERROR("IPC JSON {} app_id[{}] ip[{}] port[{}]", counter++, app_id.c_str(), ip.c_str(), port);
-    }
-}
-
-int server::on_start()
-{
     // load ipc json
     on_start_load_ipc_json_file();
 
@@ -241,12 +258,12 @@ int server::on_start()
         }
     }
 
-    // main_connection_mgr
+    // main_connection_mgr: worker_cnt worker tunnels + other tunnel
     {
-        iret = m_main_connection_mgr.init(this->m_config_mgr.get_worker_cnt() * 4);
+        iret = m_main_connection_mgr.init(this->m_worker_cnt + 1);
         if (iret != 0)
         {
-            LOG_ERROR("m_main_connection_mgr.init({}) failed[{}]", (this->m_config_mgr.get_worker_cnt() * 4), iret);
+            LOG_ERROR("m_main_connection_mgr.init({}) failed[{}]", (this->m_worker_cnt + 1), iret);
             return -1;
         }
     }
@@ -263,9 +280,9 @@ int server::on_start()
 
     // main_worker_tunnel
     {
-        m_main_worker_tunnel = std::make_unique<avant::socket::socket_pair[]>(this->m_config_mgr.get_worker_cnt());
+        m_main_worker_tunnel = std::make_unique<avant::socket::socket_pair[]>(this->m_worker_cnt);
         // init tunnel
-        for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
+        for (int i = 0; i < this->m_worker_cnt; i++)
         {
             iret = m_main_worker_tunnel[i].init();
             if (iret != 0)
@@ -274,7 +291,7 @@ int server::on_start()
                 return -1;
             }
         }
-        for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
+        for (int i = 0; i < this->m_worker_cnt; i++)
         {
             if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), event::event_poller::RWE, false))
             {
@@ -300,7 +317,7 @@ int server::on_start()
 
     // worker init
     {
-        workers::worker *worker_arr = new (std::nothrow) workers::worker[this->m_config_mgr.get_worker_cnt()];
+        workers::worker *worker_arr = new (std::nothrow) workers::worker[this->m_worker_cnt];
         if (!worker_arr)
         {
             LOG_ERROR("new worker::worker failed");
@@ -308,16 +325,18 @@ int server::on_start()
         }
         m_workers.reset(worker_arr);
 
-        for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
+        for (int i = 0; i < this->m_worker_cnt; i++)
         {
             worker_arr[i].set_server(this);
         }
 
-        uint64_t worker_max_client_cnt = std::ceil((double)this->m_config_mgr.get_max_client_cnt() / (double)this->m_config_mgr.get_worker_cnt()) + this->m_config_mgr.get_worker_cnt();
+        // +1 for the main-worker tunnel conn
+        uint64_t worker_max_client_cnt = std::ceil((double)this->m_config_mgr.get_max_client_cnt() / (double)this->m_worker_cnt) + this->m_worker_cnt + 1;
 
-        for (int worker_idx = 0; worker_idx < this->m_config_mgr.get_worker_cnt(); worker_idx++)
+        for (int worker_idx = 0; worker_idx < this->m_worker_cnt; worker_idx++)
         {
             m_workers[worker_idx].set_worker_idx(worker_idx);
+            m_workers[worker_idx].set_worker_max_client_cnt(worker_max_client_cnt);
             m_workers[worker_idx].curr_connection_num = m_curr_connection_num;
             m_workers[worker_idx].worker_connection_num.store(0);
             m_workers[worker_idx].main_worker_tunnel = &m_main_worker_tunnel[worker_idx];
@@ -405,6 +424,7 @@ int server::on_start()
         m_other.reset(other_ptr);
         m_other->main_other_tunnel = &m_main_other_tunnel;
         m_other->set_ipc_json(this->m_ipc_json);
+        m_other->set_max_ipc_conn_num(this->m_max_ipc_conn_num + 1);
 
         connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
         if (!new_connection_mgr)
@@ -415,17 +435,18 @@ int server::on_start()
 
         std::shared_ptr<connection::connection_mgr> new_connection_mgr_shared_ptr(new_connection_mgr);
 
-        iret = new_connection_mgr->init(this->m_config_mgr.get_max_ipc_conn_num());
+        // +1 for the main-other tunnel conn
+        iret = new_connection_mgr->init(this->m_max_ipc_conn_num + 1);
         if (iret != 0)
         {
-            LOG_ERROR("new_connection_mgr->init failed");
+            LOG_ERROR("new_connection_mgr->init({}) failed", (this->m_max_ipc_conn_num + 1));
             return -1;
         }
         m_other->ipc_connection_mgr = new_connection_mgr_shared_ptr;
-        iret = m_other->epoller.create(this->m_config_mgr.get_max_ipc_conn_num());
+        iret = m_other->epoller.create(this->m_max_ipc_conn_num + 1);
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_config_mgr.get_max_ipc_conn_num()), iret);
+            LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_max_ipc_conn_num + 1), iret);
             return -1;
         }
 
@@ -496,7 +517,7 @@ int server::on_start()
     }
     // worker thread start
     {
-        for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
+        for (int i = 0; i < m_worker_cnt; i++)
         {
             std::thread t(std::ref(m_workers[i]));
             t.detach();
@@ -542,7 +563,7 @@ int server::on_start()
                     {
                         bool flag = true;
                         // checking all worker stoped
-                        for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
+                        for (int i = 0; i < m_worker_cnt; i++)
                         {
                             if (!m_workers[i].is_stoped.load())
                             {
@@ -659,7 +680,7 @@ void server::on_listen_event(std::vector<int> vec_new_client_fd, std::vector<uin
         uint64_t target_worker_idx = 0;
         int worker_connection_num = 0;
 
-        for (int worker_idx = 0; worker_idx < this->m_config_mgr.get_worker_cnt(); worker_idx++)
+        for (int worker_idx = 0; worker_idx < m_worker_cnt; worker_idx++)
         {
             if (target_worker_idx == static_cast<uint64_t>(worker_idx))
             {

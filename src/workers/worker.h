@@ -65,12 +65,18 @@ namespace avant::workers
 
         avant::server::server *m_server;
 
+        // connection pool capacity for this worker (includes the tunnel conn)
+        uint64_t m_worker_max_client_cnt{0};
+
         // reusable tunnel recv scratch buffer
         std::vector<char> m_tunnel_recv_buf;
 
     public:
         int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);
         int send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package);
+
+        void set_worker_max_client_cnt(uint64_t cnt) { this->m_worker_max_client_cnt = cnt; }
+        uint64_t get_worker_max_client_cnt() const { return this->m_worker_max_client_cnt; }
 
         void close_client_fd(int fd);
         void mark_delete_timeout_timer(uint64_t timer_id);

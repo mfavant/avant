@@ -36,6 +36,7 @@ namespace avant::workers
         void set_server(avant::server::server *server) { m_server = server; }
         [[nodiscard]] const avant::server::server *get_server() const { return m_server; }
         void set_ipc_json(const avant::json::json &json) { this->ipc_json = json; }
+        void set_max_ipc_conn_num(int cnt) { this->m_max_ipc_conn_num = cnt; }
         int init_call_by_server();
 
     public:
@@ -83,9 +84,13 @@ namespace avant::workers
 
         std::unordered_set<uint64_t> m_remote2this_gid{};
 
+        // ipc connection pool capacity (includes the tunnel conn)
+        int m_max_ipc_conn_num{0};
+
         // reusable tunnel recv scratch buffer
         std::vector<char> m_tunnel_recv_buf;
 
+    private:
         avant::server::server *m_server;
     };
 };

@@ -30,26 +30,31 @@ int connection_mgr::init(size_t pool_capacity)
 
 int connection_mgr::alloc_connection(int fd, uint64_t gid)
 {
-    if (fd2gid.find(fd) != fd2gid.end())
+    if (!connection_pool)
     {
         return -1;
     }
-    if (gid2fd.find(gid) != gid2fd.end())
+
+    if (fd2gid.find(fd) != fd2gid.end())
     {
         return -2;
     }
-    if (gid2index.find(gid) != gid2index.end())
+    if (gid2fd.find(gid) != gid2fd.end())
     {
         return -3;
     }
-    if (unused_set.empty())
+    if (gid2index.find(gid) != gid2index.end())
     {
         return -4;
+    }
+    if (unused_set.empty())
+    {
+        return -5;
     }
     auto iter = unused_set.begin();
     if (iter == unused_set.end())
     {
-        return -5;
+        return -6;
     }
     size_t new_index = *iter;
     unused_set.erase(iter);
@@ -88,7 +93,10 @@ int connection_mgr::release_connection(int fd)
     using_set.erase(index);
     unused_set.insert(index);
 
-    connection_pool[index].on_release();
+    if (connection_pool)
+    {
+        connection_pool[index].on_release();
+    }
     return 0;
 }
 
@@ -119,7 +127,7 @@ connection *connection_mgr::get_conn_by_gid(uint64_t gid) const
 
 size_t connection_mgr::live_count() const
 {
-    return fd2gid.size();
+    return using_set.size();
 }
 
 size_t connection_mgr::pool_capacity() const
@@ -129,14 +137,17 @@ size_t connection_mgr::pool_capacity() const
 
 connection *connection_mgr::get_conn_by_idx(size_t idx) const
 {
-    auto iter = fd2gid.begin();
-    std::advance(iter, idx);
-    if (iter == fd2gid.end())
+    if (idx >= pool_capacity())
     {
         return nullptr;
     }
-    uint64_t gid = iter->second;
-    return get_conn_by_gid(gid);
+
+    if (!connection_pool)
+    {
+        return nullptr;
+    }
+
+    return &connection_pool[idx];
 }
 
 const std::unordered_map<uint64_t, size_t> &connection_mgr::get_gid2index() const
