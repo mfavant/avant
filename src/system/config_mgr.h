@@ -13,24 +13,24 @@ namespace avant::system
         // Load configuration from a file
         int init(const std::string &file_path);
 
-        const std::string get_app_id() const { return m_app_id; }
-        const std::string get_ip() const { return m_ip; }
+        const std::string &get_app_id() const { return m_app_id; }
+        const std::string &get_ip() const { return m_ip; }
         const int get_port() const { return m_port; }
         const int get_worker_cnt() const { return m_worker_cnt; }
         const int get_max_client_cnt() const { return m_max_client_cnt; }
         const int get_epoll_wait_time() const { return m_epoll_wait_time; }
         const int get_accept_per_tick() const { return m_accept_per_tick; }
-        const std::string get_task_type() const { return m_task_type; }
-        const std::string get_http_static_dir() const { return m_http_static_dir; }
-        const std::string get_lua_dir() const { return m_lua_dir; }
-        const std::string get_crt_pem() const { return m_crt_pem; }
-        const std::string get_key_pem() const { return m_key_pem; }
+        const std::string &get_task_type() const { return m_task_type; }
+        const std::string &get_http_static_dir() const { return m_http_static_dir; }
+        const std::string &get_lua_dir() const { return m_lua_dir; }
+        const std::string &get_crt_pem() const { return m_crt_pem; }
+        const std::string &get_key_pem() const { return m_key_pem; }
         const int get_use_ssl() const { return m_use_ssl; }
         const int get_daemon() const { return m_daemon; }
         const int get_log_level() const { return m_log_level; }
         const int get_max_ipc_conn_num() const { return m_max_ipc_conn_num; }
-        const std::string get_ipc_json_path() const { return m_ipc_json_path; }
-        const std::string get_other_udp_svr_ip() const { return m_other_udp_svr_ip; }
+        const std::string &get_ipc_json_path() const { return m_ipc_json_path; }
+        const std::string &get_other_udp_svr_ip() const { return m_other_udp_svr_ip; }
         const int get_other_udp_svr_port() const { return m_other_udp_svr_port; }
         const int get_other_udp_svr_max_loop() const { return m_other_udp_svr_max_loop; }
 
@@ -38,7 +38,7 @@ namespace avant::system
         {
             m_root_path = val;
         }
-        const std::string get_root_path() { return m_root_path; }
+        const std::string &get_root_path() const { return m_root_path; }
 
     private:
         std::string m_app_id;
@@ -64,5 +64,10 @@ namespace avant::system
 
         avant::inifile::inifile m_ini;
         std::string m_root_path;
+
+    public:
+        static constexpr int PORT_MAX = 65535;
+        static constexpr int WORKER_NUM_MAX = 511;
+        static constexpr int CLIENT_CNT_MAX = 8388607;
     };
 }

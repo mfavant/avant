@@ -27,7 +27,7 @@ namespace avant
             {
                 return m_instance.get();
             }
-            static void destory_instance()
+            static void destroy_instance()
             {
                 m_instance.reset();
             }
@@ -35,6 +35,8 @@ namespace avant
         protected:
             singleton() = default;
             ~singleton() = default;
+
+        private:
             static std::shared_ptr<T> m_instance;
         };
 

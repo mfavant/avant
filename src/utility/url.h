@@ -23,6 +23,8 @@ namespace avant::utility
     public:
         url();
         url(const std::string &s);
+        url(const url &) = delete;
+        url &operator=(const url &) = delete;
 
         std::string get_scheme() const;
         std::string get_username() const;

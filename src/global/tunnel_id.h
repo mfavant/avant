@@ -11,12 +11,7 @@ namespace avant::global
     {
     public:
         static int init(int worker_cnt);
-
-        static inline tunnel_id &get()
-        {
-            assert(tunnel_id::ptr);
-            return *tunnel_id::ptr.get();
-        }
+        static tunnel_id &get();
 
         // worker_idx begin from zero
         inline int get_worker_tunnel_id(int worker_idx) const
@@ -24,13 +19,7 @@ namespace avant::global
             return ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + worker_idx;
         }
 
-        inline void get_worker_all_tunnel_id(std::vector<int> &vec_worker_id) const
-        {
-            for (int i = get_worker_tunnel_id_min(); i <= get_worker_tunnel_id_max(); ++i)
-            {
-                vec_worker_id.push_back(i);
-            }
-        }
+        void get_worker_all_tunnel_id(std::vector<int> &vec_worker_id) const;
 
         inline int get_worker_tunnel_id_min() const
         {
@@ -57,22 +46,7 @@ namespace avant::global
             return get_worker_tunnel_id(gid & 0x1FF);
         }
 
-        inline bool is_tunnel_id(int id) const
-        {
-            if (get_worker_tunnel_id_min() <= id && id <= get_worker_tunnel_id_max())
-            {
-                return true;
-            }
-            if (get_other_tunnel_id() == id)
-            {
-                return true;
-            }
-            if (get_main_tunnel_id() == id)
-            {
-                return true;
-            }
-            return false;
-        }
+        bool is_tunnel_id(int id) const;
 
         inline bool is_worker_tunnel_id(int id) const
         {
