@@ -31,7 +31,7 @@ namespace avant::proto
         }
 
         uint64_t len = proto::ton64(data.size());
-        data.insert(0, (char *)&len, sizeof(len));
+        data.insert(0, reinterpret_cast<char *>(&len), sizeof(len));
 
         return data;
     }

@@ -680,6 +680,20 @@ namespace avant::utility
             return found->second;
         }
 
+        static std::string get_type(const std::string &filename, const std::string &default_type) noexcept
+        {
+            const size_t dot = filename.find_last_of('.');
+            const std::string ext = (dot == std::string::npos)
+                                        ? ""
+                                        : str_to_lower(filename.substr(dot + 1));
+            const auto found = types().find(ext);
+            if (found == types().end())
+            {
+                return default_type;
+            }
+            return found->second;
+        }
+
         static std::vector<std::string> get_extensions(const std::string &mime)
         {
             std::vector<std::string> exts;

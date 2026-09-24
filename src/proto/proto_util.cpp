@@ -27,6 +27,7 @@ uint64_t proto::toh64(uint64_t num)
 
 uint64_t proto::toh64_from_buffer(const void *buffer)
 {
+    assert(buffer);
     uint64_t num = 0;
     memcpy(&num, buffer, sizeof(num));
     return proto::toh64(num);
@@ -41,6 +42,6 @@ std::string &proto::pack_package(std::string &data, const ProtoPackage &package)
         return data;
     }
     uint64_t len = proto::ton64(data.size());
-    data.insert(0, (char *)&len, sizeof(len));
+    data.insert(0, reinterpret_cast<char *>(&len), sizeof(len));
     return data;
 }
