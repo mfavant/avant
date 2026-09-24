@@ -7,6 +7,8 @@
 
 namespace avant::socket
 {
+    static constexpr int default_socket_buffer_size = 10 * 1024;
+
     class socket
     {
     public:
@@ -71,7 +73,7 @@ namespace avant::socket
             return m_sockfd >= 0;
         }
 
-        int get_realtime_ip_port(std::pair<std::string, int> &res);
+        [[nodiscard]] std::pair<std::string, int> get_realtime_ip_port() const;
 
         [[nodiscard]]
         SSL *get_ssl_instance();

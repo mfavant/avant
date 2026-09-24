@@ -16,15 +16,15 @@ namespace avant::connection
 
         int alloc_connection(int fd, uint64_t gid);
         int release_connection(int fd);
-        size_t size() const;
-        size_t get_pool_capacity() const;
+        size_t live_count() const;
+        size_t pool_capacity() const;
 
         [[nodiscard]] connection *get_conn(int fd) const;
         [[nodiscard]] connection *get_conn_by_gid(uint64_t gid) const;
         [[nodiscard]] connection *get_conn_by_idx(size_t idx) const;
+        [[nodiscard]] const std::unordered_map<uint64_t, size_t> &get_gid2index() const;
 
     private:
-        size_t pool_capacity{0};
         std::unique_ptr<connection[]> connection_pool{nullptr};
         std::unordered_map<int, uint64_t> fd2gid{};
         std::unordered_map<uint64_t, int> gid2fd{};

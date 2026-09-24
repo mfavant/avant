@@ -65,6 +65,9 @@ namespace avant::workers
 
         avant::server::server *m_server;
 
+        // reusable tunnel recv scratch buffer
+        std::vector<char> m_tunnel_recv_buf;
+
     public:
         int tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &message, bool flush = true);
         int send_client_forward_message(uint64_t source_gid, const std::set<uint64_t> &dest_conn_gid, ProtoPackage &package);
@@ -72,7 +75,7 @@ namespace avant::workers
         void close_client_fd(int fd);
         void mark_delete_timeout_timer(uint64_t timer_id);
 
-        int get_worker_idx() { return this->worker_idx; }
+        int get_worker_idx() const { return this->worker_idx; }
         void set_worker_idx(int worker_idx) { this->worker_idx = worker_idx; }
 
     private:

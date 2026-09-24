@@ -62,7 +62,7 @@ void worker::operator()()
         num = this->epoller.wait(this->get_server()->get_config().get_epoll_wait_time());
         if (num < 0)
         {
-            if (errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
+            if (errno == avant::utility::comm_errno::COMM_ERRNO_EINTR)
             {
                 continue;
             }
@@ -172,7 +172,11 @@ void worker::on_tunnel_event(uint32_t event)
     {
         constexpr int buffer_size = 1024000;
 
-        std::vector<char> buffer(buffer_size);
+        if (this->m_tunnel_recv_buf.size() < static_cast<size_t>(buffer_size))
+        {
+            this->m_tunnel_recv_buf.resize(buffer_size);
+        }
+        std::vector<char> &buffer = this->m_tunnel_recv_buf;
 
         int buffer_len = 0;
 
@@ -187,9 +191,9 @@ void worker::on_tunnel_event(uint32_t event)
             }
             else
             {
-                if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
-                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
-                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+                if (oper_errno != avant::utility::comm_errno::COMM_ERRNO_EAGAIN &&
+                    oper_errno != avant::utility::comm_errno::COMM_ERRNO_EINTR &&
+                    oper_errno != avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     LOG_ERROR("worker::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     this->to_stop.store(true);
@@ -200,18 +204,19 @@ void worker::on_tunnel_event(uint32_t event)
         if (buffer_len > 0)
         {
             tunnel_conn->record_recv_bytes(buffer_len);
-            tunnel_conn->recv_buffer.append(buffer.data(), buffer_len);
+            tunnel_conn->get_recv_buffer().append(buffer.data(), buffer_len);
         }
 
+        avant::utility::vec_str_buffer &recv_buffer = tunnel_conn->get_recv_buffer();
         // parser protocol
-        while (!tunnel_conn->recv_buffer.empty())
+        while (!recv_buffer.empty())
         {
             uint64_t data_size = 0;
-            if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
+            if (recv_buffer.size() >= sizeof(data_size))
             {
-                data_size = avant::proto::toh64_from_buffer(tunnel_conn->recv_buffer.get_read_ptr());
+                data_size = avant::proto::toh64_from_buffer(recv_buffer.get_read_ptr());
 
-                if (data_size + sizeof(data_size) > tunnel_conn->recv_buffer.size())
+                if (data_size > recv_buffer.size() || data_size > recv_buffer.size() - sizeof(data_size))
                 {
                     break;
                 }
@@ -223,22 +228,22 @@ void worker::on_tunnel_event(uint32_t event)
 
             if (data_size == 0)
             {
-                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size));
+                recv_buffer.move_read_ptr_n(sizeof(data_size));
                 break;
             }
 
             ProtoPackage protoPackage;
-            if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
+            if (!protoPackage.ParseFromArray(recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
                 LOG_ERROR("worker parseFromArray err {}", data_size);
-                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+                recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
                 break;
             }
 
             // LOG_ERROR("worker recv datasize {}", sizeof(data_size) + data_size);
 
             on_tunnel_process(protoPackage);
-            tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+            recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
         }
     }
 
@@ -265,7 +270,10 @@ void worker::close_client_fd(int fd)
             this->m_conn_timeout_timer_manager.mark_delete(conn_ptr->get_gid());
         }
 
-        this->epoller.del(fd, nullptr, 0);
+        if (0 != this->epoller.del(fd))
+        {
+            LOG_FATAL("worker close_client_fd epoller.del {} failed", fd);
+        }
 
         // release_connection 背后会有 connection ctx socket 调用 ::close
         // 在这里不用直接调用 ::close
@@ -315,7 +323,7 @@ void worker::on_client_event(int fd, uint32_t event)
         return;
     }
 
-    conn->ctx_ptr->on_event(event);
+    conn->get_ctx_ptr()->on_event(event);
 }
 
 void worker::try_send_flush_tunnel()
@@ -330,33 +338,34 @@ void worker::try_send_flush_tunnel()
     }
     avant::socket::socket &sock = tunnel.get_other_socket();
 
-    if (tunnel_conn->send_buffer.empty())
+    avant::utility::vec_str_buffer &send_buffer = tunnel_conn->get_send_buffer();
+    if (send_buffer.empty())
     {
-        this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
+        this->epoller.mod(sock.get_fd(), event::event_poller::RE, false);
         return;
     }
 
-    while (!tunnel_conn->send_buffer.empty())
+    while (!send_buffer.empty())
     {
         int oper_errno = 0;
-        int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
+        int len = sock.send(send_buffer.get_read_ptr(), send_buffer.size(), oper_errno);
         if (len > 0)
         {
             tunnel_conn->record_sent_bytes(len);
-            tunnel_conn->send_buffer.move_read_ptr_n(len);
+            send_buffer.move_read_ptr_n(len);
         }
         else
         {
-            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 LOG_ERROR("worker::try_send_flush_tunnel tunnel_conn oper_errno {}", oper_errno);
                 this->to_stop.store(true);
             }
             else
             {
-                this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+                this->epoller.mod(sock.get_fd(), event::event_poller::RWE, false);
             }
             break;
         }
@@ -407,21 +416,21 @@ int worker::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage 
         return -2;
     }
 
-    tunnel_conn->send_buffer.append(data.c_str(), data.size());
+    tunnel_conn->get_send_buffer().append(data.c_str(), data.size());
     if (flush)
     {
         try_send_flush_tunnel();
     }
     else
     {
-        this->epoller.mod(this->main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false);
+        this->epoller.mod(this->main_worker_tunnel->get_other(), event::event_poller::RWE, false);
     }
     return 0;
 }
 
 void worker::handle_tunnel_client_forward_message(avant::connection::connection *conn_ptr, ProtoTunnelClientForwardMessage &message, const ProtoTunnelPackage &tunnel_package)
 {
-    if (conn_ptr->closed_flag || conn_ptr->is_close)
+    if (conn_ptr->get_closed_flag() || conn_ptr->get_is_close())
     {
         return;
     }
@@ -432,7 +441,7 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         {
         case task::task_type::HTTP_TASK:
         {
-            if (conn_ptr->is_ready && conn_ptr->ctx_ptr)
+            if (conn_ptr->get_is_ready() && conn_ptr->get_ctx_ptr())
             {
                 LOG_ERROR("task type err");
             }
@@ -440,19 +449,19 @@ void worker::handle_tunnel_client_forward_message(avant::connection::connection 
         }
         case task::task_type::STREAM_TASK:
         {
-            if (conn_ptr->is_ready && conn_ptr->ctx_ptr) // is stream task,here is_ready important
+            if (conn_ptr->get_is_ready() && conn_ptr->get_ctx_ptr()) // is stream task,here is_ready important
             {
-                avant::connection::stream_ctx *stream_ctx_ptr = dynamic_cast<avant::connection::stream_ctx *>(conn_ptr->ctx_ptr.get());
-                avant::app::stream_app::on_client_forward_message(*stream_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
+                avant::connection::stream_ctx *stream_ctx_ptr = dynamic_cast<avant::connection::stream_ctx *>(conn_ptr->get_ctx_ptr().get());
+                avant::app::stream_app::on_client_forward_message(*stream_ctx_ptr, conn_ptr->get_gid() == message.sourcegid(), message, tunnel_package);
             }
             break;
         }
         case task::task_type::WEBSOCKET_TASK:
         {
-            if (conn_ptr->is_ready && conn_ptr->ctx_ptr)
+            if (conn_ptr->get_is_ready() && conn_ptr->get_ctx_ptr())
             {
-                avant::connection::websocket_ctx *websocket_ctx_ptr = dynamic_cast<avant::connection::websocket_ctx *>(conn_ptr->ctx_ptr.get());
-                avant::app::websocket_app::on_client_forward_message(*websocket_ctx_ptr, conn_ptr->gid == message.sourcegid(), message, tunnel_package);
+                avant::connection::websocket_ctx *websocket_ctx_ptr = dynamic_cast<avant::connection::websocket_ctx *>(conn_ptr->get_ctx_ptr().get());
+                avant::app::websocket_app::on_client_forward_message(*websocket_ctx_ptr, conn_ptr->get_gid() == message.sourcegid(), message, tunnel_package);
             }
             break;
         }
@@ -510,7 +519,7 @@ void worker::on_tunnel_process(ProtoPackage &message)
         // checking target Gid
         if (message.targetgid().empty()) // broadcase all client conn
         {
-            uint64_t all_conn_in_this_worker = this->worker_connection_mgr->size();
+            uint64_t all_conn_in_this_worker = this->worker_connection_mgr->live_count();
             for (size_t i = 0; i < all_conn_in_this_worker; i++)
             {
                 // maybe here conn_ptr is tunnel conn、ssl not ready、already marked close
@@ -600,7 +609,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
     bool create_conn_succ = false;
     if (this->type == task::task_type::HTTP_TASK)
     {
-        if (!conn->ctx_ptr)
+        if (!conn->get_ctx_ptr())
         {
             connection::http_ctx *new_ctx = new (std::nothrow) connection::http_ctx;
             if (!new_ctx)
@@ -609,13 +618,13 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                 close_client_fd(fd);
                 return;
             }
-            conn->ctx_ptr.reset(new_ctx);
+            conn->get_ctx_ptr().reset(new_ctx);
         }
         create_conn_succ = true;
     }
     else if (this->type == task::task_type::STREAM_TASK)
     {
-        if (!conn->ctx_ptr)
+        if (!conn->get_ctx_ptr())
         {
             connection::stream_ctx *new_ctx = new (std::nothrow) connection::stream_ctx;
             if (!new_ctx)
@@ -624,13 +633,13 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                 close_client_fd(fd);
                 return;
             }
-            conn->ctx_ptr.reset(new_ctx);
+            conn->get_ctx_ptr().reset(new_ctx);
         }
         create_conn_succ = true;
     }
     else if (this->type == task::task_type::WEBSOCKET_TASK)
     {
-        if (!conn->ctx_ptr)
+        if (!conn->get_ctx_ptr())
         {
             connection::websocket_ctx *new_ctx = new (std::nothrow) connection::websocket_ctx;
             if (!new_ctx)
@@ -639,7 +648,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                 close_client_fd(fd);
                 return;
             }
-            conn->ctx_ptr.reset(new_ctx);
+            conn->get_ctx_ptr().reset(new_ctx);
         }
         create_conn_succ = true;
     }
@@ -666,15 +675,16 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
     // create context for connection success, to reset it
     {
         // reset socket
-        conn->socket_obj.set_fd(fd);
-        conn->socket_obj.close_callback = nullptr;
-        conn->socket_obj.set_non_blocking();
-        conn->socket_obj.set_linger(false, 0);
-        conn->socket_obj.set_nodelay(true);
-        conn->socket_obj.set_send_buffer(65536);
-        conn->socket_obj.set_recv_buffer(65536);
+        avant::socket::socket &socket_obj = conn->get_socket_obj();
+        socket_obj.set_fd(fd);
+        socket_obj.close_callback = nullptr;
+        socket_obj.set_non_blocking();
+        socket_obj.set_linger(false, 0);
+        socket_obj.set_nodelay(true);
+        socket_obj.set_send_buffer(65536);
+        socket_obj.set_recv_buffer(65536);
 
-        iret = this->epoller.add(fd, nullptr, event::event_poller::RWE, false);
+        iret = this->epoller.add(fd, event::event_poller::RWE, false);
         if (iret != 0)
         {
             LOG_ERROR("this->epoller.add failed");
@@ -685,9 +695,9 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         // SSL
         if (this->get_server()->get_config().get_use_ssl())
         {
-            if (conn->socket_obj.get_ssl_instance())
+            if (socket_obj.get_ssl_instance())
             {
-                LOG_ERROR("SSL conn->socket_obj.get_ssl_instance() already not null");
+                LOG_ERROR("SSL socket_obj.get_ssl_instance() already not null");
                 close_client_fd(fd);
                 return;
             }
@@ -707,8 +717,8 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
 
             if (!ssl_err && ssl_instance)
             {
-                conn->socket_obj.set_ssl_instance(ssl_instance);
-                conn->socket_obj.set_ssl_accepted(false);
+                socket_obj.set_ssl_instance(ssl_instance);
+                socket_obj.set_ssl_accepted(false);
             }
             else // ssl failed
             {
@@ -734,7 +744,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                                                                                                                    LOG_DEBUG("timer exe can not found conn fd {} gid {}", fd, timer_instance.get_id());
                                                                                                                    return;
                                                                                                                }
-                                                                                                               if (conn->ctx_ptr->get_app_layer_notified())
+                                                                                                               if (conn->get_ctx_ptr()->get_app_layer_notified())
                                                                                                                {
                                                                                                                    LOG_DEBUG("timer get_app_layer_notified true, fd {} timer gid {}", fd, timer_instance.get_id());
                                                                                                                    return;
@@ -759,15 +769,15 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
         // triger context be created for connection
         if (this->type == task::task_type::HTTP_TASK)
         {
-            dynamic_cast<connection::http_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this, false);
+            dynamic_cast<connection::http_ctx *>(conn->get_ctx_ptr().get())->on_create(*conn, *this, false);
         }
         else if (this->type == task::task_type::STREAM_TASK)
         {
-            dynamic_cast<connection::stream_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this);
+            dynamic_cast<connection::stream_ctx *>(conn->get_ctx_ptr().get())->on_create(*conn, *this);
         }
         else if (this->type == task::task_type::WEBSOCKET_TASK)
         {
-            dynamic_cast<connection::websocket_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this);
+            dynamic_cast<connection::websocket_ctx *>(conn->get_ctx_ptr().get())->on_create(*conn, *this);
         }
     }
 }

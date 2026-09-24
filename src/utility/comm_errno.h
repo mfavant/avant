@@ -3,11 +3,7 @@
 
 namespace avant::utility::comm_errno
 {
-    class comm_errno
-    {
-    public:
-        static constexpr int COMM_ERRNO_EINTR = EINTR;
-        static constexpr int COMM_ERRNO_EAGAIN = EAGAIN;
-        static constexpr int COMM_ERRNO_EWOULDBLOCK = EWOULDBLOCK;
-    };
+    inline constexpr int COMM_ERRNO_EINTR = EINTR;
+    inline constexpr int COMM_ERRNO_EAGAIN = EAGAIN;
+    inline constexpr int COMM_ERRNO_EWOULDBLOCK = EWOULDBLOCK;
 };

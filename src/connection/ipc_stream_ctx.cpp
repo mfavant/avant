@@ -19,19 +19,19 @@ void ipc_stream_ctx::on_create(connection &conn_obj, workers::other &other_obj)
     this->conn_ptr = &conn_obj;
     this->other_ptr = &other_obj;
 
-    this->conn_ptr->is_ready = true;
+    this->conn_ptr->set_is_ready(true);
 
     bool err = false;
     try
     {
         if (this->other_ptr->is_remote2this(this->conn_ptr->get_gid()))
         {
-            this->set_app_layer_notified();
+            this->mark_app_layer_notified();
             avant::app::other_app::on_new_connection_remote2this(*this);
         }
-        else if(this->other_ptr->is_this2remote(this->conn_ptr->get_gid()))
+        else if (this->other_ptr->is_this2remote(this->conn_ptr->get_gid()))
         {
-            this->set_app_layer_notified();
+            this->mark_app_layer_notified();
             avant::app::other_app::on_new_connection_this2remote(*this);
         }
         else
@@ -47,13 +47,13 @@ void ipc_stream_ctx::on_create(connection &conn_obj, workers::other &other_obj)
 
     if (err)
     {
-        this->conn_ptr->is_close = true;
-        event_mod(nullptr, event::event_poller::RWE, false);
+        this->conn_ptr->set_is_close(true);
+        event_mod(event::event_poller::RWE, false);
         return;
     }
 }
 
-void ipc_stream_ctx::on_close()
+void ipc_stream_ctx::on_close() noexcept
 {
     this->conn_ptr = nullptr;
     this->other_ptr = nullptr;
@@ -61,103 +61,105 @@ void ipc_stream_ctx::on_close()
 
 int ipc_stream_ctx::send_data(const std::string &data, bool flush /*= true*/)
 {
-    if (this->conn_ptr->is_close || this->conn_ptr->closed_flag)
+    if (this->conn_ptr->get_is_close() || this->conn_ptr->get_closed_flag())
     {
         return -1;
     }
 
-    if (!this->conn_ptr->is_ready)
+    if (!this->conn_ptr->get_is_ready())
     {
         return -2;
     }
 
-    this->conn_ptr->send_buffer.append(data.c_str(), data.size());
+    this->conn_ptr->get_send_buffer().append(data.c_str(), data.size());
     if (flush)
     {
         try_send_flush();
     }
     else
     {
-        event_mod(nullptr, event::event_poller::RWE, false);
+        event_mod(event::event_poller::RWE, false);
     }
     return 0;
 }
 
-uint64_t ipc_stream_ctx::get_conn_gid()
+uint64_t ipc_stream_ctx::get_conn_gid() const
 {
     return this->conn_ptr->get_gid();
 }
 
-size_t ipc_stream_ctx::get_recv_buffer_size()
+size_t ipc_stream_ctx::get_recv_buffer_size() const
 {
-    return this->conn_ptr->recv_buffer.size();
+    return this->conn_ptr->get_recv_buffer().size();
 }
 
-const char *ipc_stream_ctx::get_recv_buffer_read_ptr()
+const char *ipc_stream_ctx::get_recv_buffer_read_ptr() const
 {
-    return this->conn_ptr->recv_buffer.get_read_ptr();
+    return this->conn_ptr->get_recv_buffer().get_read_ptr();
 }
 
 void ipc_stream_ctx::recv_buffer_move_read_ptr_n(size_t n)
 {
-    return this->conn_ptr->recv_buffer.move_read_ptr_n(n);
+    this->conn_ptr->get_recv_buffer().move_read_ptr_n(n);
 }
 
-size_t ipc_stream_ctx::get_send_buffer_size()
+size_t ipc_stream_ctx::get_send_buffer_size() const
 {
-    return this->conn_ptr->send_buffer.size();
+    return this->conn_ptr->get_send_buffer().size();
 }
 
 void ipc_stream_ctx::set_conn_is_close(bool val)
 {
-    this->conn_ptr->is_close = val;
+    this->conn_ptr->set_is_close(val);
 }
 
 void ipc_stream_ctx::try_send_flush()
 {
-    avant::socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
+    avant::socket::socket *socket_ptr = &this->conn_ptr->get_socket_obj();
     avant::connection::connection *conn_ptr = this->conn_ptr;
-    if (conn_ptr->send_buffer.empty())
+    avant::utility::vec_str_buffer &send_buffer = conn_ptr->get_send_buffer();
+    if (send_buffer.empty())
     {
-        event_mod(nullptr, event::event_poller::RE, false);
+        event_mod(event::event_poller::RE, false);
         return;
     }
-    while (!conn_ptr->send_buffer.empty())
+    while (!send_buffer.empty())
     {
         int oper_errno = 0;
-        int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
+        int len = socket_ptr->send(send_buffer.get_read_ptr(), send_buffer.size(), oper_errno);
         if (len > 0)
         {
             conn_ptr->record_sent_bytes(len);
-            conn_ptr->send_buffer.move_read_ptr_n(len);
+            send_buffer.move_read_ptr_n(len);
         }
         else
         {
-            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
-                // LOG_ERROR("ipc_stream_ctx client sock send data oper_errno {}", oper_errno);
-                conn_ptr->is_close = true;
+                LOG_ERROR("ipc_stream_ctx client sock send data oper_errno {}", oper_errno);
+                conn_ptr->set_is_close(true);
             }
-            event_mod(nullptr, event::event_poller::RWE, false);
+            event_mod(event::event_poller::RWE, false);
             break;
         }
     }
 }
 
-void ipc_stream_ctx::on_event(uint32_t event)
+void ipc_stream_ctx::on_event(uint32_t event) noexcept
 {
     if (this->conn_ptr == nullptr || this->other_ptr == nullptr)
     {
         return;
     }
 
-    avant::socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
+    avant::socket::socket &socket_ref = this->conn_ptr->get_socket_obj();
+    avant::socket::socket *socket_ptr = &socket_ref;
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)
     {
-        this->conn_ptr->socket_obj.close_callback = [socket_ptr]()
+        socket_ptr->close_callback = [socket_ptr]()
         {
             if (socket_ptr)
             {
@@ -168,12 +170,12 @@ void ipc_stream_ctx::on_event(uint32_t event)
 
     if (event & event::event_poller::ERR)
     {
-        conn_ptr->is_close = true;
+        conn_ptr->set_is_close(true);
     }
 
-    if (conn_ptr->is_close)
+    if (conn_ptr->get_is_close())
     {
-        if (conn_ptr->is_ready)
+        if (conn_ptr->get_is_ready())
         {
             try
             {
@@ -189,6 +191,8 @@ void ipc_stream_ctx::on_event(uint32_t event)
         return;
     }
 
+    // IPC is plaintext; no TLS on the other-thread channel.
+
     // read from socket,parse protocol and process
     if (event & event::event_poller::READ)
     {
@@ -203,14 +207,14 @@ void ipc_stream_ctx::on_event(uint32_t event)
             len = socket_ptr->recv(buffer.data() + buffer_len, buffer_size - buffer_len, oper_errno);
 
             if (len == -1 &&
-                (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
-                 oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
+                (oper_errno == avant::utility::comm_errno::COMM_ERRNO_EAGAIN ||
+                 oper_errno == avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK))
             {
                 len = 0;
                 break;
             }
             else if (len == -1 &&
-                     oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
+                     oper_errno == avant::utility::comm_errno::COMM_ERRNO_EINTR)
             {
                 len = 0;
                 continue;
@@ -221,8 +225,8 @@ void ipc_stream_ctx::on_event(uint32_t event)
             }
             else
             {
-                conn_ptr->is_close = true;
-                event_mod(nullptr, event::event_poller::RWE, false);
+                conn_ptr->set_is_close(true);
+                event_mod(event::event_poller::RWE, false);
                 return;
             }
         }
@@ -230,25 +234,28 @@ void ipc_stream_ctx::on_event(uint32_t event)
         if (buffer_len > 0)
         {
             conn_ptr->record_recv_bytes(buffer_len);
-            conn_ptr->recv_buffer.append(buffer.data(), buffer_len);
+            conn_ptr->get_recv_buffer().append(buffer.data(), buffer_len);
         }
     }
 
-    bool err = false;
-    try
+    if (conn_ptr->get_recv_buffer().size() > 0)
     {
-        avant::app::other_app::on_process_connection(*this);
-    }
-    catch (const std::exception &e)
-    {
-        LOG_ERROR("avant::app::other_app::on_process_connection {}", e.what());
-        err = true;
-    }
-    if (err)
-    {
-        conn_ptr->is_close = true;
-        event_mod(nullptr, event::event_poller::RWE, false);
-        return;
+        bool err = false;
+        try
+        {
+            avant::app::other_app::on_process_connection(*this);
+        }
+        catch (const std::exception &e)
+        {
+            LOG_ERROR("avant::app::other_app::on_process_connection {}", e.what());
+            err = true;
+        }
+        if (err)
+        {
+            conn_ptr->set_is_close(true);
+            event_mod(event::event_poller::RWE, false);
+            return;
+        }
     }
 
     // write to socket
@@ -261,12 +268,12 @@ void ipc_stream_ctx::on_event(uint32_t event)
     return;
 }
 
-int ipc_stream_ctx::get_ip_port(std::pair<std::string, int> &res) const
+std::pair<std::string, int> ipc_stream_ctx::get_ip_port() const
 {
     if (this->conn_ptr == nullptr)
     {
-        return -1;
+        return {};
     }
 
-    return this->conn_ptr->socket_obj.get_realtime_ip_port(res);
+    return this->conn_ptr->get_socket_obj().get_realtime_ip_port();
 }

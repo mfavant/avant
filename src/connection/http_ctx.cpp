@@ -214,7 +214,7 @@ void http_ctx::init_http_settings()
 
         if (iret == 0)
         {
-            t_http_ctx->conn_ptr->recv_buffer.append(at, length);
+            t_http_ctx->conn_ptr->get_recv_buffer().append(at, length);
             t_http_ctx->recv_body_size += length;
             try
             {
@@ -271,23 +271,14 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
     this->everything_end = false;
     this->keep_alive = keep_alive;
     this->recv_body_size = 0;
-    if (this->keep_alive)
-    {
-        this->keep_live_counter++;
-    }
-    else
-    {
-        this->keep_live_counter = 0;
-    }
-
     bool err = false;
 
     if (!err && (!this->worker_ptr->get_server()->get_config().get_use_ssl() || this->keep_alive))
     {
-        this->conn_ptr->is_ready = true;
+        this->conn_ptr->set_is_ready(true);
         try
         {
-            this->set_app_layer_notified();
+            this->mark_app_layer_notified();
             this->worker_ptr->mark_delete_timeout_timer(this->get_conn_gid());
             app::http_app::on_new_connection(*this, keep_alive);
         }
@@ -300,26 +291,39 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
 
     if (err)
     {
-        this->conn_ptr->is_close = true;
-        this->worker_ptr->epoller.mod(conn_obj.fd, nullptr, event::event_poller::RWE, false);
+        this->conn_ptr->set_is_close(true);
+        this->worker_ptr->epoller.mod(conn_obj.get_fd(), event::event_poller::RWE, false);
         return;
     }
 }
 
-void http_ctx::on_close()
+void http_ctx::on_close() noexcept
 {
+    if (this->destory_callback)
+    {
+        try
+        {
+            this->destory_callback(*this);
+        }
+        catch (const std::exception &e)
+        {
+            LOG_ERROR("{}", e.what());
+        }
+        this->destory_callback = nullptr;
+    }
     this->conn_ptr = nullptr;
     this->worker_ptr = nullptr;
 }
 
-void http_ctx::on_event(uint32_t event)
+void http_ctx::on_event(uint32_t event) noexcept
 {
     if (this->conn_ptr == nullptr || this->worker_ptr == nullptr)
     {
         return;
     }
 
-    socket::socket *socket_ptr = &this->conn_ptr->socket_obj;
+    avant::socket::socket &socket_ref = this->conn_ptr->get_socket_obj();
+    socket::socket *socket_ptr = &socket_ref;
     avant::connection::connection *conn_ptr = this->conn_ptr;
     if (!socket_ptr->close_callback)
     {
@@ -334,10 +338,10 @@ void http_ctx::on_event(uint32_t event)
 
     if (event & event::event_poller::ERR)
     {
-        conn_ptr->is_close = true;
+        conn_ptr->set_is_close(true);
     }
 
-    if (conn_ptr->is_close)
+    if (conn_ptr->get_is_close())
     {
         if (this->destory_callback)
         {
@@ -362,12 +366,12 @@ void http_ctx::on_event(uint32_t event)
         if (1 == ssl_status)
         {
             socket_ptr->set_ssl_accepted(true);
-            conn_ptr->is_ready = true;
+            conn_ptr->set_is_ready(true);
             // triger new connection hook
             bool err = false;
             try
             {
-                this->set_app_layer_notified();
+                this->mark_app_layer_notified();
                 this->worker_ptr->mark_delete_timeout_timer(this->conn_ptr->get_gid());
                 app::http_app::on_new_connection(*this, false);
             }
@@ -378,15 +382,15 @@ void http_ctx::on_event(uint32_t event)
             }
             if (err)
             {
-                conn_ptr->is_close = true;
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                conn_ptr->set_is_close(true);
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RWE, false);
                 return;
             }
         }
         else if (0 == ssl_status)
         {
             // need more data or space
-            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+            this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RWE, false);
             return;
         }
         else
@@ -395,19 +399,19 @@ void http_ctx::on_event(uint32_t event)
             if (ssl_error == SSL_ERROR_WANT_READ)
             {
                 // need more data or space
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RE, false);
                 return;
             }
             else if (ssl_error == SSL_ERROR_WANT_WRITE)
             {
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RWE, false);
                 return;
             }
             else
             {
                 LOG_DEBUG("SSL_accept ssl_status[{}] error: {}", ssl_status, ERR_error_string(ERR_get_error(), nullptr));
-                conn_ptr->is_close = true;
-                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+                conn_ptr->set_is_close(true);
+                this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RWE, false);
                 return;
             }
         }
@@ -426,13 +430,13 @@ void http_ctx::on_event(uint32_t event)
         {
             len = socket_ptr->recv(buffer.data() + buffer_len, buffer_size - buffer_len, oper_errno);
             if (len == -1 &&
-                (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
-                 oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK))
+                (oper_errno == avant::utility::comm_errno::COMM_ERRNO_EAGAIN ||
+                 oper_errno == avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK))
             {
                 len = 0;
                 break;
             }
-            else if (len == -1 && oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
+            else if (len == -1 && oper_errno == avant::utility::comm_errno::COMM_ERRNO_EINTR)
             {
                 len = 0;
                 continue;
@@ -493,18 +497,19 @@ void http_ctx::on_event(uint32_t event)
     if (!this->get_everything_end() && this->get_process_end())
     {
         // from conn send buffer to socket
-        while (!conn_ptr->send_buffer.empty() && (event & event::event_poller::WRITE))
+        avant::utility::vec_str_buffer &send_buffer = conn_ptr->get_send_buffer();
+        while (!send_buffer.empty() && (event & event::event_poller::WRITE))
         {
             int oper_errno = 0;
-            int len = socket_ptr->send(conn_ptr->send_buffer.get_read_ptr(), conn_ptr->send_buffer.size(), oper_errno);
+            int len = socket_ptr->send(send_buffer.get_read_ptr(), send_buffer.size(), oper_errno);
             if (0 > len)
             {
-                if (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
+                if (oper_errno == avant::utility::comm_errno::COMM_ERRNO_EINTR)
                 {
                     continue;
                 }
-                else if (oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN ||
-                         oper_errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+                else if (oper_errno == avant::utility::comm_errno::COMM_ERRNO_EAGAIN ||
+                         oper_errno == avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     break;
                 }
@@ -523,10 +528,10 @@ void http_ctx::on_event(uint32_t event)
             else
             {
                 conn_ptr->record_sent_bytes(len);
-                conn_ptr->send_buffer.move_read_ptr_n(len);
+                send_buffer.move_read_ptr_n(len);
             }
         }
-        if (conn_ptr->send_buffer.empty() && !this->get_response_end())
+        if (send_buffer.empty() && !this->get_response_end())
         {
             try
             {
@@ -544,7 +549,7 @@ void http_ctx::on_event(uint32_t event)
                 LOG_ERROR("{}", e.what());
                 this->set_everything_end(true);
             }
-            if (conn_ptr->send_buffer.empty() && this->get_response_end())
+            if (send_buffer.empty() && this->get_response_end())
             {
                 this->set_everything_end(true);
             }
@@ -552,7 +557,7 @@ void http_ctx::on_event(uint32_t event)
     }
 
     // response end and not exist bytes in send_buffer, then change to evething end
-    if (conn_ptr->send_buffer.empty() && this->get_response_end())
+    if (conn_ptr->get_send_buffer().empty() && this->get_response_end())
     {
         this->set_everything_end(true);
     }
@@ -575,7 +580,7 @@ void http_ctx::on_event(uint32_t event)
         if (this->keep_alive)
         {
             // reuse connection
-            this->conn_ptr->on_alloc(this->conn_ptr->fd, this->conn_ptr->gid);
+            this->conn_ptr->on_alloc(this->conn_ptr->get_fd(), this->conn_ptr->get_gid());
             // reuse context
             this->on_create(*this->conn_ptr, *this->worker_ptr, true);
         }
@@ -584,19 +589,19 @@ void http_ctx::on_event(uint32_t event)
     // continue to epoll_wait
     if (!this->get_everything_end() && !this->get_recv_end()) // next loop for reading
     {
-        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RE, false);
+        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RE, false);
         return;
     }
 
     if (!this->get_everything_end())
     {
-        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+        this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RWE, false);
         return;
     }
 
     this->set_everything_end(true);
-    conn_ptr->is_close = true;
-    this->worker_ptr->epoller.mod(socket_ptr->get_fd(), nullptr, event::event_poller::RWE, false);
+    conn_ptr->set_is_close(true);
+    this->worker_ptr->epoller.mod(socket_ptr->get_fd(), event::event_poller::RWE, false);
 }
 
 void http_ctx::set_recv_end(bool recv_end)
@@ -604,7 +609,7 @@ void http_ctx::set_recv_end(bool recv_end)
     this->recv_end = recv_end;
 }
 
-bool http_ctx::get_recv_end()
+bool http_ctx::get_recv_end() const
 {
     return this->recv_end;
 }
@@ -614,7 +619,7 @@ void http_ctx::set_process_end(bool process_end)
     this->process_end = process_end;
 }
 
-bool http_ctx::get_process_end()
+bool http_ctx::get_process_end() const
 {
     return this->process_end;
 }
@@ -624,7 +629,7 @@ void http_ctx::set_response_end(bool response_end)
     this->response_end = response_end;
 }
 
-bool http_ctx::get_response_end()
+bool http_ctx::get_response_end() const
 {
     return this->response_end;
 }
@@ -634,53 +639,47 @@ void http_ctx::set_everything_end(bool everything_end)
     this->everything_end = everything_end;
 }
 
-bool http_ctx::get_everything_end()
+bool http_ctx::get_everything_end() const
 {
     return this->everything_end;
 }
 
 void http_ctx::add_header(const std::string &key, const std::string &value)
 {
-    auto res = this->headers.find(key);
-    if (res == this->headers.end())
-    {
-        std::vector<std::string> m_vec;
-        this->headers[key] = m_vec;
-    }
     this->headers[key].push_back(value);
 }
 
 void http_ctx::send_buffer_append(const char *data, size_t len)
 {
-    this->conn_ptr->send_buffer.append(data, len);
+    this->conn_ptr->get_send_buffer().append(data, len);
 }
 
-size_t http_ctx::get_recv_buffer_size()
+size_t http_ctx::get_recv_buffer_size() const
 {
-    return this->conn_ptr->recv_buffer.size();
+    return this->conn_ptr->get_recv_buffer().size();
 }
 
 void http_ctx::clear_recv_buffer()
 {
-    return this->conn_ptr->recv_buffer.clear();
+    this->conn_ptr->get_recv_buffer().clear();
 }
 
-uint64_t http_ctx::get_conn_gid()
+uint64_t http_ctx::get_conn_gid() const
 {
     return this->conn_ptr->get_gid();
 }
 
-uint64_t http_ctx::get_recv_body_size()
+uint64_t http_ctx::get_recv_body_size() const
 {
     return this->recv_body_size;
 }
 
-int http_ctx::get_ip_port(std::pair<std::string, int> &res) const
+std::pair<std::string, int> http_ctx::get_ip_port() const
 {
     if (this->conn_ptr == nullptr)
     {
-        return -1;
+        return {};
     }
 
-    return this->conn_ptr->socket_obj.get_realtime_ip_port(res);
+    return this->conn_ptr->get_socket_obj().get_realtime_ip_port();
 }

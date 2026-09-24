@@ -78,7 +78,7 @@ void other_app::on_other_tick(avant::workers::other &other_obj)
             {
                 continue;
             }
-            avant::connection::ipc_stream_ctx *ctx = dynamic_cast<avant::connection::ipc_stream_ctx *>(conn->ctx_ptr.get());
+            avant::connection::ipc_stream_ctx *ctx = dynamic_cast<avant::connection::ipc_stream_ctx *>(conn->get_ctx_ptr().get());
             if (!ctx)
             {
                 continue;
@@ -183,7 +183,7 @@ void other_app::on_process_connection(avant::connection::ipc_stream_ctx &ctx)
     if (ctx.get_recv_buffer_size() > 2048000)
     {
         ctx.set_conn_is_close(true);
-        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        ctx.event_mod(event::event_poller::RWE, false);
         LOG_ERROR("ctx.get_recv_buffer_size() > 2048000");
         return;
     }
@@ -319,7 +319,7 @@ void other_app::other_lua_send_ipc_package(const std::string &app_id, int cmd, g
         return;
     }
 
-    avant::connection::ipc_stream_ctx *ipc_stream_ctx = dynamic_cast<avant::connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get());
+    avant::connection::ipc_stream_ctx *ipc_stream_ctx = dynamic_cast<avant::connection::ipc_stream_ctx *>(ipc_conn->get_ctx_ptr().get());
     if (!ipc_stream_ctx)
     {
         LOG_ERROR("other_app::other_lua_send_ipc_package !ipc_stream_ctx app_id[{}] cmd[{}]", app_id.c_str(), cmd);

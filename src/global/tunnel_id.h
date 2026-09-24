@@ -19,6 +19,11 @@ namespace avant::global
             return ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN + worker_idx;
         }
 
+        inline int get_worker_idx_by_tunnel_id(int tunnel_id) const
+        {
+            return tunnel_id - ProtoTunnelID::PROTO_TUNNEL_WORKER_MIN;
+        }
+
         void get_worker_all_tunnel_id(std::vector<int> &vec_worker_id) const;
 
         inline int get_worker_tunnel_id_min() const

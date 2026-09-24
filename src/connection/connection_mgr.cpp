@@ -25,7 +25,6 @@ int connection_mgr::init(size_t pool_capacity)
     {
         unused_set.insert(i);
     }
-    this->pool_capacity = pool_capacity + 1;
     return 0;
 }
 
@@ -118,14 +117,14 @@ connection *connection_mgr::get_conn_by_gid(uint64_t gid) const
     return &connection_pool[gid2index_iter->second];
 }
 
-size_t connection_mgr::size() const
+size_t connection_mgr::live_count() const
 {
     return fd2gid.size();
 }
 
-size_t connection_mgr::get_pool_capacity() const
+size_t connection_mgr::pool_capacity() const
 {
-    return this->pool_capacity;
+    return unused_set.size() + using_set.size();
 }
 
 connection *connection_mgr::get_conn_by_idx(size_t idx) const
@@ -138,4 +137,9 @@ connection *connection_mgr::get_conn_by_idx(size_t idx) const
     }
     uint64_t gid = iter->second;
     return get_conn_by_gid(gid);
+}
+
+const std::unordered_map<uint64_t, size_t> &connection_mgr::get_gid2index() const
+{
+    return gid2index;
 }

@@ -10,10 +10,6 @@ using namespace std;
 using namespace avant::socket;
 using namespace avant::utility;
 
-server_socket::server_socket() : socket()
-{
-}
-
 server_socket::server_socket(const string &ip, int port, int max_connections) : socket(ip, port)
 {
     m_sockfd = socket::create_tcp_socket(ip);
@@ -28,8 +24,8 @@ server_socket::server_socket(const string &ip, int port, int max_connections) : 
         close();
         return;
     }
-    set_recv_buffer(10 * 1024); // 10KB
-    set_send_buffer(10 * 1024); // 10KB
+    set_recv_buffer(default_socket_buffer_size);
+    set_send_buffer(default_socket_buffer_size);
     set_linger(true, 0);
     set_keep_alive();
     set_reuse_addr();

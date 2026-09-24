@@ -69,7 +69,7 @@ int other::init_call_by_server()
         return -3;
     }
 
-    if (0 != this->epoller.add(this->ipc_listen_socket->get_fd(), nullptr, event::event_poller::RE, false))
+    if (0 != this->epoller.add(this->ipc_listen_socket->get_fd(), event::event_poller::RE, false))
     {
         LOG_ERROR("ipc_listen_socket epoller add failed");
         return -4;
@@ -125,7 +125,7 @@ int other::init_call_by_server()
         };
 
         // 将udp_svr_component的fd加入到other的epoller中
-        if (0 != this->epoller.add(this->udp_svr_component->get_socket_fd(), nullptr, event::event_poller::RE, false))
+        if (0 != this->epoller.add(this->udp_svr_component->get_socket_fd(), event::event_poller::RE, false))
         {
             LOG_ERROR("udp_svr_component socketfd epoller add failed");
             return -9;
@@ -162,7 +162,7 @@ void other::operator()()
         num = this->epoller.wait(this->get_server()->get_config().get_epoll_wait_time());
         if (num < 0)
         {
-            if (errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
+            if (errno == avant::utility::comm_errno::COMM_ERRNO_EINTR)
             {
                 continue;
             }
@@ -278,14 +278,14 @@ int other::tunnel_forward(const std::vector<int> &dest_tunnel_id, ProtoPackage &
     std::string data;
     proto::pack_package(data, tunnelPackage, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE);
 
-    tunnel_conn->send_buffer.append(data.c_str(), data.size());
+    tunnel_conn->get_send_buffer().append(data.c_str(), data.size());
     if (flush)
     {
         try_send_flush_tunnel();
     }
     else
     {
-        this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+        this->epoller.mod(sock.get_fd(), event::event_poller::RWE, false);
     }
     return 0;
 }
@@ -302,33 +302,34 @@ void other::try_send_flush_tunnel()
     }
     avant::socket::socket &sock = tunnel.get_other_socket();
 
-    if (tunnel_conn->send_buffer.empty())
+    avant::utility::vec_str_buffer &send_buffer = tunnel_conn->get_send_buffer();
+    if (send_buffer.empty())
     {
-        this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
+        this->epoller.mod(sock.get_fd(), event::event_poller::RE, false);
         return;
     }
 
-    while (!tunnel_conn->send_buffer.empty())
+    while (!send_buffer.empty())
     {
         int oper_errno = 0;
-        int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
+        int len = sock.send(send_buffer.get_read_ptr(), send_buffer.size(), oper_errno);
         if (len > 0)
         {
             tunnel_conn->record_sent_bytes(len);
-            tunnel_conn->send_buffer.move_read_ptr_n(len);
+            send_buffer.move_read_ptr_n(len);
         }
         else
         {
-            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                 this->to_stop.store(true);
             }
             else
             {
-                this->epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+                this->epoller.mod(sock.get_fd(), event::event_poller::RWE, false);
             }
             break;
         }
@@ -352,7 +353,11 @@ void other::on_tunnel_event(uint32_t event)
     if (event & event::event_poller::READ)
     {
         constexpr int buffer_size = 1024000;
-        std::vector<char> buffer(buffer_size);
+        if (this->m_tunnel_recv_buf.size() < static_cast<size_t>(buffer_size))
+        {
+            this->m_tunnel_recv_buf.resize(buffer_size);
+        }
+        std::vector<char> &buffer = this->m_tunnel_recv_buf;
         int buffer_len = 0;
         while (buffer_len < buffer_size)
         {
@@ -365,9 +370,9 @@ void other::on_tunnel_event(uint32_t event)
             }
             else
             {
-                if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
-                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
-                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+                if (oper_errno != avant::utility::comm_errno::COMM_ERRNO_EAGAIN &&
+                    oper_errno != avant::utility::comm_errno::COMM_ERRNO_EINTR &&
+                    oper_errno != avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     LOG_ERROR("other::on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     this->to_stop.store(true);
@@ -378,18 +383,19 @@ void other::on_tunnel_event(uint32_t event)
         if (buffer_len > 0)
         {
             tunnel_conn->record_recv_bytes(buffer_len);
-            tunnel_conn->recv_buffer.append(buffer.data(), buffer_len);
+            tunnel_conn->get_recv_buffer().append(buffer.data(), buffer_len);
         }
 
+        avant::utility::vec_str_buffer &recv_buffer = tunnel_conn->get_recv_buffer();
         // parser protocol
-        while (!tunnel_conn->recv_buffer.empty())
+        while (!recv_buffer.empty())
         {
             uint64_t data_size = 0;
-            if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
+            if (recv_buffer.size() >= sizeof(data_size))
             {
-                data_size = avant::proto::toh64_from_buffer(tunnel_conn->recv_buffer.get_read_ptr());
+                data_size = avant::proto::toh64_from_buffer(recv_buffer.get_read_ptr());
 
-                if (data_size + sizeof(data_size) > tunnel_conn->recv_buffer.size())
+                if (data_size > recv_buffer.size() || data_size > recv_buffer.size() - sizeof(data_size))
                 {
                     break;
                 }
@@ -401,22 +407,22 @@ void other::on_tunnel_event(uint32_t event)
 
             if (data_size == 0)
             {
-                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size));
+                recv_buffer.move_read_ptr_n(sizeof(data_size));
                 break;
             }
 
             ProtoPackage protoPackage;
-            if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
+            if (!protoPackage.ParseFromArray(recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
                 LOG_ERROR("other parseFromArray err {}", data_size);
-                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+                recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
                 break;
             }
 
             // LOG_ERROR("other recv datasize {}", sizeof(data_size) + data_size);
 
             on_tunnel_process(protoPackage);
-            tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+            recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
         }
     }
 
@@ -479,7 +485,10 @@ void other::close_ipc_client_fd(int fd)
     if (conn_ptr)
     {
         uint64_t gid = conn_ptr->get_gid();
-        this->epoller.del(fd, nullptr, 0);
+        if (0 != this->epoller.del(fd))
+        {
+            LOG_FATAL("close_ipc_client_fd epoller.del {} failed", fd);
+        }
         int iret = this->ipc_connection_mgr->release_connection(fd);
         if (iret != 0)
         {
@@ -517,7 +526,7 @@ void other::close_ipc_client_fd(int fd)
     }
     else
     {
-        LOG_ERROR("worker close_client_fd conn_ptr is null, ::close {}", fd);
+        LOG_ERROR("other close_ipc_client_fd conn_ptr is null, ::close {}", fd);
         ::close(fd);
     }
 }
@@ -546,7 +555,7 @@ void other::on_new_ipc_client_fd(int fd, uint64_t gid)
         return;
     }
 
-    if (!ipc_conn->ctx_ptr)
+    if (!ipc_conn->get_ctx_ptr())
     {
         connection::ipc_stream_ctx *new_ctx = new (std::nothrow) connection::ipc_stream_ctx;
         if (!new_ctx)
@@ -555,25 +564,26 @@ void other::on_new_ipc_client_fd(int fd, uint64_t gid)
             close_ipc_client_fd(fd);
             return;
         }
-        ipc_conn->ctx_ptr.reset(new_ctx);
+        ipc_conn->get_ctx_ptr().reset(new_ctx);
     }
 
-    if (!dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get()))
+    if (!dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->get_ctx_ptr().get()))
     {
-        LOG_ERROR("!dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get())");
+        LOG_ERROR("!dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->get_ctx_ptr().get())");
         close_ipc_client_fd(fd);
         return;
     }
 
     {
-        ipc_conn->socket_obj.set_fd(fd);
-        ipc_conn->socket_obj.close_callback = nullptr;
-        ipc_conn->socket_obj.set_non_blocking();
-        ipc_conn->socket_obj.set_linger(false, 0);
-        ipc_conn->socket_obj.set_send_buffer(65536);
-        ipc_conn->socket_obj.set_recv_buffer(65536);
+        avant::socket::socket &socket_obj = ipc_conn->get_socket_obj();
+        socket_obj.set_fd(fd);
+        socket_obj.close_callback = nullptr;
+        socket_obj.set_non_blocking();
+        socket_obj.set_linger(false, 0);
+        socket_obj.set_send_buffer(65536);
+        socket_obj.set_recv_buffer(65536);
 
-        iret = this->epoller.add(fd, nullptr, event::event_poller::RWE, false);
+        iret = this->epoller.add(fd, event::event_poller::RWE, false);
         if (iret != 0)
         {
             LOG_ERROR("this->epoller.add ipc client fd failed");
@@ -584,7 +594,7 @@ void other::on_new_ipc_client_fd(int fd, uint64_t gid)
 
     this->m_remote2this_gid.insert(gid);
 
-    dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->ctx_ptr.get())->on_create(*ipc_conn, *this);
+    dynamic_cast<connection::ipc_stream_ctx *>(ipc_conn->get_ctx_ptr().get())->on_create(*ipc_conn, *this);
 }
 
 void other::on_ipc_client_event(int fd, uint32_t event)
@@ -597,7 +607,7 @@ void other::on_ipc_client_event(int fd, uint32_t event)
         return;
     }
 
-    conn->ctx_ptr->on_event(event);
+    conn->get_ctx_ptr()->on_event(event);
 }
 
 void other::ipc_client_to_connect()
@@ -627,6 +637,7 @@ void other::ipc_client_to_connect()
         if (iret != 0)
         {
             LOG_ERROR("this->ipc_connection_mgr->alloc_connection failed iret {}", iret);
+            // new_client_socket 析构函数会 close
             continue;
         }
 
@@ -635,38 +646,45 @@ void other::ipc_client_to_connect()
         if (!conn)
         {
             LOG_ERROR("this->ipc_connection_mgr->get_conn failed {}", new_client_socket.get_fd());
+            // new_client_socket 析构函数会 close
             continue;
         }
 
-        if (!conn->ctx_ptr)
+        // 此时 new_client_socket 生命周期应该移交给 conn
+        conn->get_socket_obj() = std::move(new_client_socket);
+        // 下面都应该使用 conn->get_socket_obj() 而不是 new_client_socket
+
+        if (!conn->get_ctx_ptr())
         {
             connection::ipc_stream_ctx *new_ctx = new (std::nothrow) connection::ipc_stream_ctx;
             if (!new_ctx)
             {
                 LOG_ERROR("new connection::ipc_stream_ctx failed");
+                close_ipc_client_fd(conn->get_socket_obj().get_fd());
                 continue;
             }
-            conn->ctx_ptr.reset(new_ctx);
+            conn->get_ctx_ptr().reset(new_ctx);
         }
 
-        if (!dynamic_cast<connection::ipc_stream_ctx *>(conn->ctx_ptr.get()))
+        if (!dynamic_cast<connection::ipc_stream_ctx *>(conn->get_ctx_ptr().get()))
         {
-            LOG_ERROR("!dynamic_cast<connection::ipc_stream_ctx *>(conn->ctx_ptr.get())");
+            LOG_ERROR("!dynamic_cast<connection::ipc_stream_ctx *>(conn->get_ctx_ptr().get())");
+            close_ipc_client_fd(conn->get_socket_obj().get_fd());
             continue;
         }
 
-        iret = this->epoller.add(new_client_socket.get_fd(), nullptr, event::event_poller::RWE, false);
+        iret = this->epoller.add(conn->get_socket_obj().get_fd(), event::event_poller::RWE, false);
         if (iret != 0)
         {
             LOG_ERROR("this->epoller.add ipc client fd failed");
-            return;
+            close_ipc_client_fd(conn->get_socket_obj().get_fd());
+            continue;
         }
 
-        conn->socket_obj = std::move(new_client_socket);
         this->m_this2remote_appid2gid[app_id] = conn->get_gid();
         this->m_this2remote_gid2appid[conn->get_gid()] = app_id;
 
-        dynamic_cast<connection::ipc_stream_ctx *>(conn->ctx_ptr.get())->on_create(*conn, *this);
+        dynamic_cast<connection::ipc_stream_ctx *>(conn->get_ctx_ptr().get())->on_create(*conn, *this);
     }
 }
 

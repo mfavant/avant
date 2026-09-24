@@ -2,7 +2,7 @@
 
 using namespace avant::event;
 
-event_poller::event_poller() : m_epfd(-1)
+event_poller::event_poller()
 {
 }
 
@@ -57,28 +57,28 @@ int event_poller::create(int max_connections)
     return 0;
 }
 
-int event_poller::wait(int millsecond)
+int event_poller::wait(int millisecond)
 {
 #ifdef __linux__
-    return epoll_wait(m_epfd, m_events, m_max_connections + 1, millsecond);
+    return epoll_wait(m_epfd, m_events, m_max_connections + 1, millisecond);
 #elif defined(__APPLE__)
-    if (millsecond < 0)
+    if (millisecond < 0)
     {
         return kevent(this->m_epfd, NULL, 0, this->m_events, this->m_max_connections + 1, NULL);
     }
 
     struct timespec timeout;
-    timeout.tv_sec = millsecond / 1000;
-    timeout.tv_nsec = (millsecond % 1000) * 1000000;
+    timeout.tv_sec = millisecond / 1000;
+    timeout.tv_nsec = (millisecond % 1000) * 1000000;
     return kevent(this->m_epfd, NULL, 0, this->m_events, this->m_max_connections + 1, &timeout);
 #endif
 }
 
-int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=false*/)
-{
 #ifdef __linux__
+int event_poller::ctrl(int fd, uint32_t events, int op, bool et /*=false*/)
+{
     struct epoll_event ev;
-    ev.data.ptr = ptr;
+    // ev.data.ptr = ptr; epoll_event.data is a union
     ev.data.fd = fd;
     if (et)
     {
@@ -98,12 +98,10 @@ int event_poller::ctrl(int fd, void *ptr, uint32_t events, int op, bool et /*=fa
     }
     ev.events = events;
     return epoll_ctl(m_epfd, op, fd, &ev);
-#elif defined(__APPLE__)
-    return -1;
-#endif
 }
+#endif
 
-int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
+int event_poller::add(int fd, uint32_t events, bool et /*=false*/)
 {
 #ifdef __linux__
     if (et)
@@ -118,7 +116,7 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
             return 0;
         }
     }
-    int iret = ctrl(fd, ptr, events, EPOLL_CTL_ADD, et);
+    int iret = ctrl(fd, events, EPOLL_CTL_ADD, et);
     if (iret == 0)
     {
         fd_curr_reg_event[fd] = events;
@@ -138,7 +136,7 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
     int iret = 0;
     if (events & event_poller::READ)
     {
-        EV_SET(&event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, ptr);
+        EV_SET(&event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
         if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
         {
             return -1;
@@ -147,7 +145,7 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
     }
     if (events & event_poller::WRITE)
     {
-        EV_SET(&event, fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, ptr);
+        EV_SET(&event, fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, nullptr);
         if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
         {
             return -1;
@@ -158,7 +156,7 @@ int event_poller::add(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 #endif
 }
 
-int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
+int event_poller::mod(int fd, uint32_t events, bool et /*=false*/)
 {
 #ifdef __linux__
     if (et)
@@ -173,7 +171,7 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
             return 0;
         }
     }
-    int iret = ctrl(fd, ptr, events, EPOLL_CTL_MOD, et);
+    int iret = ctrl(fd, events, EPOLL_CTL_MOD, et);
     if (iret == 0)
     {
         fd_curr_reg_event[fd] = events;
@@ -198,7 +196,7 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         if ((fd_curr_reg_event.find(fd) == fd_curr_reg_event.end()) ||
             !(fd_curr_reg_event[fd] & event_poller::READ))
         {
-            EV_SET(&event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, ptr);
+            EV_SET(&event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
             {
                 return -1;
@@ -212,7 +210,7 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         if ((fd_curr_reg_event.find(fd) != fd_curr_reg_event.end()) &&
             (fd_curr_reg_event[fd] & event_poller::READ))
         {
-            EV_SET(&event, fd, EVFILT_READ, EV_DISABLE, 0, 0, ptr);
+            EV_SET(&event, fd, EVFILT_READ, EV_DISABLE, 0, 0, nullptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
             {
                 return -1;
@@ -228,7 +226,7 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         if ((fd_curr_reg_event.find(fd) == fd_curr_reg_event.end()) ||
             !(fd_curr_reg_event[fd] & event_poller::WRITE))
         {
-            EV_SET(&event, fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, ptr);
+            EV_SET(&event, fd, EVFILT_WRITE, EV_ADD | EV_ENABLE, 0, 0, nullptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
             {
                 return -1;
@@ -242,7 +240,7 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
         if ((fd_curr_reg_event.find(fd) != fd_curr_reg_event.end()) &&
             (fd_curr_reg_event[fd] & event_poller::WRITE))
         {
-            EV_SET(&event, fd, EVFILT_WRITE, EV_DISABLE, 0, 0, ptr);
+            EV_SET(&event, fd, EVFILT_WRITE, EV_DISABLE, 0, 0, nullptr);
             if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
             {
                 return -1;
@@ -256,7 +254,7 @@ int event_poller::mod(int fd, void *ptr, uint32_t events, bool et /*=false*/)
 #endif
 }
 
-int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=false*/)
+int event_poller::del(int fd)
 {
     auto iter = fd_curr_reg_event.find(fd);
     if (iter != fd_curr_reg_event.end())
@@ -265,11 +263,11 @@ int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=false*/)
     }
 
 #ifdef __linux__
-    return ctrl(fd, ptr, events, EPOLL_CTL_DEL, et);
+    return ctrl(fd, 0, EPOLL_CTL_DEL, false);
 #elif defined(__APPLE__)
     struct kevent event{};
     int iret = 0;
-    EV_SET(&event, fd, EVFILT_READ, EV_DELETE, 0, 0, ptr);
+    EV_SET(&event, fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
     if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
     {
         if (errno != ENOENT)
@@ -277,7 +275,7 @@ int event_poller::del(int fd, void *ptr, uint32_t events, bool et /*=false*/)
             iret = -1;
         }
     }
-    EV_SET(&event, fd, EVFILT_WRITE, EV_DELETE, 0, 0, ptr);
+    EV_SET(&event, fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
     if (-1 == kevent(this->m_epfd, &event, 1, NULL, 0, NULL))
     {
         if (errno != ENOENT)

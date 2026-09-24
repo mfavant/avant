@@ -156,8 +156,8 @@ void http_app::on_new_connection(avant::connection::http_ctx &ctx, bool is_keep_
         ProtoPackage package;
         ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
         protoNewConn.set_gid(ctx.get_conn_gid());
-        std::pair<std::string, int> ip_port;
-        if (0 == ctx.get_ip_port(ip_port))
+        const auto ip_port = ctx.get_ip_port();
+        if (!ip_port.first.empty())
         {
             protoNewConn.set_ip(ip_port.first);
             protoNewConn.set_port(ip_port.second);
@@ -371,8 +371,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
 
         if constexpr (false)
         {
-            std::pair<std::string, int> ip_port;
-            ctx.get_ip_port(ip_port);
+            const auto ip_port = ctx.get_ip_port();
             LOG_DEBUG("HttpUrl {} ClientIPPort {} : {}", url.c_str(), ip_port.first.c_str(), ip_port.second);
         }
 
@@ -591,14 +590,7 @@ void http_app::process_connection(avant::connection::http_ctx &ctx)
             response_ptr->ptr_type = avant_http_app_reponse::FD;
 
             std::string mime_type;
-            try
-            {
-                mime_type = utility::mime_type::get_type(t_path.string());
-            }
-            catch (...)
-            {
-                mime_type = "application/octet-stream";
-            }
+            mime_type = utility::mime_type::get_type(t_path.string(), "application/octet-stream");
 
             // checking mine_type for use_gzip, default using use_gzip.
             // ranged responses must not be compressed (Content-Range refers to raw bytes,

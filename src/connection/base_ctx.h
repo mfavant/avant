@@ -1,13 +1,14 @@
 #pragma once
 #include <stdint.h>
 #include <string>
+#include <utility>
 
 namespace avant::connection
 {
     class base_ctx
     {
     public:
-        base_ctx();
+        base_ctx() = default;
         virtual ~base_ctx();
 
         base_ctx(const base_ctx &) = delete;
@@ -20,20 +21,20 @@ namespace avant::connection
             this->app_layer_notified = false;
         }
 
-        inline void set_app_layer_notified()
+        inline void mark_app_layer_notified()
         {
             this->app_layer_notified = true;
         }
 
-        inline bool get_app_layer_notified()
+        [[nodiscard]] inline bool get_app_layer_notified() const
         {
             return this->app_layer_notified;
         }
 
-        virtual void on_close() = 0;
-        virtual void on_event(uint32_t event) = 0;
+        virtual void on_close() noexcept = 0;
+        virtual void on_event(uint32_t event) noexcept = 0;
 
-        virtual int get_ip_port(std::pair<std::string, int> &res) const = 0;
+        virtual std::pair<std::string, int> get_ip_port() const = 0;
 
     private:
         // Indicates whether the context has been notified to the application layer

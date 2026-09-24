@@ -78,15 +78,18 @@ namespace avant::server
 
         SSL_CTX *m_ssl_context{nullptr};
         std::shared_ptr<avant::socket::server_socket> m_server_listen_socket;
-        avant::workers::worker *m_workers{nullptr};
-        avant::workers::other *m_other{nullptr};
+        std::unique_ptr<avant::workers::worker[]> m_workers;
+        std::unique_ptr<avant::workers::other> m_other;
 
         std::shared_ptr<std::atomic<int>> m_curr_connection_num{nullptr};
-        avant::socket::socket_pair *m_main_worker_tunnel{nullptr};
+        std::unique_ptr<avant::socket::socket_pair[]> m_main_worker_tunnel;
         std::unordered_map<int, int> m_main_worker_tunnel_fd2index;
         avant::socket::socket_pair m_main_other_tunnel;
 
         avant::event::event_poller m_epoller;
         avant::connection::connection_mgr m_main_connection_mgr;
+
+        // reusable tunnel recv scratch buffer
+        std::vector<char> m_tunnel_recv_buf;
     };
 }

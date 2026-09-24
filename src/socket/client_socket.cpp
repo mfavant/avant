@@ -27,8 +27,8 @@ client_socket::client_socket(const string &ip, int port) : socket(ip, port)
         close();
         return;
     }
-    set_recv_buffer(10 * 1024);
-    set_send_buffer(10 * 1024);
+    set_recv_buffer(default_socket_buffer_size);
+    set_send_buffer(default_socket_buffer_size);
     set_linger(true, 0);
     set_nodelay(true);
     set_keep_alive();

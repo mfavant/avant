@@ -82,11 +82,11 @@ void websocket_app::on_worker_tunnel(avant::workers::worker &worker_obj, const P
             avant::connection::connection *close_conn = worker_obj.worker_connection_mgr->get_conn_by_gid(gid);
             if (close_conn)
             {
-                auto close_websocket_ctx = dynamic_cast<avant::connection::websocket_ctx *>(close_conn->ctx_ptr.get());
+                auto close_websocket_ctx = dynamic_cast<avant::connection::websocket_ctx *>(close_conn->get_ctx_ptr().get());
                 if (close_websocket_ctx)
                 {
                     close_websocket_ctx->set_conn_is_close(true);
-                    close_websocket_ctx->event_mod(nullptr, event::event_poller::RWE, false);
+                    close_websocket_ctx->event_mod(event::event_poller::RWE, false);
                 }
             }
             return;
@@ -128,8 +128,8 @@ void websocket_app::on_new_connection(avant::connection::websocket_ctx &ctx)
         ProtoPackage package;
         ProtoTunnelWorker2OtherEventNewClientConnection protoNewConn;
         protoNewConn.set_gid(ctx.get_conn_gid());
-        std::pair<std::string, int> ip_port;
-        if (0 == ctx.get_ip_port(ip_port))
+        const auto ip_port = ctx.get_ip_port();
+        if (!ip_port.first.empty())
         {
             protoNewConn.set_ip(ip_port.first);
             protoNewConn.set_port(ip_port.second);
@@ -199,7 +199,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
             {
                 LOG_ERROR("frame not be allowed. opcode = {}", opcode);
                 ctx.set_conn_is_close(true);
-                ctx.event_mod(nullptr, event::event_poller::RWE, false);
+                ctx.event_mod(event::event_poller::RWE, false);
                 break;
             }
 
@@ -322,7 +322,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
     if (ctx.get_recv_buffer_size() > 1024000)
     {
         ctx.set_conn_is_close(true);
-        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        ctx.event_mod(event::event_poller::RWE, false);
         LOG_ERROR("ctx.get_recv_buffer_size() > 1024000");
         return;
     }
@@ -330,7 +330,7 @@ void websocket_app::on_process_connection(avant::connection::websocket_ctx &ctx)
     if (ctx.frame_payload_data.size() > 1024000)
     {
         ctx.set_conn_is_close(true);
-        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        ctx.event_mod(event::event_poller::RWE, false);
         LOG_ERROR("ctx.frame_payload_data.size() > 1024000");
         return;
     }
@@ -354,7 +354,7 @@ void websocket_app::on_process_frame(avant::connection::websocket_ctx &ctx, cons
         LOG_ERROR("!protoPackage.ParseFromArray failed gid {}", ctx.get_conn_gid());
         ctx.frame_payload_data.clear();
         ctx.set_conn_is_close(true);
-        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        ctx.event_mod(event::event_poller::RWE, false);
         return;
     }
     ctx.frame_payload_data.clear();
@@ -402,7 +402,7 @@ int websocket_app::send_sync_package(avant::connection::websocket_ctx &ctx, uint
     {
         LOG_ERROR("ctx.get_send_buffer_size() > 1024000");
         ctx.set_conn_is_close(true);
-        ctx.event_mod(nullptr, event::event_poller::RWE, false);
+        ctx.event_mod(event::event_poller::RWE, false);
         return -1;
     }
 

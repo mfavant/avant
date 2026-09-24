@@ -35,6 +35,7 @@ namespace avant::workers
 
         void set_server(avant::server::server *server) { m_server = server; }
         [[nodiscard]] const avant::server::server *get_server() const { return m_server; }
+        void set_ipc_json(const avant::json::json &json) { this->ipc_json = json; }
         int init_call_by_server();
 
     public:
@@ -81,6 +82,9 @@ namespace avant::workers
         std::unordered_map<uint64_t, std::string> m_this2remote_gid2appid{};
 
         std::unordered_set<uint64_t> m_remote2this_gid{};
+
+        // reusable tunnel recv scratch buffer
+        std::vector<char> m_tunnel_recv_buf;
 
         avant::server::server *m_server;
     };

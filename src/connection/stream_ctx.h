@@ -15,23 +15,23 @@ namespace avant::connection
         // context create success
         void on_create(connection &conn_obj, workers::worker &worker_obj);
         // context destory
-        virtual void on_close() override;
+        virtual void on_close() noexcept override;
         int send_data(const std::string &data, bool flush = true);
 
-        void on_event(uint32_t event) override;
+        void on_event(uint32_t event) noexcept override;
 
-        virtual int get_ip_port(std::pair<std::string, int> &res) const override;
+        virtual std::pair<std::string, int> get_ip_port() const override;
 
     private:
         void try_send_flush();
 
     public:
-        uint64_t get_conn_gid();
-        size_t get_recv_buffer_size();
-        const char *get_recv_buffer_read_ptr();
+        [[nodiscard]] uint64_t get_conn_gid() const;
+        [[nodiscard]] size_t get_recv_buffer_size() const;
+        [[nodiscard]] const char *get_recv_buffer_read_ptr() const;
         void recv_buffer_move_read_ptr_n(size_t n);
 
-        size_t get_send_buffer_size();
+        [[nodiscard]] size_t get_send_buffer_size() const;
 
         void set_conn_is_close(bool val);
 
@@ -42,7 +42,7 @@ namespace avant::connection
             {
                 return;
             }
-            this->worker_ptr->epoller.mod(this->conn_ptr->socket_obj.get_fd(), std::forward<Args>(args)...);
+            this->worker_ptr->epoller.mod(this->conn_ptr->get_socket_obj().get_fd(), std::forward<Args>(args)...);
         }
 
         template <typename... Args>

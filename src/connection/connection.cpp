@@ -7,7 +7,7 @@ using avant::connection::connection;
 
 connection::traffic_data::traffic_data(const std::chrono::time_point<std::chrono::steady_clock> &timestamp,
                                        size_t bytes) : bytes(bytes),
-                                                        timestamp(timestamp)
+                                                       timestamp(timestamp)
 {
 }
 
@@ -59,6 +59,66 @@ uint64_t connection::get_gid() const
     return this->gid;
 }
 
+avant::utility::vec_str_buffer &connection::get_recv_buffer()
+{
+    return this->recv_buffer;
+}
+
+avant::utility::vec_str_buffer &connection::get_send_buffer()
+{
+    return this->send_buffer;
+}
+
+int connection::get_fd()
+{
+    return this->fd;
+}
+
+void connection::set_fd(int fd)
+{
+    this->fd = fd;
+}
+
+avant::socket::socket &connection::get_socket_obj()
+{
+    return this->socket_obj;
+}
+
+std::shared_ptr<avant::connection::base_ctx> &connection::get_ctx_ptr()
+{
+    return this->ctx_ptr;
+}
+
+bool connection::get_closed_flag() const
+{
+    return this->closed_flag;
+}
+
+void connection::set_closed_flag(bool val)
+{
+    this->closed_flag = val;
+}
+
+bool connection::get_is_close() const
+{
+    return this->is_close;
+}
+
+void connection::set_is_close(bool val)
+{
+    this->is_close = val;
+}
+
+bool connection::get_is_ready() const
+{
+    return this->is_ready;
+}
+
+void connection::set_is_ready(bool val)
+{
+    this->is_ready = val;
+}
+
 void connection::record_traffic_bytes(std::deque<traffic_data> &traffic_data_list, size_t bytes)
 {
     if (bytes == 0)
@@ -78,7 +138,7 @@ void connection::record_traffic_bytes(std::deque<traffic_data> &traffic_data_lis
             traffic_data_list.push_back(data);
         }
 
-        if (traffic_data_list.back().timestamp.time_since_epoch().count() != now.time_since_epoch().count())
+        if (traffic_data_list.back().get_timestamp().time_since_epoch().count() != now.time_since_epoch().count())
         {
             traffic_data data(now, 0);
             traffic_data_list.push_back(data);
@@ -122,12 +182,12 @@ void connection::record_sent_bytes(size_t bytes)
         {
             if (iter == this->traffic_sent_data_list.begin())
             {
-                timestamp_begin = iter->timestamp;
+                timestamp_begin = iter->get_timestamp();
             }
 
             if (iter == this->traffic_sent_data_list.end() - 1)
             {
-                timestamp_end = iter->timestamp;
+                timestamp_end = iter->get_timestamp();
             }
 
             bytes_total += iter->bytes;
@@ -157,12 +217,12 @@ void connection::record_recv_bytes(size_t bytes)
         {
             if (iter == this->traffic_recv_data_list.begin())
             {
-                timestamp_begin = iter->timestamp;
+                timestamp_begin = iter->get_timestamp();
             }
 
             if (iter == this->traffic_recv_data_list.end() - 1)
             {
-                timestamp_end = iter->timestamp;
+                timestamp_end = iter->get_timestamp();
             }
 
             bytes_total += iter->bytes;
@@ -183,7 +243,7 @@ void connection::clear_timeout_traffic_data(std::deque<traffic_data> &traffic_da
     auto iter = traffic_data_list.begin();
     while (iter != traffic_data_list.end())
     {
-        if (now_timestamp - iter->timestamp > std::chrono::seconds(seconds))
+        if (now_timestamp - iter->get_timestamp() > std::chrono::seconds(seconds))
         {
             iter = traffic_data_list.erase(iter);
         }

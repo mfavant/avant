@@ -19,28 +19,28 @@ namespace avant::connection
         // context create success
         void on_create(connection &conn_obj, workers::worker &worker_obj, bool keep_alive);
         // context destory
-        virtual void on_close() override;
+        virtual void on_close() noexcept override;
 
-        void on_event(uint32_t event) override;
+        void on_event(uint32_t event) noexcept override;
 
         const workers::worker *get_worker_ptr() const { return this->worker_ptr; }
 
         void set_recv_end(bool recv_end);
-        bool get_recv_end();
+        [[nodiscard]] bool get_recv_end() const;
         void set_process_end(bool process_end);
-        bool get_process_end();
+        [[nodiscard]] bool get_process_end() const;
         void set_response_end(bool response_end);
-        bool get_response_end();
+        [[nodiscard]] bool get_response_end() const;
         void set_everything_end(bool everything_end);
-        bool get_everything_end();
+        [[nodiscard]] bool get_everything_end() const;
 
         void add_header(const std::string &key, const std::string &value);
 
         void send_buffer_append(const char *data, size_t len);
-        size_t get_recv_buffer_size();
+        [[nodiscard]] size_t get_recv_buffer_size() const;
         void clear_recv_buffer();
-        uint64_t get_conn_gid();
-        uint64_t get_recv_body_size();
+        [[nodiscard]] uint64_t get_conn_gid() const;
+        [[nodiscard]] uint64_t get_recv_body_size() const;
 
         template <typename... Args>
         int tunnel_forward(Args &&...args)
@@ -62,7 +62,7 @@ namespace avant::connection
             return this->worker_ptr->get_worker_idx(std::forward<Args>(args)...);
         }
 
-        virtual int get_ip_port(std::pair<std::string, int> &res) const override;
+        virtual std::pair<std::string, int> get_ip_port() const override;
 
     public:
         static std::shared_ptr<llhttp_settings_t> settings;
@@ -93,7 +93,6 @@ namespace avant::connection
         bool response_end{false};
         bool everything_end{false};
 
-        uint64_t keep_live_counter{0};
         uint64_t recv_body_size{0};
     };
 }

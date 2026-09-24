@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <thread>
+#include <memory>
 #include <avant-log/logger.h>
 #include <chrono>
 #include "server/server.h"
@@ -44,26 +45,10 @@ server::server()
 server::~server()
 {
     // release SSL_CTX
-    if (this->m_config_mgr.get_use_ssl() && m_ssl_context)
+    if (m_ssl_context)
     {
         SSL_CTX_free(m_ssl_context);
         m_ssl_context = nullptr;
-    }
-
-    if (m_main_worker_tunnel)
-    {
-        delete[] m_main_worker_tunnel;
-        m_main_worker_tunnel = nullptr;
-    }
-    if (m_workers)
-    {
-        delete[] m_workers;
-        m_workers = nullptr;
-    }
-    if (m_other)
-    {
-        delete m_other;
-        m_other = nullptr;
     }
 }
 
@@ -137,15 +122,15 @@ int server::start()
         return -1;
     }
 
-    if (this->m_config_mgr.get_max_client_cnt() <= 0 || this->m_config_mgr.get_max_client_cnt() > 8388607)
+    if (this->m_config_mgr.get_max_client_cnt() <= 0 || this->m_config_mgr.get_max_client_cnt() > this->m_config_mgr.CLIENT_CNT_MAX)
     {
-        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > 8388607 {}", this->m_config_mgr.get_max_client_cnt());
+        LOG_ERROR("m_max_client_cnt <= 0 || m_max_client_cnt > CLIENT_CNT_MAX {}", this->m_config_mgr.get_max_client_cnt());
         return -1;
     }
 
-    if (this->m_config_mgr.get_worker_cnt() <= 0 || this->m_config_mgr.get_worker_cnt() > 511)
+    if (this->m_config_mgr.get_worker_cnt() <= 0 || this->m_config_mgr.get_worker_cnt() > this->m_config_mgr.WORKER_NUM_MAX)
     {
-        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > 511 {}", this->m_config_mgr.get_worker_cnt());
+        LOG_ERROR("m_worker_cnt <= 0 || m_worker_cnt > WORKER_NUM_MAX {}", this->m_config_mgr.get_worker_cnt());
         return -1;
     }
 
@@ -278,12 +263,7 @@ int server::on_start()
 
     // main_worker_tunnel
     {
-        m_main_worker_tunnel = new (std::nothrow) avant::socket::socket_pair[this->m_config_mgr.get_worker_cnt()];
-        if (!m_main_worker_tunnel)
-        {
-            LOG_ERROR("new socket_pair err");
-            return -1;
-        }
+        m_main_worker_tunnel = std::make_unique<avant::socket::socket_pair[]>(this->m_config_mgr.get_worker_cnt());
         // init tunnel
         for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
         {
@@ -296,7 +276,7 @@ int server::on_start()
         }
         for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
         {
-            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), nullptr, event::event_poller::RWE, false))
+            if (0 != m_epoller.add(m_main_worker_tunnel[i].get_me(), event::event_poller::RWE, false))
             {
                 LOG_ERROR("main_epoller.add m_workers.main_worker_tunnel->get_me() failed {}", errno);
                 return -1;
@@ -310,9 +290,9 @@ int server::on_start()
                     return -1;
                 }
                 connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_worker_tunnel[i].get_me());
-                tunnel_conn->recv_buffer.reserve(10485760); // 10MB
-                tunnel_conn->send_buffer.reserve(10485760); // 10MB
-                tunnel_conn->is_ready = true;
+                tunnel_conn->get_recv_buffer().reserve(10485760); // 10MB
+                tunnel_conn->get_send_buffer().reserve(10485760); // 10MB
+                tunnel_conn->set_is_ready(true);
             }
             m_main_worker_tunnel_fd2index.emplace(m_main_worker_tunnel[i].get_me(), i);
         }
@@ -320,14 +300,13 @@ int server::on_start()
 
     // worker init
     {
-        workers::worker *worker_arr = new workers::worker[this->m_config_mgr.get_worker_cnt()];
-
-        m_workers = worker_arr;
+        workers::worker *worker_arr = new (std::nothrow) workers::worker[this->m_config_mgr.get_worker_cnt()];
         if (!worker_arr)
         {
             LOG_ERROR("new worker::worker failed");
             return -1;
         }
+        m_workers.reset(worker_arr);
 
         for (int i = 0; i < this->m_config_mgr.get_worker_cnt(); i++)
         {
@@ -368,7 +347,7 @@ int server::on_start()
             }
 
             // tunnel to worker_epoller
-            if (0 != m_workers[worker_idx].epoller.add(m_workers[worker_idx].main_worker_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
+            if (0 != m_workers[worker_idx].epoller.add(m_workers[worker_idx].main_worker_tunnel->get_other(), event::event_poller::RWE, false))
             {
                 LOG_ERROR("m_workers.epoller.add m_workers.main_worker_tunnel->get_other() failed");
                 return -1;
@@ -381,9 +360,9 @@ int server::on_start()
                 return -1;
             }
             connection::connection *tunnel_conn = m_workers[worker_idx].worker_connection_mgr->get_conn(m_workers[worker_idx].main_worker_tunnel->get_other());
-            tunnel_conn->recv_buffer.reserve(10485760); // 10MB
-            tunnel_conn->send_buffer.reserve(10485760); // 10MB
-            tunnel_conn->is_ready = true;
+            tunnel_conn->get_recv_buffer().reserve(10485760); // 10MB
+            tunnel_conn->get_send_buffer().reserve(10485760); // 10MB
+            tunnel_conn->set_is_ready(true);
         }
     }
 
@@ -395,7 +374,7 @@ int server::on_start()
             LOG_ERROR("main m_main_other_tunnel failed iret={}", iret);
             return -1;
         }
-        if (0 != m_epoller.add(m_main_other_tunnel.get_me(), nullptr, event::event_poller::RWE, false))
+        if (0 != m_epoller.add(m_main_other_tunnel.get_me(), event::event_poller::RWE, false))
         {
             LOG_ERROR("main_epoller.add m_main_other_tunnel.get_me() failed {}", errno);
             return -1;
@@ -409,23 +388,23 @@ int server::on_start()
                 return -1;
             }
             connection::connection *tunnel_conn = m_main_connection_mgr.get_conn(m_main_other_tunnel.get_me());
-            tunnel_conn->recv_buffer.reserve(10485760); // 10MB
-            tunnel_conn->send_buffer.reserve(10485760); // 10MB
-            tunnel_conn->is_ready = true;
+            tunnel_conn->get_recv_buffer().reserve(10485760); // 10MB
+            tunnel_conn->get_send_buffer().reserve(10485760); // 10MB
+            tunnel_conn->set_is_ready(true);
         }
     }
 
     // other init
     {
-        workers::other *other_ptr = new workers::other(this);
-        m_other = other_ptr;
-        if (!m_other)
+        workers::other *other_ptr = new (std::nothrow) workers::other(this);
+        if (!other_ptr)
         {
             LOG_ERROR("new workers::other failed");
             return -1;
         }
+        m_other.reset(other_ptr);
         m_other->main_other_tunnel = &m_main_other_tunnel;
-        m_other->ipc_json = this->m_ipc_json;
+        m_other->set_ipc_json(this->m_ipc_json);
 
         connection::connection_mgr *new_connection_mgr = new (std::nothrow) connection::connection_mgr;
         if (!new_connection_mgr)
@@ -451,7 +430,7 @@ int server::on_start()
         }
 
         // tunnel to other_epoller
-        if (0 != m_other->epoller.add(m_other->main_other_tunnel->get_other(), nullptr, event::event_poller::RWE, false))
+        if (0 != m_other->epoller.add(m_other->main_other_tunnel->get_other(), event::event_poller::RWE, false))
         {
             LOG_ERROR("m_other->epoller.add(m_other->main_other_tunnel->get_other() failed");
             return -1;
@@ -465,9 +444,9 @@ int server::on_start()
             return -1;
         }
         connection::connection *tunnel_conn = m_other->ipc_connection_mgr->get_conn(m_other->main_other_tunnel->get_other());
-        tunnel_conn->recv_buffer.reserve(10485760); // 10MB
-        tunnel_conn->send_buffer.reserve(10485760); // 10MB
-        tunnel_conn->is_ready = true;
+        tunnel_conn->get_recv_buffer().reserve(10485760); // 10MB
+        tunnel_conn->get_send_buffer().reserve(10485760); // 10MB
+        tunnel_conn->set_is_ready(true);
 
         iret = m_other->init_call_by_server();
         if (iret != 0)
@@ -495,7 +474,7 @@ int server::on_start()
             LOG_ERROR("listen_socket failed get_fd() < 0");
             return -1;
         }
-        if (0 != m_epoller.add(this->m_server_listen_socket->get_fd(), nullptr, event::event_poller::RWE, false))
+        if (0 != m_epoller.add(this->m_server_listen_socket->get_fd(), event::event_poller::RWE, false))
         {
             LOG_ERROR("listen_socket m_epoller add failed");
             return -1;
@@ -537,7 +516,7 @@ int server::on_start()
 
             if (num < 0)
             {
-                if (errno == avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR)
+                if (errno == avant::utility::comm_errno::COMM_ERRNO_EINTR)
                 {
                     continue;
                 }
@@ -643,7 +622,10 @@ int server::on_start()
                 else
                 {
                     LOG_ERROR("main epoller, undefined type fd");
-                    m_epoller.del(evented_fd, nullptr, 0);
+                    if (0 != m_epoller.del(evented_fd))
+                    {
+                        LOG_FATAL("m_epoller.del evented_fd {} failed", evented_fd);
+                    }
                     ::close(evented_fd);
                 }
             }
@@ -734,7 +716,11 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
     if (event & event::event_poller::READ)
     {
         constexpr int buffer_size = 1024000;
-        std::vector<char> buffer(buffer_size);
+        if (this->m_tunnel_recv_buf.size() < static_cast<size_t>(buffer_size))
+        {
+            this->m_tunnel_recv_buf.resize(buffer_size);
+        }
+        std::vector<char> &buffer = this->m_tunnel_recv_buf;
         int buffer_used_idx{0};
 
         while (buffer_used_idx < buffer_size)
@@ -748,9 +734,9 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
             }
             else
             {
-                if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
-                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
-                    oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+                if (oper_errno != avant::utility::comm_errno::COMM_ERRNO_EAGAIN &&
+                    oper_errno != avant::utility::comm_errno::COMM_ERRNO_EINTR &&
+                    oper_errno != avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
                 {
                     LOG_ERROR("on_tunnel_event tunnel_conn oper_errno {}", oper_errno);
                     to_stop();
@@ -761,17 +747,18 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
         if (buffer_used_idx > 0)
         {
             tunnel_conn->record_recv_bytes(buffer_used_idx);
-            tunnel_conn->recv_buffer.append(buffer.data(), buffer_used_idx);
+            tunnel_conn->get_recv_buffer().append(buffer.data(), buffer_used_idx);
         }
 
+        avant::utility::vec_str_buffer &recv_buffer = tunnel_conn->get_recv_buffer();
         // parser protocol
-        while (!tunnel_conn->recv_buffer.empty())
+        while (!recv_buffer.empty())
         {
             uint64_t data_size = 0;
-            if (tunnel_conn->recv_buffer.size() >= sizeof(data_size))
+            if (recv_buffer.size() >= sizeof(data_size))
             {
-                data_size = avant::proto::toh64_from_buffer(tunnel_conn->recv_buffer.get_read_ptr());
-                if (data_size + sizeof(data_size) > tunnel_conn->recv_buffer.size())
+                data_size = avant::proto::toh64_from_buffer(recv_buffer.get_read_ptr());
+                if (data_size > recv_buffer.size() || data_size > recv_buffer.size() - sizeof(data_size))
                 {
                     break;
                 }
@@ -783,20 +770,20 @@ void server::on_tunnel_event(avant::socket::socket_pair &tunnel, uint32_t event)
 
             if (data_size == 0)
             {
-                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size));
+                recv_buffer.move_read_ptr_n(sizeof(data_size));
                 break;
             }
 
             ProtoPackage protoPackage;
-            if (!protoPackage.ParseFromArray(tunnel_conn->recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
+            if (!protoPackage.ParseFromArray(recv_buffer.get_read_ptr() + sizeof(data_size), data_size))
             {
                 LOG_ERROR("server parseFromArray err {}", data_size);
-                tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+                recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
                 break;
             }
 
             on_tunnel_process(protoPackage);
-            tunnel_conn->recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
+            recv_buffer.move_read_ptr_n(sizeof(data_size) + data_size);
         }
     }
 
@@ -918,34 +905,35 @@ void server::try_send_flush_tunnel(avant::socket::socket_pair &tunnel)
 
     avant::socket::socket &sock = tunnel.get_me_socket();
 
-    if (tunnel_conn->send_buffer.empty())
+    avant::utility::vec_str_buffer &send_buffer = tunnel_conn->get_send_buffer();
+    if (send_buffer.empty())
     {
-        m_epoller.mod(sock.get_fd(), nullptr, event::event_poller::RE, false);
+        m_epoller.mod(sock.get_fd(), event::event_poller::RE, false);
         return;
     }
 
-    while (!tunnel_conn->send_buffer.empty())
+    while (!send_buffer.empty())
     {
         int oper_errno = 0;
-        int len = sock.send(tunnel_conn->send_buffer.get_read_ptr(), tunnel_conn->send_buffer.size(), oper_errno);
+        int len = sock.send(send_buffer.get_read_ptr(), send_buffer.size(), oper_errno);
         if (len > 0)
         {
             // LOG_ERROR("flush bytes {}", len);
             tunnel_conn->record_sent_bytes(len);
-            tunnel_conn->send_buffer.move_read_ptr_n(len);
+            send_buffer.move_read_ptr_n(len);
         }
         else
         {
-            if (oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EAGAIN &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EINTR &&
-                oper_errno != avant::utility::comm_errno::comm_errno::COMM_ERRNO_EWOULDBLOCK)
+            if (oper_errno != avant::utility::comm_errno::COMM_ERRNO_EAGAIN &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EINTR &&
+                oper_errno != avant::utility::comm_errno::COMM_ERRNO_EWOULDBLOCK)
             {
                 LOG_ERROR("try_send_flush_tunnel tunnel_conn oper_errno {}", oper_errno);
                 to_stop();
             }
             else
             {
-                m_epoller.mod(sock.get_fd(), nullptr, event::event_poller::RWE, false);
+                m_epoller.mod(sock.get_fd(), event::event_poller::RWE, false);
             }
             break;
         }
@@ -992,30 +980,32 @@ int server::tunnel_forward(int source_tunnelid, int dest_tunnel_id, ProtoPackage
     proto::pack_package(data, package, ProtoCmd::PROTO_CMD_TUNNEL_PACKAGE);
     // LOG_ERROR("forward datasize {} cmd {}", data.size(), package.innerprotopackage().cmd());
 
-    dest_tunnel_conn_ptr->send_buffer.append(data.c_str(), data.size());
+    dest_tunnel_conn_ptr->get_send_buffer().append(data.c_str(), data.size());
     if (flush)
     {
+        int dest_fd = dest_tunnel_conn_ptr->get_fd();
         // worker_tunnel_fd
-        if (m_main_worker_tunnel_fd2index.find(dest_tunnel_conn_ptr->fd) != m_main_worker_tunnel_fd2index.end())
+        if (m_main_worker_tunnel_fd2index.find(dest_fd) != m_main_worker_tunnel_fd2index.end())
         {
             // LOG_ERROR("main to worker");
-            try_send_flush_tunnel(m_main_worker_tunnel[m_main_worker_tunnel_fd2index[dest_tunnel_conn_ptr->fd]]);
+            int worker_idx = m_main_worker_tunnel_fd2index[dest_fd];
+            try_send_flush_tunnel(m_main_worker_tunnel[worker_idx]);
         }
         // main_other tunnel
-        else if (m_main_other_tunnel.get_me() == dest_tunnel_conn_ptr->fd)
+        else if (m_main_other_tunnel.get_me() == dest_fd)
         {
             // LOG_ERROR("main to other");
             try_send_flush_tunnel(m_main_other_tunnel);
         }
         else
         {
-            LOG_ERROR("flush error know fd {}, it's not worker and other tunnel fd", dest_tunnel_conn_ptr->fd);
+            LOG_ERROR("flush error know fd {}, it's not worker and other tunnel fd", dest_fd);
             return -4;
         }
     }
     else
     {
-        m_epoller.mod(dest_tunnel_conn_ptr->fd, nullptr, event::event_poller::RWE, false);
+        m_epoller.mod(dest_tunnel_conn_ptr->get_fd(), event::event_poller::RWE, false);
     }
     return 0;
 }
@@ -1026,7 +1016,9 @@ avant::connection::connection *server::get_main2worker_tunnel(int worker_tunnel_
     {
         return nullptr;
     }
-    return m_main_connection_mgr.get_conn(m_main_worker_tunnel[worker_tunnel_id].get_me());
+
+    int worker_idx = tunnel_id::get().get_worker_idx_by_tunnel_id(worker_tunnel_id);
+    return m_main_connection_mgr.get_conn(m_main_worker_tunnel[worker_idx].get_me());
 }
 
 avant::connection::connection *server::get_main2other_tunnel()

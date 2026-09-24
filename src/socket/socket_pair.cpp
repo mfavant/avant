@@ -30,8 +30,12 @@ int socket_pair::init()
         m_socket_obj[M_ME_IDX].close();
         return -1;
     }
-    m_socket_obj[M_ME_IDX].set_recv_buffer(65535);
-    m_socket_obj[M_ME_IDX].set_send_buffer(65535);
+    if (!m_socket_obj[M_ME_IDX].set_recv_buffer(65535) || !m_socket_obj[M_ME_IDX].set_send_buffer(65535))
+    {
+        LOG_ERROR("socket_pair me endpoint set_recv_buffer/set_send_buffer failed");
+        m_socket_obj[M_ME_IDX].close();
+        return -1;
+    }
     m_socket_obj[M_ME_IDX].close_callback = nullptr;
 
     m_socket_obj[M_OTHER_IDX].set_fd(fd[M_OTHER_IDX]);
@@ -42,11 +46,15 @@ int socket_pair::init()
         m_socket_obj[M_OTHER_IDX].close();
         return -1;
     }
-    // note: if either set_non_blocking fails, the paired fd is auto-closed by the socket destructors
-    m_socket_obj[M_OTHER_IDX].set_recv_buffer(65535);
-    m_socket_obj[M_OTHER_IDX].set_send_buffer(65535);
+    if (!m_socket_obj[M_OTHER_IDX].set_recv_buffer(65535) || !m_socket_obj[M_OTHER_IDX].set_send_buffer(65535))
+    {
+        LOG_ERROR("socket_pair other endpoint set_recv_buffer/set_send_buffer failed");
+        m_socket_obj[M_ME_IDX].close();
+        m_socket_obj[M_OTHER_IDX].close();
+        return -1;
+    }
     m_socket_obj[M_OTHER_IDX].close_callback = nullptr;
-    return iret;
+    return 0;
 }
 
 int socket_pair::get_me()
