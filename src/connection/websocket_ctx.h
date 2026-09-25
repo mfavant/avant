@@ -106,8 +106,6 @@ namespace avant::connection
         uint8_t frame_first_opcode{0};
         std::string frame_payload_data{};
 
-        void *ptr{nullptr};
-
     private:
         llhttp_t http_parser_obj;
     };

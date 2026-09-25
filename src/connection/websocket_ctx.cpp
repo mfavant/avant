@@ -249,7 +249,7 @@ void websocket_ctx::on_create(connection &conn_obj, avant::workers::worker &work
     this->is_connected = false;
     this->frame_first_opcode = 0;
     this->frame_payload_data.clear();
-    this->ptr = nullptr;
+
     llhttp_init(&this->http_parser_obj, HTTP_REQUEST, websocket_ctx::settings.get());
     this->http_parser_obj.data = this;
 }
