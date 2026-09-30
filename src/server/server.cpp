@@ -44,6 +44,9 @@ server::server()
 
 server::~server()
 {
+    // Close the self-pipe
+    close_signal_pipe();
+
     // release SSL_CTX
     if (m_ssl_context)
     {
@@ -112,13 +115,7 @@ void server::config(const system::config_mgr &config_mgr)
 
 void server::to_stop()
 {
-    if (stop_flag.load())
-    {
-        return;
-    }
-    // main thread stop_flag
-    stop_flag.store(true);
-    // worker thread stop_flag
+    stop_flag.store(true, std::memory_order_release);
     if (m_workers)
     {
         for (int i = 0; i < m_worker_cnt; i++)
@@ -250,12 +247,18 @@ int server::on_start()
     // main m_epoller
     int iret = 0;
     {
-        iret = m_epoller.create(this->m_config_mgr.get_max_client_cnt() + 10);
+        iret = m_epoller.create(this->m_config_mgr.get_max_client_cnt() + 11);
         if (iret != 0)
         {
-            LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_config_mgr.get_max_client_cnt() + 10), iret);
+            LOG_ERROR("m_epoller.create({}) iret[{}]", (this->m_config_mgr.get_max_client_cnt() + 11), iret);
             return -1;
         }
+    }
+
+    // self-pipe: lets the async-signal-safe handlers wake the main loop.
+    if (setup_signal_pipe() != 0)
+    {
+        return -1;
     }
 
     // main_connection_mgr: worker_cnt worker tunnels + other tunnel
@@ -533,6 +536,11 @@ int server::on_start()
     {
         while (true)
         {
+            // Handle any signal work requested since the last loop (the handlers only set
+            // flags + wrote the self-pipe; the actual to_stop()/cmd_reload() runs here, in
+            // the main loop, never in signal context).
+            process_signal_requests();
+
             int num = m_epoller.wait(this->m_config_mgr.get_epoll_wait_time());
 
             if (num < 0)
@@ -548,42 +556,40 @@ int server::on_start()
                     continue;
                 }
             }
-
             // time update
             {
                 hooks::tick::on_main_tick(*this); // maybe change errno
                 this->m_server_loop_time.update();
                 uint64_t now_tick_time = this->m_server_loop_time.get_seconds();
-                if (this->m_latest_tick_time != now_tick_time)
-                {
-                    // int curr_connection_num = m_curr_connection_num->load();
-                    // LOG_ERROR("curr_connection_num {}", curr_connection_num);
 
-                    if (stop_flag.load())
+                if (stop_flag.load())
+                {
+                    bool all_stopped = true;
+                    // checking all worker stoped
+                    for (int i = 0; i < m_worker_cnt; i++)
                     {
-                        bool flag = true;
-                        // checking all worker stoped
-                        for (int i = 0; i < m_worker_cnt; i++)
+                        if (!m_workers[i].is_stoped.load())
                         {
-                            if (!m_workers[i].is_stoped.load())
-                            {
-                                flag = false;
-                            }
-                        }
-                        if (flag)
-                        {
-                            m_other->to_stop.store(true);
-                        }
-                        // checking other thread stoped
-                        if (!m_other->is_stoped.load())
-                        {
-                            flag = false;
-                        }
-                        if (flag)
-                        {
-                            break;
+                            all_stopped = false;
                         }
                     }
+                    if (all_stopped)
+                    {
+                        m_other->to_stop.store(true);
+                    }
+                    // checking other thread stoped
+                    if (!m_other->is_stoped.load())
+                    {
+                        all_stopped = false;
+                    }
+                    if (all_stopped)
+                    {
+                        break;
+                    }
+                }
+
+                if (this->m_latest_tick_time != now_tick_time)
+                {
                     this->m_gid_seq = 0;
                     this->m_latest_tick_time = now_tick_time;
                 }
@@ -639,6 +645,12 @@ int server::on_start()
                 else if (m_main_other_tunnel.get_me() == evented_fd)
                 {
                     on_tunnel_event(m_main_other_tunnel, event_come);
+                }
+                // self-pipe: a signal handler requested work; drain and run it in-loop.
+                else if (evented_fd == m_signal_pipe_rd)
+                {
+                    drain_signal_pipe();
+                    process_signal_requests();
                 }
                 else
                 {
@@ -1050,4 +1062,106 @@ avant::connection::connection *server::get_main2other_tunnel()
 void server::cmd_reload()
 {
     hooks::reload::on_cmd_reload(*this);
+}
+
+void server::request_stop()
+{
+    // Both operations are async-signal-safe: an atomic store and a 1-byte write.
+    stop_flag.store(true, std::memory_order_release);
+    if (m_signal_pipe_wr >= 0)
+    {
+        const char byte = 'S';
+        (void)write(m_signal_pipe_wr, &byte, 1);
+    }
+}
+
+void server::request_reload()
+{
+    reload_request.store(true, std::memory_order_release);
+    if (m_signal_pipe_wr >= 0)
+    {
+        const char byte = 'R';
+        (void)write(m_signal_pipe_wr, &byte, 1);
+    }
+}
+
+// Close the self-pipe
+void server::close_signal_pipe()
+{
+    if (m_signal_pipe_rd >= 0)
+    {
+        ::close(m_signal_pipe_rd);
+        m_signal_pipe_rd = -1;
+    }
+    if (m_signal_pipe_wr >= 0)
+    {
+        ::close(m_signal_pipe_wr);
+        m_signal_pipe_wr = -1;
+    }
+}
+
+int server::setup_signal_pipe()
+{
+    int fds[2]{-1, -1};
+    if (::pipe(fds) != 0)
+    {
+        LOG_ERROR("signal self-pipe pipe() failed errno {}", errno);
+        return -1;
+    }
+
+    // Both ends non-blocking: the write end (used by the async-signal-safe handler) must
+    // never block, and the read end (drained in the main loop) must never block either --
+    // a blocking read() here would stall the main loop and process_signal_requests()
+    // would never run, so a requested stop/reload would never be acted on.
+    for (int i = 0; i < 2; ++i)
+    {
+        const int flags = fcntl(fds[i], F_GETFL);
+        if (flags < 0 || fcntl(fds[i], F_SETFL, flags | O_NONBLOCK) < 0)
+        {
+            ::close(fds[0]);
+            ::close(fds[1]);
+            LOG_ERROR("signal self-pipe fcntl(O_NONBLOCK) failed errno {}", errno);
+            return -1;
+        }
+    }
+    m_signal_pipe_rd = fds[0];
+    m_signal_pipe_wr = fds[1];
+
+    if (0 != m_epoller.add(m_signal_pipe_rd, event::event_poller::RE, false))
+    {
+        LOG_ERROR("m_epoller.add signal self-pipe read end failed errno {}", errno);
+        ::close(fds[0]);
+        ::close(fds[1]);
+        m_signal_pipe_rd = -1;
+        m_signal_pipe_wr = -1;
+        return -1;
+    }
+
+    return 0;
+}
+
+void server::drain_signal_pipe()
+{
+    char buf[256];
+    for (int i = 0; i < 8; ++i)
+    {
+        const ssize_t n = ::read(m_signal_pipe_rd, buf, sizeof(buf));
+        if (n <= 0)
+        {
+            break; // EAGAIN (empty) or error: nothing more to drain
+        }
+    }
+}
+
+void server::process_signal_requests()
+{
+    if (stop_flag.load(std::memory_order_acquire))
+    {
+        to_stop();
+    }
+    if (reload_request.load(std::memory_order_acquire))
+    {
+        reload_request.store(false, std::memory_order_release);
+        cmd_reload();
+    }
 }

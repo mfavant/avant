@@ -6,6 +6,7 @@
 #include <iostream>
 #include <filesystem>
 #include <fcntl.h>
+#include <format>
 #include <avant-inifile/inifile.h>
 #include <avant-log/logger.h>
 
@@ -46,7 +47,8 @@ int system::init()
     }
 
     // daemon
-    if (m_config_mgr.get_daemon())
+    m_daemon = m_config_mgr.get_daemon() == 1;
+    if (m_daemon)
     {
         create_daemon();
     }
@@ -62,13 +64,22 @@ int system::init()
     DIR *dp = opendir(log_dir_path.c_str());
     if (dp == nullptr)
     {
-        mkdir(log_dir_path.c_str(), 0755); // create dir
+        if (mkdir(log_dir_path.c_str(), 0755) != 0) // create dir
+        {
+            std::cerr << std::format("system::init() mkdir log dir '{}' failed: {}", log_dir_path, strerror(errno)) << std::endl;
+            return -1;
+        }
     }
     else
     {
         closedir(dp);
     }
-    logger::instance().open(m_root_path + "/log/", m_config_mgr.get_log_level());
+
+    if (0 != logger::instance().open(m_root_path + "/log/", m_config_mgr.get_log_level()))
+    {
+        std::cerr << "system::init() logger::open() failed, exiting" << std::endl;
+        return -1;
+    }
 
     // server
     avant::server::server *new_server = new server::server;
@@ -78,7 +89,7 @@ int system::init()
         return 1;
     }
     m_server_ptr.reset(new_server);
-    m_server_ptr->config(m_config_mgr); // copy config_mgr to server object
+    m_server_ptr->config(m_config_mgr);    // copy config_mgr to server object
     int start_ret = m_server_ptr->start(); // main thread loop
 
     LOG_ERROR("m_server_ptr->start() return ret={}", start_ret);
@@ -203,7 +214,7 @@ void system::signal_term(int)
 {
     if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr)
     {
-        avant_global_system_ptr->m_server_ptr->to_stop();
+        avant_global_system_ptr->m_server_ptr->request_stop();
     }
 }
 
@@ -211,15 +222,15 @@ void system::signal_usr1(int)
 {
     if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr)
     {
-        avant_global_system_ptr->m_server_ptr->cmd_reload();
+        avant_global_system_ptr->m_server_ptr->request_reload();
     }
 }
 
 void system::signal_int(int)
 {
     if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr &&
-        !avant_global_system_ptr->m_config_mgr.get_daemon())
+        !avant_global_system_ptr->m_daemon)
     {
-        avant_global_system_ptr->m_server_ptr->to_stop();
+        avant_global_system_ptr->m_server_ptr->request_stop();
     }
 }

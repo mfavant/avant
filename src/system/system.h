@@ -30,5 +30,6 @@ namespace avant::system
         std::string m_root_path{};
         std::shared_ptr<avant::server::server> m_server_ptr;
         avant::system::config_mgr m_config_mgr;
+        bool m_daemon{false};
     };
 }

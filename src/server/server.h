@@ -1,11 +1,11 @@
 #pragma once
 #include <string>
+#include <atomic>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/opensslv.h>
 #include <memory>
-#include <atomic>
 #include <unordered_map>
 #include <vector>
 #include <avant-json/json.h>
@@ -40,12 +40,15 @@ namespace avant::server
 
         avant::task::task_type get_task_type();
         void to_stop();
+        void cmd_reload();
+
+        void request_stop();
+        void request_reload();
+
         inline const avant::json::json &get_ipc_json()
         {
             return this->m_ipc_json;
         }
-
-        void cmd_reload();
 
     private:
         int on_start();
@@ -64,6 +67,11 @@ namespace avant::server
 
         [[nodiscard]] connection::connection *get_main2worker_tunnel(int worker_tunnel_id);
         [[nodiscard]] connection::connection *get_main2other_tunnel();
+
+        int setup_signal_pipe();
+        void close_signal_pipe();
+        void process_signal_requests();
+        void drain_signal_pipe();
 
     private:
         system::config_mgr m_config_mgr;
@@ -94,5 +102,12 @@ namespace avant::server
 
         // reusable tunnel recv scratch buffer
         std::vector<char> m_tunnel_recv_buf;
+
+        // self-pipe: the signal handlers write one byte here (async-signal-safe) to wake
+        // the main loop; the read end is registered with m_epoller.
+        int m_signal_pipe_rd{-1};
+        int m_signal_pipe_wr{-1};
+        // Set by the (async-signal-safe) handlers, consumed by the main loop.
+        std::atomic<bool> reload_request{false};
     };
 }
