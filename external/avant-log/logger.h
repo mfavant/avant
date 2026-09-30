@@ -40,10 +40,10 @@ namespace avant
              * @brief open log file directory
              *
              * @param log_file_base_path directory path for log files (e.g., "logs")
-             * @param log_level
+             * @param log_level one of DEBUG..FATAL
+             * @return 0 on success, -1 if the directory/file could not be created or opened
              */
-
-            void open(const string &log_file_base_path, const int log_level);
+            int open(const std::string &log_file_base_path, const int log_level);
 
             /**
              * @brief close log file

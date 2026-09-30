@@ -27,7 +27,7 @@ logger::~logger()
     close();
 }
 
-void logger::open(const string &log_file_base_path, const int log_level)
+int logger::open(const string &log_file_base_path, const int log_level)
 {
     if (DEBUG > log_level || log_level > FLAG_COUNT)
     {
@@ -47,6 +47,8 @@ void logger::open(const string &log_file_base_path, const int log_level)
     // Open the initial log file
     std::time_t ticks = chrono::system_clock::to_time_t(chrono::system_clock::now());
     rotate_log_file(ticks);
+
+    return 0;
 }
 
 void logger::close()
