@@ -4,10 +4,11 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <string>
-#include <cstring>
+#include <atomic>
 #include <chrono>
 #include <mutex>
 #include <format>
+#include <iostream>
 
 namespace avant
 {
@@ -44,12 +45,6 @@ namespace avant
              * @return 0 on success, -1 if the directory/file could not be created or opened
              */
             int open(const std::string &log_file_base_path, const int log_level);
-
-            /**
-             * @brief close log file
-             *
-             */
-            void close();
 
             template <typename... Args>
             void debug(const char *file, int line, const char *func, std::format_string<Args...> fmt, Args &&...args)
@@ -107,21 +102,30 @@ namespace avant
             {
                 std::lock_guard<std::mutex> lock(m_log_mutex);
 
-                if (m_fp == nullptr)
+                struct tm tm_now{};
+                struct tm *ptm = nullptr;
+
+                const std::time_t ticks = chrono::system_clock::to_time_t(chrono::system_clock::now());
+
+                ptm = ::localtime_r(&ticks, &tm_now);
+                if (ptm == nullptr)
                 {
-                    printf("open log file failed: m_fp==nullptr\n");
-                    exit(1);
+                    std::cerr << "log: localtime_r failed, message dropped" << '\n';
+                    return;
                 }
 
-                std::time_t ticks = chrono::system_clock::to_time_t(chrono::system_clock::now());
-
                 // Check if log file needs rotation
-                rotate_log_file(ticks);
+                rotate_log_file(tm_now);
 
-                // Get time for log enrty
-                struct tm *ptm = std::localtime(&ticks);
-                char buf[32];
-                memset(buf, 0, sizeof(buf));
+                if (m_fp == nullptr)
+                {
+                    std::cerr << "log: file not open, message dropped" << '\n';
+                    m_reported_fp_null = true;
+                    return;
+                }
+
+                // Get time for log entry
+                char buf[32]{0};
                 strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ptm);
 
                 // using log file
@@ -129,23 +133,27 @@ namespace avant
                 fprintf(m_fp, "%s  ", s_flag[f]); // print flag
                 fprintf(m_fp, "%s:%d %s  ", file, line, func);
                 auto msg = std::format(fmt, std::forward<Args>(args)...);
-                fprintf(m_fp, "%s\r\n", msg.c_str());
-
-                // free lock
+                fprintf(m_fp, "%s\n", msg.c_str());
                 fflush(m_fp);
+                // free lock
             }
 
-            void rotate_log_file(std::time_t ticks);
+            void rotate_log_file(const struct tm &tm_now);
+            void close_unlocked();
 
         protected:
             FILE *m_fp{nullptr};
             // Store base path for log files
             std::string m_base_path;
             // Track current hour for rotation
-            struct tm m_last_tm;
+            struct tm m_last_tm{};
+            // True once the current hour has been accounted for by a rotation attempt
             bool m_has_valid_tm{false};
 
-            int m_log_level{0};
+            // Rate-limits the "file not open" notice to one per disabled period.
+            bool m_reported_fp_null{false};
+
+            std::atomic<int> m_log_level{0};
 
             std::mutex m_log_mutex;
 
