@@ -740,7 +740,7 @@ void worker::on_new_client_fd(int fd, uint64_t gid)
                                                                                                            this->m_latest_tick_time_monotonic,
                                                                                                            1,
                                                                                                            5, // timeout 5 s
-                                                                                                           [this, fd](avant::timer::timer &timer_instance) -> void
+                                                                                                           [this, fd](const avant::timer::timer &timer_instance) -> void
                                                                                                            {
                                                                                                                auto conn = this->worker_connection_mgr->get_conn_by_gid(timer_instance.get_id());
                                                                                                                if (!conn)
