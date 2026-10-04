@@ -1,166 +1,453 @@
-#include <iostream>
+#pragma once
+
+#include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <fcntl.h>
+#include <functional>
+#include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <string>
-#include <list>
-#include <functional>
-
-#define DEBUG cout << "DEBUG " << __LINE__ << endl
-
-using namespace std;
+#include <type_traits>
+#include <cerrno>
+#include <cstring>
 
 namespace avant
 {
     namespace ipc
     {
+        // Fixed-size object pool backed by a POSIX shared memory object
+        //
+        // Memory layout:
+        //   [ header ]
+        //   [ padding for atomic_ref<uint8_t> alignment ]
+        //   [ use-list: count bytes, 1 byte per slot ]
+        //   [ alignment padding for T ]
+        //   [ count * T ]
+        //
+        // The header records magic/version/count/mem_size so a stale object from
+        // an earlier (different) configuration is rejected instead of misparsed.
+        //
+        // Semantics:
+        // - init() opens or creates the shm object and maps it.
+        //   On creation the header is written and the use-list zeroed.
+        //   On re-open the existing state is kept.
+        // - The use-list uses std::atomic_ref so the actual shared-memory storage
+        //   remains std::uint8_t while accesses to it can be performed atomically.
+        // - Synchronization of the T payload itself is NOT provided.
+        //   If a slot is shared between processes while in use, the producer /
+        //   consumer must order their accesses themselves.
+        // - The shm object persists in the kernel until unlink() is called
+        //   or the system reboots.
         template <typename T>
         class shm_pool
         {
         public:
-            shm_pool(const std::string &name, const size_t &count);
+            shm_pool(const std::string &name, size_t count);
             ~shm_pool();
+
+            // Open or create the shm object and map it.
             bool init();
+
+            // Unmap and close the fd.
+            // The shm object itself stays in the kernel.
             bool close();
+
+            // close() + remove the object from the kernel.
             bool unlink();
+
+            // Mark all slots free.
+            bool reset();
+
+            // Claim a slot.
+            // Returns nullptr when the pool is exhausted.
             T *alloc();
+
+            // Release a slot previously obtained from alloc().
             bool back(T *t);
-            void foreach (std::function<bool(T *t, bool used)> callback, bool used = true);
+
+            // Iterate slots; callback return false stops the iteration.
+            // used=true visits in-use slots only (default),
+            // used=false visits free slots only.
+            void foreach (std::function<bool(T *, bool)> callback, bool used = true);
 
         private:
+            struct header
+            {
+                std::uint64_t magic{0};
+                std::uint32_t version{0};
+                std::uint32_t count{0};
+                std::uint64_t mem_size{0};
+            };
+
+            static constexpr std::uint64_t M_MAGIC = 0x314350495641ULL; // "AVIPC1"
+            static constexpr std::uint32_t M_VERSION = 1;
+
             T *get_by_index(size_t index);
+            header *hdr();
+            T *object_base();
+
+            // The actual shared-memory storage is std::uint8_t.
+            // std::atomic_ref is used when atomic access is required.
+            std::uint8_t *use_list_base();
 
         private:
             size_t count{0};
+
+            // Padding between use-list and T object array.
             size_t padding{0};
+
+            // Padding between header and use-list.
+            size_t use_list_padding{0};
+
             size_t mem_size{0};
+
             std::string name{};
-            T *list{nullptr};
             int mem_fd{-1};
             void *mem_ptr{nullptr};
         };
 
         template <typename T>
-        shm_pool<T>::shm_pool(const std::string &name, const size_t &count) : name(name), count(count)
+        shm_pool<T>::shm_pool(
+            const std::string &name,
+            size_t count)
+            : count(count),
+              name(name)
         {
-            size_t alignment = std::alignment_of<T>::value;
-            size_t use_list_size = sizeof(char) * count;
-            this->padding = (alignment - use_list_size % alignment) % alignment;
-            this->mem_size = use_list_size + padding + sizeof(T) * count;
+            /*
+             * The use-list is accessed through std::atomic_ref<uint8_t>.
+             * Therefore its address must satisfy atomic_ref's alignment
+             * requirement.
+             */
+            constexpr size_t use_list_alignment =
+                std::atomic_ref<std::uint8_t>::required_alignment;
+
+            constexpr size_t object_alignment =
+                std::alignment_of<T>::value;
+
+            /*
+             * Layout:
+             *
+             * [ header ]
+             * [ use-list padding ]
+             * [ use-list ]
+             * [ T padding ]
+             * [ T objects ]
+             */
+
+            const size_t pre_use_list_size = sizeof(header);
+
+            // use_list_padding is 0
+            this->use_list_padding =
+                (use_list_alignment -
+                 pre_use_list_size % use_list_alignment) %
+                use_list_alignment;
+
+            const size_t use_list_offset =
+                sizeof(header) + this->use_list_padding;
+
+            const size_t pre_obj_size =
+                use_list_offset +
+                sizeof(std::uint8_t) * count;
+
+            this->padding =
+                (object_alignment -
+                 pre_obj_size % object_alignment) %
+                object_alignment;
+
+            this->mem_size =
+                pre_obj_size +
+                this->padding +
+                sizeof(T) * count;
         }
 
         template <typename T>
         shm_pool<T>::~shm_pool()
         {
-            if (this->mem_fd != -1)
-            {
-                close();
-            }
+            close();
         }
 
         template <typename T>
         bool shm_pool<T>::init()
         {
-            int shm_fd = shm_open(name.c_str(), O_RDWR, 0);
-            bool recreate = false;
-            if (shm_fd == -1) // create
+            if (this->mem_ptr != nullptr)
             {
-                this->mem_fd = shm_open(name.c_str(), O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
-                if (this->mem_fd == -1)
+                return true; // already mapped
+            }
+
+            int shm_fd = shm_open(
+                this->name.c_str(),
+                O_RDWR,
+                0);
+
+            bool recreate = false;
+
+            if (shm_fd == -1)
+            {
+                // Create.
+                if (errno != ENOENT)
                 {
                     return false;
                 }
-                // shm space size
-                if (-1 == ftruncate(this->mem_fd, this->mem_size))
+
+                shm_fd = shm_open(
+                    this->name.c_str(),
+                    O_RDWR | O_CREAT | O_EXCL,
+                    S_IRUSR | S_IWUSR);
+
+                if (shm_fd == -1)
                 {
                     return false;
                 }
+
+                // shm space size.
+                // The kernel may round the object size up to a page.
+                if (-1 == ftruncate(
+                              shm_fd,
+                              static_cast<off_t>(this->mem_size)))
+                {
+                    ::close(shm_fd);
+                    shm_unlink(this->name.c_str());
+                    return false;
+                }
+
                 recreate = true;
             }
             else
             {
-                this->mem_fd = shm_fd;
-            }
-            // mapping
-            this->mem_ptr = mmap(nullptr, this->mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, this->mem_fd, 0);
-            if (this->mem_ptr == MAP_FAILED)
-            {
-                return false;
-            }
-            char *use_list = (char *)this->mem_ptr;
-            if (recreate)
-            {
-                for (size_t i = 0; i < count; ++i)
+                // The existing object must be at least our required size.
+                struct stat st;
+
+                if (-1 == fstat(shm_fd, &st) ||
+                    static_cast<size_t>(st.st_size) < this->mem_size)
                 {
-                    use_list[i] = 0;
+                    ::close(shm_fd);
+                    return false;
                 }
             }
+
+            // Mapping.
+            void *mem_ptr = mmap(
+                nullptr,
+                this->mem_size,
+                PROT_READ | PROT_WRITE,
+                MAP_SHARED,
+                shm_fd,
+                0);
+
+            if (mem_ptr == MAP_FAILED)
+            {
+                ::close(shm_fd);
+
+                if (recreate)
+                {
+                    shm_unlink(this->name.c_str());
+                }
+
+                return false;
+            }
+
+            if (recreate)
+            {
+                // Newly created shared memory:
+                // initialize metadata and use-list.
+                header *h =
+                    static_cast<header *>(mem_ptr);
+
+                h->magic = M_MAGIC;
+                h->version = M_VERSION;
+                h->count =
+                    static_cast<std::uint32_t>(this->count);
+                h->mem_size = this->mem_size;
+
+                std::uint8_t *use_list =
+                    static_cast<std::uint8_t *>(mem_ptr) +
+                    sizeof(header) +
+                    this->use_list_padding;
+
+                std::memset(
+                    use_list,
+                    0,
+                    this->count * sizeof(std::uint8_t));
+            }
+            else
+            {
+                // Re-use existing shared memory:
+                // verify metadata before using it.
+                header *h =
+                    static_cast<header *>(mem_ptr);
+
+                if (h->magic != M_MAGIC ||
+                    h->version != M_VERSION ||
+                    h->count !=
+                        static_cast<std::uint32_t>(this->count) ||
+                    h->mem_size != this->mem_size)
+                {
+                    ::munmap(mem_ptr, this->mem_size);
+                    ::close(shm_fd);
+                    return false;
+                }
+            }
+
+            this->mem_ptr = mem_ptr;
+            this->mem_fd = shm_fd;
+
             return true;
         }
 
         template <typename T>
         bool shm_pool<T>::close()
         {
-            this->mem_ptr = nullptr;
-            int close_res = -1;
+            bool ok = true;
+
+            if (this->mem_ptr != nullptr)
+            {
+                if (-1 == munmap(
+                              this->mem_ptr,
+                              this->mem_size))
+                {
+                    ok = false;
+                }
+
+                this->mem_ptr = nullptr;
+            }
+
             if (this->mem_fd != -1)
             {
-                close_res = ::close(this->mem_fd);
+                if (-1 == ::close(this->mem_fd))
+                {
+                    ok = false;
+                }
+
+                this->mem_fd = -1;
             }
-            return (close_res != -1);
+
+            return ok;
         }
 
         template <typename T>
         bool shm_pool<T>::unlink()
         {
             close();
-            this->mem_ptr = nullptr;
-            return (shm_unlink(this->name.c_str()) != -1);
+
+            return (shm_unlink(
+                        this->name.c_str()) != -1);
+        }
+
+        template <typename T>
+        bool shm_pool<T>::reset()
+        {
+            if (this->mem_ptr == nullptr)
+            {
+                return false;
+            }
+
+            std::uint8_t *use_list =
+                use_list_base();
+
+            for (size_t i = 0; i < this->count; ++i)
+            {
+                std::atomic_ref<std::uint8_t> slot(use_list[i]);
+
+                slot.store(
+                    0,
+                    std::memory_order_relaxed);
+            }
+
+            return true;
         }
 
         template <typename T>
         T *shm_pool<T>::alloc()
         {
-            T *object_ptr = (T *)((char *)this->mem_ptr + sizeof(char) * this->count + this->padding);
-            char *use_list = (char *)this->mem_ptr;
+            if (this->mem_ptr == nullptr)
+            {
+                return nullptr;
+            }
+
+            std::uint8_t *use_list =
+                use_list_base();
+
+            T *object_ptr =
+                object_base();
+
             for (size_t i = 0; i < this->count; ++i)
             {
-                if (use_list[i] == 0) // unused
+                std::atomic_ref<std::uint8_t> slot(
+                    use_list[i]);
+
+                /*
+                 * Atomically claim the slot.
+                 *
+                 * exchange() returns the previous value:
+                 *
+                 *   0 -> successfully claimed
+                 *   1 -> already in use
+                 */
+                if (slot.exchange(
+                        1,
+                        std::memory_order_acq_rel) == 0)
                 {
-                    use_list[i] = 1;
                     return &object_ptr[i];
                 }
             }
+
             return nullptr;
         }
 
         template <typename T>
         bool shm_pool<T>::back(T *t)
         {
-            T *start_addr = (T *)((char *)this->mem_ptr + sizeof(char) * this->count + this->padding);
-            T *end_addr = start_addr + this->count;
-            if (!(t < end_addr && t >= start_addr))
+            if (this->mem_ptr == nullptr)
             {
-                DEBUG;
                 return false;
             }
-            size_t gap = (char *)t - (char *)start_addr;
+
+            T *start_addr =
+                object_base();
+
+            T *end_addr =
+                start_addr + this->count;
+
+            if (t < start_addr || t >= end_addr)
+            {
+                return false;
+            }
+
+            size_t gap =
+                reinterpret_cast<char *>(t) -
+                reinterpret_cast<char *>(start_addr);
+
             if (gap % sizeof(T) != 0)
             {
-                DEBUG;
                 return false;
             }
-            size_t index = gap / sizeof(T);
+
+            size_t index =
+                gap / sizeof(T);
+
+            std::uint8_t *use_list =
+                use_list_base();
+
+            std::atomic_ref<std::uint8_t> slot(
+                use_list[index]);
+
+            /*
+             * Atomically release the slot.
+             *
+             * exchange() returns the previous value:
+             *
+             *   1 -> successfully released
+             *   0 -> not in use / double back
+             */
+            if (slot.exchange(
+                    0,
+                    std::memory_order_acq_rel) != 1)
             {
-                char *use_list = (char *)this->mem_ptr;
-                if (use_list[index] != 1)
-                {
-                    DEBUG;
-                    return false;
-                }
-                use_list[index] = 0;
+                return false;
             }
+
             return true;
         }
 
@@ -171,149 +458,72 @@ namespace avant
             {
                 return nullptr;
             }
-            T *start_addr = (T *)((char *)this->mem_ptr + sizeof(char) * this->count + this->padding);
-            return start_addr + index;
+
+            return object_base() + index;
         }
 
         template <typename T>
-        void shm_pool<T>::foreach (std::function<bool(T *t, bool used)> callback, bool used)
+        void shm_pool<T>::foreach(
+            std::function<bool(T *, bool)> callback,
+            bool used)
         {
-            char *use_list = (char *)this->mem_ptr;
+            if (this->mem_ptr == nullptr)
+            {
+                return;
+            }
+
+            std::uint8_t *use_list =
+                use_list_base();
+
             for (size_t i = 0; i < this->count; ++i)
             {
-                if (used)
+                std::atomic_ref<std::uint8_t> slot(
+                    use_list[i]);
+
+                bool slot_used =
+                    slot.load(
+                        std::memory_order_relaxed) != 0;
+
+                if (slot_used == used)
                 {
-                    if (use_list[i])
-                    {
-                        bool continue_able = callback(get_by_index(i), use_list[i]);
-                        if (!continue_able)
-                        {
-                            break;
-                        }
-                    }
-                }
-                else
-                {
-                    bool continue_able = callback(get_by_index(i), use_list[i]);
-                    if (!continue_able)
+                    if (!callback(
+                            get_by_index(i),
+                            slot_used))
                     {
                         break;
                     }
                 }
             }
         }
-    }
-}
 
-int main(int argc, char **argv)
-{
-    // testing No.1
-    {
-        avant::ipc::shm_pool<int> pool("/m_pool", 10);
-        pool.init();
-        pool.foreach (
-            [](int *obj_ptr, bool used) -> bool
-            {
-                cout << *obj_ptr << " ";
-                return true;
-            },
-            false);
-        cout << endl;
-
-        cout << "alloc start" << endl;
-
-        int *obj1 = pool.alloc();
-        if (obj1)
-            *obj1 = 1;
-        int *obj2 = pool.alloc();
-        if (obj2)
-            *obj2 = 2;
-        int *obj3 = pool.alloc();
-        if (obj3)
-            *obj3 = 3;
-        int *obj4 = pool.alloc();
-        if (obj4)
-            *obj4 = 4;
-        int *obj5 = pool.alloc();
-        if (obj5)
-            *obj5 = 5;
-        int *obj6 = pool.alloc();
-        if (obj6)
-            *obj6 = 6;
-        int *obj7 = pool.alloc();
-        if (obj7)
-            *obj7 = 7;
-        int *obj8 = pool.alloc();
-        if (obj8)
-            *obj8 = 8;
-
-        cout << "DEBUG " << __LINE__ << endl;
-
-        pool.foreach (
-            [](int *obj_ptr, bool used) -> bool
-            {
-                cout << *obj_ptr << " ";
-                return true;
-            });
-        cout << endl;
-
-        cout << "back res=" << pool.back(obj6) << endl;
-
-        pool.foreach (
-            [](int *obj_ptr, bool used) -> bool
-            {
-                cout << *obj_ptr << " ";
-                return true;
-            });
-        cout << endl;
-
-        pool.unlink();
-    }
-
-    // testing No.2
-    {
-        struct Foo
+        template <typename T>
+        typename shm_pool<T>::header *
+        shm_pool<T>::hdr()
         {
-            char a;
-            uint64_t b;
-            uint32_t c;
-            uint8_t d;
-        };
-        avant::ipc::shm_pool<Foo> pool("/m_pool_foo", 10);
-        pool.init();
-        pool.foreach (
-            [](Foo *obj_ptr, bool used) -> bool
-            {
-                cout << obj_ptr->a << " " << obj_ptr->b << " " << obj_ptr->c << " " << (int)obj_ptr->d << endl;
-                return true;
-            },
-            false);
-        cout << endl;
-
-        Foo *foo1 = pool.alloc();
-        if (foo1)
-        {
-            foo1->a = 'a';
-            foo1->b = 123456789;
-            foo1->c = 123456;
-            foo1->d = 123;
+            return static_cast<header *>(
+                this->mem_ptr);
         }
-        Foo *foo2 = pool.alloc();
-        if (foo2)
-        {
-            foo2->a = 'b';
-            foo2->b = 987654321;
-            foo2->c = 654321;
-            foo2->d = 3;
-        }
-        pool.foreach (
-            [](Foo *obj_ptr, bool used) -> bool
-            {
-                cout << obj_ptr->a << " " << obj_ptr->b << " " << obj_ptr->c << " " << (int)obj_ptr->d << endl;
-                return true;
-            });
-        cout << endl;
-    }
 
-    return 0;
-}
+        template <typename T>
+        T *shm_pool<T>::object_base()
+        {
+            return reinterpret_cast<T *>(
+                static_cast<char *>(this->mem_ptr) +
+                sizeof(header) +
+                this->use_list_padding +
+                sizeof(std::uint8_t) * this->count +
+                this->padding);
+        }
+
+        template <typename T>
+        std::uint8_t *
+        shm_pool<T>::use_list_base()
+        {
+            return reinterpret_cast<std::uint8_t *>(
+                static_cast<char *>(this->mem_ptr) +
+                sizeof(header) +
+                this->use_list_padding);
+        }
+
+    } // namespace ipc
+} // namespace avant
