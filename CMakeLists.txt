@@ -93,7 +93,7 @@ if(AVANT_JIT_VERSION)
     set(EXTERNAL_LIB avant-llhttp 
     avant-inifile 
     avant-log 
-    avant-ipc-udp 
+    avant-ipc 
     avant-timer 
     avant-xml 
     avant-buffer 
@@ -103,7 +103,7 @@ else()
     set(EXTERNAL_LIB avant-llhttp 
     avant-inifile 
     avant-log 
-    avant-ipc-udp 
+    avant-ipc 
     avant-timer 
     avant-xml 
     avant-buffer 

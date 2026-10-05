@@ -203,7 +203,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE -Wno-unused-variable)
 add_subdirectory(${PROJECT_SOURCE_DIR}/external)
 
 # for link external gen .so lib
-set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc-udp avant-timer avant-xml avant-buffer avant-lua avant-zlib avant-json)
+set(EXTERNAL_LIB avant-llhttp avant-inifile avant-log avant-ipc avant-timer avant-xml avant-buffer avant-lua avant-zlib avant-json)
 
 # 使用找到的库文件
 target_link_libraries(${PROJECT_NAME}

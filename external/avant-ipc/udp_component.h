@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <iostream>
+#include <memory>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -9,12 +11,6 @@
 #include <fcntl.h>
 #include <cstring>
 #include <string>
-
-#ifdef __linux__
-#include <sys/epoll.h>
-#elif defined(__APPLE__)
-#include <sys/event.h>
-#endif
 
 #include <functional>
 
@@ -34,11 +30,15 @@ namespace avant
             int udp_component_get_port(const struct sockaddr_storage &addr);
 
             // 如果 IP 为空字符串 "" 表示绑定到 any (:: or 0.0.0.0 取决于 socket 类型)
+            // start_event_loop=false 时只创建 socket 并 bind，返回 0/-1，
+            // 调用方自行通过 get_socket_fd() 将 fd 加入自己的事件循环
             int udp_component_server(const std::string &IP,
                                      const int PORT,
                                      bool start_event_loop = true);
 
-            // client：如果 addr != nullptr 则向指定地址发送并返回，否则向 IP:PORT 发送并在发送完后进入 event_loop()，前者用于服务器向客户端反包 后者用于客户端向服务器发送消息
+            // client：如果 addr != nullptr 则向指定地址发送并返回（用于服务器向客户端反包），
+            // 否则向 TARGET_IP:TARGET_PORT 发送（用于客户端向服务器发送消息）。
+            // 如果 socket 尚未创建则按 addr 或 TARGET_IP 的地址族自动创建。
             int udp_component_client(
                 const std::string &TARGET_IP,
                 const int TARGET_PORT,
@@ -49,12 +49,15 @@ namespace avant
 
             static bool is_ipv6(const std::string &ip);
 
+            // 阻塞事件循环（epoll/kqueue），由 tick_callback 控制退出
             int event_loop();
+            // 一次性读尽当前可读的 UDP 报文并逐个调用 message_callback
             int server_recvfrom(unsigned int max_loop);
 
             int get_socket_fd();
 
         private:
+            int create_socket(int family);
             int init_sock(const std::string &ip);
             void to_close();
 
@@ -62,6 +65,11 @@ namespace avant
             // 用 -1 表示无效 fd
             int m_socket_fd{-1};
             int m_epoll_or_kqueue_fd{-1};
+            // event_loop 是否已把 socket 注册进自己的 epoll/kqueue 实例，
+            // 防止重复注册导致误关 socket
+            bool m_event_registered{false};
+            // server_recvfrom 的复用缓冲区，避免每次调用都堆分配
+            std::unique_ptr<char[]> m_recv_buffer{nullptr};
 
         public:
             // tick_callback: 可在 event loop 中周期性调用来判断是否退出
@@ -72,5 +80,5 @@ namespace avant
 
             std::function<void()> close_callback{nullptr};
         };
-    }
-}
+    } // namespace ipc
+} // namespace avant

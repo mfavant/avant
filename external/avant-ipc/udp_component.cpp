@@ -1,5 +1,10 @@
 #include "udp_component.h"
-#include <memory>
+
+#ifdef __linux__
+#include <sys/epoll.h>
+#elif defined(__APPLE__)
+#include <sys/event.h>
+#endif
 
 namespace avant
 {
@@ -30,15 +35,16 @@ namespace avant
         {
             if (m_socket_fd != -1)
             {
-                close(m_socket_fd);
+                ::close(m_socket_fd);
                 m_socket_fd = -1;
             }
 
             if (m_epoll_or_kqueue_fd != -1)
             {
-                close(m_epoll_or_kqueue_fd);
+                ::close(m_epoll_or_kqueue_fd);
                 m_epoll_or_kqueue_fd = -1;
             }
+            m_event_registered = false;
 
             if (close_callback)
             {
@@ -46,51 +52,37 @@ namespace avant
             }
         }
 
-        int udp_component::init_sock(const std::string &ip)
+        int udp_component::create_socket(int family)
         {
             if (m_socket_fd != -1)
             {
                 return 0; // 已初始化
             }
 
-            bool want_ipv6 = false;
-            if (ip.empty())
+            m_socket_fd = ::socket(family, SOCK_DGRAM, 0);
+            if (m_socket_fd == -1)
             {
-                // 默认使用 IPv6 socket（dual-stack），以便支持 IPv4 + IPv6
-                want_ipv6 = true;
-            }
-            else
-            {
-                want_ipv6 = is_ipv6(ip);
+                perror("create_socket: error creating udp socket");
+                return -1;
             }
 
-            if (want_ipv6)
+            if (family == AF_INET6)
             {
-                m_socket_fd = ::socket(AF_INET6, SOCK_DGRAM, 0);
-                if (m_socket_fd == -1)
-                {
-                    perror("init_sock: error creating AF_INET6 socket");
-                    return -1;
-                }
                 // 允许接收 IPv4-mapped 地址（dual-stack）
                 int off = 0;
                 if (setsockopt(m_socket_fd, IPPROTO_IPV6, IPV6_V6ONLY, &off, sizeof(off)) == -1)
                 {
                     // 非致命：记录但不强制失败（有的平台可能不允许修改）
-                    perror("init_sock: warning setsockopt(IPV6_V6ONLY) failed");
-                }
-            }
-            else
-            {
-                m_socket_fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-                if (m_socket_fd == -1)
-                {
-                    perror("init_sock: error creating AF_INET socket");
-                    return -1;
+                    perror("create_socket: warning setsockopt(IPV6_V6ONLY) failed");
                 }
             }
 
             return 0;
+        }
+
+        int udp_component::init_sock(const std::string &ip)
+        {
+            return create_socket(is_ipv6(ip) ? AF_INET6 : AF_INET);
         }
 
         std::string udp_component::udp_component_get_ip(const struct sockaddr_storage &addr)
@@ -98,13 +90,13 @@ namespace avant
             char ipbuf[INET6_ADDRSTRLEN + 1] = {0};
             if (addr.ss_family == AF_INET)
             {
-                struct sockaddr_in *a = (struct sockaddr_in *)&addr;
+                const struct sockaddr_in *a = (const struct sockaddr_in *)&addr;
                 inet_ntop(AF_INET, &a->sin_addr, ipbuf, INET_ADDRSTRLEN);
                 return std::string(ipbuf);
             }
             else if (addr.ss_family == AF_INET6)
             {
-                struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&addr;
+                const struct sockaddr_in6 *a6 = (const struct sockaddr_in6 *)&addr;
                 inet_ntop(AF_INET6, &a6->sin6_addr, ipbuf, INET6_ADDRSTRLEN);
                 return std::string(ipbuf);
             }
@@ -115,12 +107,12 @@ namespace avant
         {
             if (addr.ss_family == AF_INET)
             {
-                struct sockaddr_in *a = (struct sockaddr_in *)&addr;
+                const struct sockaddr_in *a = (const struct sockaddr_in *)&addr;
                 return ntohs(a->sin_port);
             }
             else if (addr.ss_family == AF_INET6)
             {
-                struct sockaddr_in6 *a6 = (struct sockaddr_in6 *)&addr;
+                const struct sockaddr_in6 *a6 = (const struct sockaddr_in6 *)&addr;
                 return ntohs(a6->sin6_port);
             }
             return -1;
@@ -227,10 +219,19 @@ namespace avant
             struct sockaddr *addr /*=nullptr*/,
             socklen_t addr_len /*=0*/)
         {
-            // ensure socket exists
-            if (m_socket_fd == -1 && addr == nullptr)
+            // ensure socket exists（addr 优先，其次 TARGET_IP 决定地址族）
+            if (m_socket_fd == -1)
             {
-                if (0 != init_sock(TARGET_IP)) // client udp socket - use target IP to determine socket family
+                int family = AF_INET;
+                if (addr != nullptr)
+                {
+                    family = (addr->sa_family == AF_INET6) ? AF_INET6 : AF_INET;
+                }
+                else if (is_ipv6(TARGET_IP))
+                {
+                    family = AF_INET6;
+                }
+                if (0 != create_socket(family))
                 {
                     perror("udp_component_client: Error creating client udp socket");
                     return -1;
@@ -339,29 +340,38 @@ namespace avant
                 return -1;
             }
 
+            // 重复调用 event_loop 时只做修改不做 ADD，
+            // 否则对同一 fd 二次 ADD 会失败并导致误关 socket
+            if (!m_event_registered)
+            {
+                bool reg_ok = false;
 #ifdef __linux__
-            // add server fd to epoll's listen list
-            epoll_event event;
-            memset(&event, 0, sizeof(event));
-            event.data.fd = m_socket_fd;
-            event.events = EPOLLIN | EPOLLET; // edge-triggered 更高效（注意：非阻塞）
-            if (-1 == epoll_ctl(m_epoll_or_kqueue_fd, EPOLL_CTL_ADD, m_socket_fd, &event))
-            {
-                perror("event_loop: error adding server socket to epoll");
-                to_close();
-                return -1;
-            }
+                epoll_event event;
+                memset(&event, 0, sizeof(event));
+                event.data.fd = m_socket_fd;
+                event.events = EPOLLIN | EPOLLET; // edge-triggered 更高效（注意：非阻塞）
+                reg_ok = (-1 != epoll_ctl(m_epoll_or_kqueue_fd, EPOLL_CTL_ADD, m_socket_fd, &event));
+                if (!reg_ok)
+                {
+                    perror("event_loop: error adding server socket to epoll");
+                }
 #elif defined(__APPLE__)
-            // add server fd to kqueue's listen list
-            struct kevent event;
-            EV_SET(&event, m_socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
-            if (kevent(m_epoll_or_kqueue_fd, &event, 1, NULL, 0, NULL) == -1)
-            {
-                perror("event_loop: error adding server socket to kqueue");
-                to_close();
-                return -1;
-            }
+                struct kevent event;
+                EV_SET(&event, m_socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+                // kevent 返回取到的事件数（纯 ADD 成功时为 0），-1 才是失败
+                reg_ok = (-1 != kevent(m_epoll_or_kqueue_fd, &event, 1, NULL, 0, NULL));
+                if (!reg_ok)
+                {
+                    perror("event_loop: error adding server socket to kqueue");
+                }
 #endif
+                if (!reg_ok)
+                {
+                    to_close();
+                    return -1;
+                }
+                m_event_registered = true;
+            }
 
             constexpr int MAX_EVENTS_NUM = 8;
 
@@ -445,7 +455,10 @@ namespace avant
             }
 
             constexpr int buffer_size = 65536;
-            std::unique_ptr<char[]> buffer(new char[buffer_size]);
+            if (!m_recv_buffer)
+            {
+                m_recv_buffer = std::unique_ptr<char[]>(new char[buffer_size]);
+            }
 
             unsigned int loop_count = 0;
             while (true)
@@ -460,7 +473,7 @@ namespace avant
                 socklen_t addr_len = sizeof(client_addr);
                 memset(&client_addr, 0, sizeof(client_addr));
 
-                ssize_t bytes = recvfrom(m_socket_fd, buffer.get(), buffer_size, 0,
+                ssize_t bytes = recvfrom(m_socket_fd, m_recv_buffer.get(), buffer_size, 0,
                                          (struct sockaddr *)&client_addr, &addr_len);
                 if (bytes < 0)
                 {
@@ -490,7 +503,7 @@ namespace avant
                     // 调用回调（传入 const sockaddr_storage &）
                     if (message_callback)
                     {
-                        message_callback(buffer.get(), bytes, client_addr, addr_len);
+                        message_callback(m_recv_buffer.get(), bytes, client_addr, addr_len);
                     }
                 }
             } // end inner read loop
