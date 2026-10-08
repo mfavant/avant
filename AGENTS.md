@@ -61,6 +61,7 @@ g++ test/object_pool.test.cpp -o test/object_pool.exe -lpthread && ./test/object
 g++ test/json.test.cpp external/avant-json/json.cpp external/avant-json/parser.cpp -o test/json.exe && ./test/json.exe
 g++ external/avant-xml/element.cpp external/avant-xml/document.cpp test/xml.test.cpp -o test/xml.exe && ./test/xml.exe
 g++ test/timer.test.cpp external/avant-timer/timer.cpp external/avant-timer/timer_manager.cpp -o test/timer.exe -I"src/" -lpthread && ./test/timer.exe
+g++ -std=c++20 test/inifile.test.cpp external/avant-inifile/inifile.cpp external/avant-inifile/value.cpp -o test/inifile.exe && ./test/inifile.exe
 ```
 
 (`test/main.cpp` and `test/node_http_server.js` are support files, not tests.) There is no `make test`.

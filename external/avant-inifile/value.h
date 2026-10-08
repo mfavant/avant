@@ -1,10 +1,11 @@
 #pragma once
+
 #include <string>
+
 namespace avant
 {
     namespace inifile
     {
-        using namespace std;
         /**
          * @brief string store int、bool、double、string type
          *
@@ -13,26 +14,27 @@ namespace avant
         {
         public:
             value() = default;
-            value(const bool &value);
-            value(const int &value);
-            value(const double &value);
-            value(const string &value);
-            ~value() = default;
+            value(bool value);
+            value(int value);
+            value(double value);
+            value(const std::string &value);
+            value(const char *value);
 
-            value &operator=(const bool &value);
-            value &operator=(const int &value);
-            value &operator=(const double &value);
-            value &operator=(const string &value);
+            value &operator=(bool value);
+            value &operator=(int value);
+            value &operator=(double value);
+            value &operator=(const std::string &value);
+            value &operator=(const char *value);
 
             operator bool() const;
             operator int() const;
             operator double() const;
-            operator string() const;
+            operator std::string() const;
 
             bool operator==(const value &other) const;
 
         private:
-            string m_value{};
+            std::string m_value{};
         };
     }
 }

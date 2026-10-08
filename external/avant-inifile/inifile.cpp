@@ -1,4 +1,9 @@
+#include <cstddef>
 #include <fstream>
+#include <iostream>
+#include <map>
+#include <string>
+#include <string_view>
 
 #include "inifile.h"
 
@@ -6,102 +11,127 @@ namespace avant
 {
     namespace inifile
     {
-        inifile::inifile(const string &filename)
+        inifile::inifile(const std::string &filename)
         {
             load(filename);
         }
 
-        string inifile::trim(string s)
+        std::string inifile::trim(std::string_view s)
         {
-            if (s.empty())
+            const std::size_t first = s.find_first_not_of(" \t\r\n");
+            if (first == std::string_view::npos)
             {
-                return s;
+                return {};
             }
-            s.erase(0, s.find_first_not_of(" \r\n"));
-            s.erase(s.find_last_not_of(" \r\n") + 1);
-            return s;
+            const std::size_t last = s.find_last_not_of(" \t\r\n");
+            return std::string(s.substr(first, last - first + 1));
         }
 
-        bool inifile::load(const string &filename)
+        bool inifile::load(const std::string &filename)
         {
             m_filename = filename;
             m_inifile.clear();
-            string name;
-            string line;
+            m_missing_section.clear();
+            std::string name;
+            std::string line;
             // read ini file
-            ifstream f(filename.c_str());
+            std::ifstream f(filename);
             if (f.fail())
             {
-                cout << "loading file failed: " << m_filename << " is not found" << endl;
+                std::cerr << "loading file failed: " << filename << " is not found" << std::endl;
                 return false;
             }
-            cout << "loading file sucess: " << m_filename << endl;
-            // parse content
+            std::cout << "loading file success: " << filename << std::endl;
+            // parse content (lenient by design: unparseable lines are skipped
+            // with a warning instead of failing the whole load; validating the
+            // parsed values is the caller's job, e.g. config_mgr::init)
             while (std::getline(f, line))
             {
                 line = trim(line);
-                if ('[' == line[0]) // section tag
+                if (line.empty())
                 {
-                    int pos = line.find_first_of(']');
-                    if (-1 != pos)
+                    continue;
+                }
+                if (line[0] == '[') // section tag
+                {
+                    const std::size_t pos = line.find_first_of(']');
+                    if (pos != std::string::npos)
                     {
-                        name = trim(line.substr(1, pos - 1));
+                        const std::string section_name = trim(line.substr(1, pos - 1));
+                        if (section_name.empty())
+                        {
+                            std::cerr << "parsing warning: skipping empty section tag in " << filename << std::endl;
+                            // keep the previous section: keys after an empty
+                            // tag keep landing where they were
+                            continue;
+                        }
+                        name = section_name;
                         m_inifile[name];
                     }
+                    else
+                    {
+                        std::cerr << "parsing warning: skipping section tag without closing bracket: " << line << std::endl;
+                    }
                 }
-                else if ('#' == line[0]) // comment
+                else if (line[0] == '#') // comment
                 {
-                    continue; // not parsing commment line
+                    continue; // not parsing comment line
                 }
                 else // the line key=value
                 {
                     // find =
-                    int pos = line.find_first_of('=');
-                    if (pos > 0)
+                    const std::size_t pos = line.find_first_of('=');
+                    if (pos == std::string::npos || pos == 0)
                     {
-                        string key = trim(line.substr(0, pos));
-                        string value = trim(line.substr(pos + 1, line.size() - pos));
-                        decltype(m_inifile)::iterator it = m_inifile.find(name);
-                        if (it == m_inifile.end())
-                        {
-                            printf("parsing error: section=%s key=%s\n", name.c_str(), key.c_str());
-                            return false;
-                        }
-                        m_inifile[name][key] = value;
+                        continue;
                     }
+                    std::string key = trim(line.substr(0, pos));
+                    if (key.empty())
+                    {
+                        continue;
+                    }
+                    const std::string value = trim(line.substr(pos + 1));
+                    auto it = m_inifile.find(name);
+                    if (it == m_inifile.end())
+                    {
+                        std::cerr << "parsing warning: skipping key outside any section: " << line << std::endl;
+                        continue;
+                    }
+                    it->second[key] = value;
                 }
             }
             return true;
         }
 
-        void inifile::save(const string &filename)
+        bool inifile::save(const std::string &filename)
         {
-            ofstream f(filename.c_str());
-            std::map<string, std::map<string, value>>::iterator it;
-            for (it = m_inifile.begin(); it != m_inifile.end(); ++it)
+            std::ofstream f(filename);
+            if (f.fail())
             {
-                f << "[" << it->first << "]" << endl; // section tag
-                for (std::map<string, value>::iterator iter = it->second.begin(); iter != it->second.end(); ++iter)
-                {
-                    // write key=value
-                    f << iter->first << " = " << (string)iter->second << endl;
-                }
-                f << endl;
+                std::cerr << "saving file failed: " << filename << " is not writable" << std::endl;
+                return false;
             }
+            *this << f;
+            f.flush();
+            if (!f.good())
+            {
+                std::cerr << "saving file failed: " << filename << std::endl;
+                return false;
+            }
+            return true;
         }
 
-        ostream &inifile::operator<<(ostream &os)
+        std::ostream &inifile::operator<<(std::ostream &os)
         {
-            decltype(m_inifile)::iterator it;
-            for (it = m_inifile.begin(); it != m_inifile.end(); ++it)
+            for (auto &section : m_inifile)
             {
-                os << "[" << it->first << "]" << endl; // section tag
-                for (std::map<string, value>::iterator iter = it->second.begin(); iter != it->second.end(); ++iter)
+                os << "[" << section.first << "]" << std::endl; // section tag
+                for (auto &entry : section.second)
                 {
                     // write key=value
-                    os << iter->first << " = " << (string)iter->second << endl;
+                    os << entry.first << " = " << static_cast<std::string>(entry.second) << std::endl;
                 }
-                os << endl;
+                os << std::endl;
             }
             return os;
         }
@@ -109,16 +139,17 @@ namespace avant
         void inifile::clear()
         {
             m_inifile.clear();
+            m_missing_section.clear();
         }
 
-        bool inifile::has(const string &section)
+        bool inifile::has(const std::string &section)
         {
             return (m_inifile.find(section) != m_inifile.end());
         }
 
-        bool inifile::has(const string &section, const string &key)
+        bool inifile::has(const std::string &section, const std::string &key)
         {
-            decltype(m_inifile)::iterator it = m_inifile.find(section);
+            auto it = m_inifile.find(section);
             if (it != m_inifile.end())
             {
                 return (it->second.find(key) != it->second.end());
@@ -126,47 +157,56 @@ namespace avant
             return false;
         }
 
-        value &inifile::get(const string &section, const string &key)
+        const value &inifile::get(const std::string &section, const std::string &key)
         {
-            return m_inifile[section][key];
+            auto it = m_inifile.find(section);
+            if (it == m_inifile.end())
+            {
+                return m_default_value;
+            }
+            auto key_it = it->second.find(key);
+            if (key_it == it->second.end())
+            {
+                return m_default_value;
+            }
+            return key_it->second;
         }
 
-        void inifile::set(const string &section, const string &key, bool value)
+        void inifile::set(const std::string &section, const std::string &key, const std::string &value)
         {
             m_inifile[section][key] = value;
         }
 
-        void inifile::set(const string &section, const string &key, int value)
+        void inifile::remove(const std::string &section)
         {
-            m_inifile[section][key] = value;
-        }
-
-        void inifile::set(const string &section, const string &key, double value)
-        {
-            m_inifile[section][key] = value;
-        }
-
-        void inifile::set(const string &section, const string &key, const string &value)
-        {
-            m_inifile[section][key] = value;
-        }
-
-        void inifile::remove(const string &section)
-        {
-            decltype(m_inifile)::iterator it = m_inifile.find(section);
+            auto it = m_inifile.find(section);
             if (it != m_inifile.end())
+            {
                 m_inifile.erase(it);
+            }
         }
 
-        void inifile::remove(const string &section, const string &key)
+        void inifile::remove(const std::string &section, const std::string &key)
         {
-            decltype(m_inifile)::iterator it = m_inifile.find(section);
+            auto it = m_inifile.find(section);
             if (it != m_inifile.end())
             {
                 auto iter = it->second.find(key);
                 if (iter != it->second.end())
+                {
                     it->second.erase(iter);
+                }
             }
+        }
+
+        std::map<std::string, value> &inifile::operator[](const std::string &key)
+        {
+            auto it = m_inifile.find(key);
+            if (it == m_inifile.end())
+            {
+                return m_missing_section;
+            }
+            return it->second;
         }
     }
 }

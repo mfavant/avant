@@ -1,7 +1,9 @@
 #pragma once
-#include <string>
+
+#include <iosfwd>
 #include <map>
-#include <iostream>
+#include <string>
+#include <string_view>
 
 #include "value.h"
 
@@ -9,7 +11,6 @@ namespace avant
 {
     namespace inifile
     {
-        using namespace std;
         /**
          * @brief inifile parser
          *
@@ -18,51 +19,60 @@ namespace avant
         {
         public:
             inifile() = default;
-            inifile(const string &filename);
+            inifile(const std::string &filename);
             ~inifile() = default;
 
-            bool load(const string &filename);
-            void save(const string &filename);
+            bool load(const std::string &filename);
+            bool save(const std::string &filename);
             void clear();
 
-            // get
-            value &get(const string &section, const string &key);
+            // get (non-mutating: a missing section or key yields this
+            // instance's default-constructed entry; const, since writing
+            // through the reference would land in that entry, not in this
+            // file)
+            const value &get(const std::string &section, const std::string &key);
 
-            // set
-            void set(const string &section, const string &key, bool value);
-            void set(const string &section, const string &key, int value);
-            void set(const string &section, const string &key, double value);
-            void set(const string &section, const string &key, const string &value);
+            // set (the stored text is the string form; type overloads would be
+            // ambiguous for literals — `set("s","k","1")` cannot tell bool from
+            // string — so the single string form is the whole API)
+            void set(const std::string &section, const std::string &key, const std::string &value);
 
             // has
-            bool has(const string &section);
-            bool has(const string &section, const string &key);
+            bool has(const std::string &section);
+            bool has(const std::string &section, const std::string &key);
 
             // remove
-            void remove(const string &section);
-            void remove(const string &section, const string &key);
+            void remove(const std::string &section);
+            void remove(const std::string &section, const std::string &key);
 
-            // operator[key]
-            std::map<string, value> &operator[](const string &key)
-            {
-                return m_inifile[key];
-            }
+            // operator[section]: an existing section is returned by reference;
+            // a missing section yields this instance's own stand-in empty map
+            // — writes there stay in this instance, are never persisted by
+            // save(), and are wiped on the next load(); use set() to store
+            // values. Note that ini["s"]["k"] on an *existing* section still
+            // default-constructs a missing key (std::map operator[] semantics).
+            std::map<std::string, value> &operator[](const std::string &key);
 
             // out
-            ostream &operator<<(ostream &os);
+            std::ostream &operator<<(std::ostream &os);
 
         private:
             /**
-             * @brief delete " \r\n" start or end with s
+             * @brief delete " \t\r\n" start or end from s
              *
              * @param s
              * @return string result
              */
-            string trim(string s);
+            static std::string trim(std::string_view s);
 
         private:
-            string m_filename{};
-            std::map<string, map<string, value>> m_inifile{};
+            std::string m_filename;
+            std::map<std::string, std::map<std::string, value>> m_inifile{};
+            // per-instance stand-in for sections that do not exist; cleared on
+            // every load() / clear() so stale entries never leak
+            std::map<std::string, value> m_missing_section{};
+            // per-instance stand-in for values that do not exist
+            value m_default_value{};
         };
     }
 }

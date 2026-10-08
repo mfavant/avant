@@ -151,7 +151,7 @@ Other config files in `bin/config/`:
 
 ## Testing
 
-Tests are standalone `.test.cpp` files in `test/` (json, object_pool, timer, xml). They are not integrated into CMake. Compile manually:
+Tests are standalone `.test.cpp` files in `test/` (json, object_pool, timer, xml, inifile). They are not integrated into CMake. Compile manually:
 
 ```bash
 # Example: object pool test
@@ -166,6 +166,10 @@ g++ external/avant-xml/element.cpp external/avant-xml/document.cpp test/xml.test
 
 # Example: timer test
 g++ test/timer.test.cpp external/avant-timer/timer.cpp external/avant-timer/timer_manager.cpp -o test/timer.exe -I"src/" -lpthread
+
+# Example: inifile test
+g++ -std=c++20 test/inifile.test.cpp external/avant-inifile/inifile.cpp external/avant-inifile/value.cpp -o test/inifile.exe
+./test/inifile.exe
 ```
 
 ## Key Implementation Details
