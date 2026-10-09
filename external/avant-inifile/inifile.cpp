@@ -16,7 +16,7 @@ namespace avant
             load(filename);
         }
 
-        std::string inifile::trim(std::string_view s)
+        auto inifile::trim(std::string_view s) -> std::string
         {
             const std::size_t first = s.find_first_not_of(" \t\r\n");
             if (first == std::string_view::npos)

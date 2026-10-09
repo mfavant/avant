@@ -10,9 +10,9 @@
 
 using namespace avant::inifile;
 
-namespace
+namespace avant::inifile
 {
-    std::string to_lower(const std::string &s)
+    static std::string to_lower(const std::string &s)
     {
         std::string t;
         t.reserve(s.size());
