@@ -1,10 +1,15 @@
 #pragma once
+
+#include <cstddef>
+#include <map>
+#include <ostream>
 #include <string>
 #include <vector>
-#include <map>
 
 namespace avant::json
 {
+    class parser;
+
     class json
     {
     public:
@@ -19,50 +24,67 @@ namespace avant::json
             json_object
         };
 
-        json();
-        json(json_type json_type);
+        json() = default;
         json(bool value);
         json(long long value);
+        // Throws std::logic_error for NaN/Inf (JSON has no representation).
         json(double value);
         json(const char *value);
         json(const std::string &value);
         json(const json &other);
-        ~json();
+        // Move ops leave the source node as null (a moved-from json is
+        // always null, never a stale type tag with an empty payload).
+        json(json &&other) noexcept;
+        ~json() noexcept = default;
 
-        json_type type() const;
-        bool is_null() const;
-        bool is_bool() const;
-        bool is_integer() const;
-        bool is_double() const;
-        bool is_string() const;
-        bool is_array() const;
-        bool is_object() const;
+        json &operator=(const json &other);
+        // As with the move ctor, leaves the source node as null.
+        json &operator=(json &&other) noexcept;
+        json &operator=(bool value);
+        json &operator=(long long value);
+        json &operator=(double value);
+        json &operator=(const std::string &value);
+        json &operator=(const char *value);
 
-        bool as_bool() const;
-        long long as_integer() const;
-        double as_double() const;
-        std::string as_string() const;
+        [[nodiscard]] json_type type() const;
+        [[nodiscard]] bool is_null() const;
+        [[nodiscard]] bool is_bool() const;
+        [[nodiscard]] bool is_integer() const;
+        [[nodiscard]] bool is_double() const;
+        [[nodiscard]] bool is_string() const;
+        [[nodiscard]] bool is_array() const;
+        [[nodiscard]] bool is_object() const;
+
+        // as_integer also accepts a whole-number double that fits in long long,
+        // and as_double also accepts an integer; both throw for values that
+        // would not convert losslessly (3.7, 2^63, ...). as_bool/as_string are
+        // strict: they only accept their own type.
+        [[nodiscard]] bool as_bool() const;
+        [[nodiscard]] long long as_integer() const;
+        [[nodiscard]] double as_double() const;
+        [[nodiscard]] std::string as_string() const;
 
         void copy(const json &other);
 
-        // array size
-        size_t size() const;
+        // Number of elements (array) or keys (object); throws for scalars.
+        [[nodiscard]] std::size_t size() const;
 
-        bool empty() const;
+        [[nodiscard]] bool empty() const;
 
-        void clear();
+        // Resets the node to null (type tag included) and empties the payload.
+        void clear() noexcept;
 
-        bool remove(size_t index);
+        bool remove(std::size_t index);
         bool remove(const char *key);
         bool remove(const std::string &key);
 
-        bool has(size_t index) const;
-        bool has(const char *key) const;
-        bool has(const std::string &key) const;
+        [[nodiscard]] bool has(std::size_t index) const;
+        [[nodiscard]] bool has(const char *key) const;
+        [[nodiscard]] bool has(const std::string &key) const;
 
-        const json &get(size_t index) const;
-        const json &get(const char *key) const;
-        const json &get(const std::string &key) const;
+        [[nodiscard]] const json &get(std::size_t index) const;
+        [[nodiscard]] const json &get(const char *key) const;
+        [[nodiscard]] const json &get(const std::string &key) const;
 
         void set(const json &other);
         void set(bool value);
@@ -72,18 +94,11 @@ namespace avant::json
 
         json &append(const json &value);
 
-        json &operator=(const json &other);
-        json &operator=(bool value);
-        json &operator=(long long value);
-        json &operator=(double value);
-        json &operator=(const std::string &value);
-        json &operator=(const char *value);
+        bool operator==(const json &other) const;
+        bool operator!=(const json &other) const;
 
-        bool operator==(const json &other);
-        bool operator!=(const json &other);
-
-        json &operator[](size_t index);
-        const json &operator[](size_t index) const;
+        json &operator[](std::size_t index);
+        const json &operator[](std::size_t index) const;
 
         json &operator[](const char *key);
         const json &operator[](const char *key) const;
@@ -91,39 +106,61 @@ namespace avant::json
         json &operator[](const std::string &key);
         const json &operator[](const std::string &key) const;
 
-        explicit operator bool();
-        explicit operator long long();
-        explicit operator double();
-        explicit operator std::string();
+        // Explicit conversion of the node to the underlying scalar value;
+        // throws if the node is not that type.
+        explicit operator bool() const;
+        explicit operator long long() const;
+        explicit operator double() const;
         explicit operator std::string() const;
 
-        static json const &null();
+        [[nodiscard]] static const json &null();
 
+        // Replace this node with the parsed value of str. Throws std::logic_error
+        // on malformed input.
         void parse(const std::string &str);
-        std::string to_string() const;
+        [[nodiscard]] std::string to_string() const;
 
         typedef std::vector<json>::iterator iterator;
         typedef std::vector<json>::const_iterator const_iterator;
 
+        // Array iteration. begin()/end() on a non-array observe the (empty)
+        // array view and therefore range-for over a non-array is a no-op.
         iterator begin()
         {
             return m_array_value.begin();
         }
-
         iterator end()
         {
             return m_array_value.end();
         }
-
         const_iterator begin() const
         {
             return m_array_value.begin();
         }
-
         const_iterator end() const
         {
             return m_array_value.end();
         }
+
+    private:
+        // Constructs a node of the given container type with an empty payload
+        // (all other members take their default in-class initializers). The
+        // parser (a friend) uses this to build an empty array/object before
+        // filling it. Kept private so callers cannot construct a node by bare
+        // type tag and bypass the scalar/value constructors; it is not part of
+        // the public API.
+        json(json_type type);
+
+        // Serialize to a stream (compact, single line). Not noexcept:
+        // to_string allocates (std::bad_alloc) and can throw std::logic_error
+        // for a non-finite double; let those propagate instead of terminating.
+        friend std::ostream &operator<<(std::ostream &os, const json &value)
+        {
+            return os << value.to_string();
+        }
+
+        // The parser builds the container nodes via the private type-ctor.
+        friend class parser;
 
     private:
         json_type m_json_type{json_type::json_null};

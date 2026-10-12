@@ -1,48 +1,101 @@
 #include "json.h"
 #include "parser.h"
-#include <stdexcept>
-#include <sstream>
 
-using std::istringstream;
-using std::ostringstream;
+#include <climits>
+#include <cmath>
+#include <cstdio>
+#include <stdexcept>
+
 using namespace avant::json;
 
-json::json()
+namespace avant::json
 {
+    // Append the escaped body of a JSON string (without the surrounding
+    // quotes) to out. Escapes the seven required characters (RFC 8259 s2)
+    // plus every control character U+0000..U+001F as \u00xx; all other
+    // bytes (including raw UTF-8) pass through unmodified.
+    static void append_escaped_body(const std::string &value, std::string &out)
+    {
+        for (const char ch : value)
+        {
+            switch (ch)
+            {
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\b':
+                out += "\\b";
+                break;
+            case '\f':
+                out += "\\f";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
+            default:
+                if (static_cast<unsigned char>(ch) < 0x20)
+                {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned int>(static_cast<unsigned char>(ch)));
+                    out += buf;
+                }
+                else
+                {
+                    out += ch;
+                }
+                break;
+            }
+        }
+    }
+
+    // A complete JSON string token: opening quote, escaped body, closing quote.
+    static std::string string_token(const std::string &value)
+    {
+        std::string out = "\"";
+        out.reserve(value.size() + 2);
+        append_escaped_body(value, out);
+        out += "\"";
+        return out;
+    }
 }
 
 json::json(json::json_type type) : m_json_type(type)
 {
 }
 
-json::json(bool value)
+json::json(bool value) : m_json_type(json_type::json_bool), m_bool_value(value)
 {
-    m_json_type = json_type::json_bool;
-    m_bool_value = value;
 }
 
-json::json(long long value)
+json::json(long long value) : m_json_type(json_type::json_integer), m_integer_value(value)
 {
-    m_json_type = json_type::json_integer;
-    m_integer_value = value;
 }
 
-json::json(double value)
+json::json(double value) : m_json_type(json_type::json_double), m_double_value(value)
 {
-    m_json_type = json_type::json_double;
-    m_double_value = value;
+    // JSON has no representation for NaN/Inf; refuse at construction rather
+    // than producing a node that to_string cannot serialize validly.
+    if (!std::isfinite(value))
+    {
+        throw std::logic_error("function json::json(double) non-finite value");
+    }
 }
 
-json::json(const char *value)
+json::json(const char *value) : m_json_type(json_type::json_string), m_string_value(value ? value : "")
 {
-    m_json_type = json_type::json_string;
-    m_string_value = value;
 }
 
-json::json(const std::string &value)
+json::json(const std::string &value) : m_json_type(json_type::json_string), m_string_value(value)
 {
-    m_json_type = json_type::json_string;
-    m_string_value = value;
 }
 
 json::json(const json &other)
@@ -50,9 +103,75 @@ json::json(const json &other)
     copy(other);
 }
 
-json::~json()
+json::json(json &&other) noexcept
+    : m_json_type(other.m_json_type),
+      m_integer_value(other.m_integer_value),
+      m_double_value(other.m_double_value),
+      m_bool_value(other.m_bool_value),
+      m_string_value(std::move(other.m_string_value)),
+      m_array_value(std::move(other.m_array_value)),
+      m_object_value(std::move(other.m_object_value))
 {
-    clear();
+    // Reset the source to null so a moved-from node is always in one
+    // predictable state, instead of keeping a stale type tag with an empty
+    // payload (or a stale scalar, which is copied rather than moved).
+    other.clear();
+}
+
+json &json::operator=(const json &other)
+{
+    if (this != &other)
+    {
+        *this = json(other);
+    }
+    return *this;
+}
+
+json &json::operator=(json &&other) noexcept
+{
+    if (this != &other)
+    {
+        m_json_type = other.m_json_type;
+        m_integer_value = other.m_integer_value;
+        m_double_value = other.m_double_value;
+        m_bool_value = other.m_bool_value;
+        m_string_value = std::move(other.m_string_value);
+        m_array_value = std::move(other.m_array_value);
+        m_object_value = std::move(other.m_object_value);
+        // As in the move ctor: leave the source as a null node.
+        other.clear();
+    }
+    return *this;
+}
+
+json &json::operator=(bool value)
+{
+    set(value);
+    return *this;
+}
+
+json &json::operator=(long long value)
+{
+    set(value);
+    return *this;
+}
+
+json &json::operator=(double value)
+{
+    set(value);
+    return *this;
+}
+
+json &json::operator=(const std::string &value)
+{
+    set(value);
+    return *this;
+}
+
+json &json::operator=(const char *value)
+{
+    set(std::string(value ? value : ""));
+    return *this;
 }
 
 json::json_type json::type() const
@@ -97,12 +216,9 @@ bool json::is_object() const
 
 bool json::as_bool() const
 {
-    switch (m_json_type)
+    if (m_json_type == json_type::json_bool)
     {
-    case json_type::json_bool:
         return m_bool_value;
-    default:
-        break;
     }
     throw std::logic_error("function json::as_bool value type error");
 }
@@ -113,10 +229,24 @@ long long json::as_integer() const
     {
     case json_type::json_integer:
         return m_integer_value;
+    case json_type::json_double:
+        // JSON has no integer/real distinction that consumers should have to
+        // reason about: a real that is a whole number and fits in long long
+        // coerces losslessly. Non-whole values (3.7) and out-of-range values
+        // do not, so they throw rather than being silently truncated or
+        // cast out of range. (2^63 is not representable in long long, so the
+        // upper bound is a strict <; the lower bound -2^63 == LLONG_MIN is
+        // exactly representable, so >= is safe. NaN fails the whole-number
+        // check, ±inf fail the range check.)
+        if (m_double_value == std::trunc(m_double_value) && m_double_value >= static_cast<double>(LLONG_MIN) && m_double_value < static_cast<double>(LLONG_MAX))
+        {
+            return static_cast<long long>(m_double_value);
+        }
+        break;
     default:
         break;
     }
-    throw std::logic_error("function json::as_integet value type error");
+    throw std::logic_error("function json::as_integer value type error");
 }
 
 double json::as_double() const
@@ -125,6 +255,8 @@ double json::as_double() const
     {
     case json_type::json_double:
         return m_double_value;
+    case json_type::json_integer:
+        return static_cast<double>(m_integer_value);
     default:
         break;
     }
@@ -133,12 +265,9 @@ double json::as_double() const
 
 std::string json::as_string() const
 {
-    switch (m_json_type)
+    if (m_json_type == json_type::json_string)
     {
-    case json_type::json_string:
         return m_string_value;
-    default:
-        break;
     }
     throw std::logic_error("function json::as_string value type error");
 }
@@ -146,36 +275,17 @@ std::string json::as_string() const
 void json::copy(const json &other)
 {
     clear();
-    m_json_type = other.type();
-    switch (other.type())
-    {
-    case json_type::json_array:
-        m_array_value = other.m_array_value;
-        break;
-    case json_type::json_bool:
-        m_bool_value = other.m_bool_value;
-        break;
-    case json_type::json_double:
-        m_double_value = other.m_double_value;
-        break;
-    case json_type::json_integer:
-        m_integer_value = other.m_integer_value;
-        break;
-    case json_type::json_null:
-        break;
-    case json_type::json_object:
-        m_object_value = other.m_object_value;
-        break;
-    case json_type::json_string:
-        m_string_value = other.m_string_value;
-        break;
-    default:
-        break;
-    }
+    m_json_type = other.m_json_type;
+    m_bool_value = other.m_bool_value;
+    m_integer_value = other.m_integer_value;
+    m_double_value = other.m_double_value;
+    m_string_value = other.m_string_value;
+    m_array_value = other.m_array_value;
+    m_object_value = other.m_object_value;
 }
 
-// array size
-size_t json::size() const
+// Number of elements (array) or keys (object); throws for scalars.
+std::size_t json::size() const
 {
     switch (m_json_type)
     {
@@ -205,35 +315,34 @@ bool json::empty() const
     throw std::logic_error("function json::empty value type error");
 }
 
-void json::clear()
+void json::clear() noexcept
 {
-    m_array_value.clear();
-    m_bool_value = false;
-    m_double_value = 0.;
+    m_json_type = json_type::json_null;
     m_integer_value = 0;
-    m_object_value.clear();
+    m_double_value = 0.;
+    m_bool_value = false;
     m_string_value.clear();
+    m_array_value.clear();
+    m_object_value.clear();
 }
 
-bool json::remove(size_t index)
+bool json::remove(std::size_t index)
 {
     if (m_json_type != json_type::json_array)
     {
         return false;
     }
-    size_t size = m_array_value.size();
-    if (index < 0 || index >= size)
+    if (index >= m_array_value.size())
     {
         return false;
     }
-    m_array_value.erase(m_array_value.begin() + index);
+    m_array_value.erase(m_array_value.begin() + static_cast<std::vector<json>::difference_type>(index));
     return true;
 }
 
 bool json::remove(const char *key)
 {
-    std::string name = key;
-    return remove(name);
+    return remove(std::string(key ? key : ""));
 }
 
 bool json::remove(const std::string &key)
@@ -242,7 +351,7 @@ bool json::remove(const std::string &key)
     {
         return false;
     }
-    std::map<std::string, json>::iterator it = m_object_value.find(key);
+    auto it = m_object_value.find(key);
     if (it == m_object_value.end())
     {
         return false;
@@ -251,24 +360,18 @@ bool json::remove(const std::string &key)
     return true;
 }
 
-bool json::has(size_t index) const
+bool json::has(std::size_t index) const
 {
     if (m_json_type != json_type::json_array)
     {
         return false;
     }
-    size_t size = m_array_value.size();
-    return (index >= 0 && index < size);
+    return index < m_array_value.size();
 }
 
 bool json::has(const char *key) const
 {
-    if (m_json_type != json_type::json_object)
-    {
-        return false;
-    }
-    std::map<std::string, json>::const_iterator it = m_object_value.find(key);
-    return (it != m_object_value.end());
+    return has(std::string(key ? key : ""));
 }
 
 bool json::has(const std::string &key) const
@@ -277,18 +380,16 @@ bool json::has(const std::string &key) const
     {
         return false;
     }
-    std::map<std::string, json>::const_iterator it = m_object_value.find(key);
-    return (it != m_object_value.end());
+    return m_object_value.find(key) != m_object_value.end();
 }
 
-const json &json::get(size_t index) const
+const json &json::get(std::size_t index) const
 {
     if (m_json_type != json_type::json_array)
     {
         throw std::logic_error("function json::get [int] requires array value");
     }
-    size_t size = m_array_value.size();
-    if (index >= 0 && index < size)
+    if (index < m_array_value.size())
     {
         return m_array_value.at(index);
     }
@@ -297,8 +398,7 @@ const json &json::get(size_t index) const
 
 const json &json::get(const char *key) const
 {
-    const std::string name = key;
-    return get(name);
+    return get(std::string(key ? key : ""));
 }
 
 const json &json::get(const std::string &key) const
@@ -307,7 +407,7 @@ const json &json::get(const std::string &key) const
     {
         throw std::logic_error("function json::get [const string&] requires object value");
     }
-    std::map<std::string, json>::const_iterator it = m_object_value.find(key);
+    auto it = m_object_value.find(key);
     if (it != m_object_value.end())
     {
         return it->second;
@@ -317,7 +417,7 @@ const json &json::get(const std::string &key) const
 
 void json::set(const json &other)
 {
-    copy(other);
+    *this = other;
 }
 
 void json::set(bool value)
@@ -336,6 +436,10 @@ void json::set(long long value)
 
 void json::set(double value)
 {
+    if (!std::isfinite(value))
+    {
+        throw std::logic_error("function json::set non-finite double");
+    }
     clear();
     m_json_type = json_type::json_double;
     m_double_value = value;
@@ -362,48 +466,7 @@ json &json::append(const json &value)
     return (*this);
 }
 
-json &json::operator=(const json &other)
-{
-    copy(other);
-    return *this;
-}
-
-json &json::operator=(bool value)
-{
-    json other(value);
-    copy(other);
-    return *this;
-}
-
-json &json::operator=(long long value)
-{
-    json other(value);
-    copy(other);
-    return *this;
-}
-
-json &json::operator=(double value)
-{
-    json other(value);
-    copy(other);
-    return *this;
-}
-
-json &json::operator=(const std::string &value)
-{
-    json other(value);
-    copy(other);
-    return *this;
-}
-
-json &json::operator=(const char *value)
-{
-    json other(value);
-    copy(other);
-    return *this;
-}
-
-bool json::operator==(const json &other)
+bool json::operator==(const json &other) const
 {
     if (m_json_type != other.m_json_type)
     {
@@ -412,52 +475,52 @@ bool json::operator==(const json &other)
     switch (m_json_type)
     {
     case json_type::json_array:
-    {
-        return false;
-    }
-    break;
-    case json_type::json_bool:
-    {
-        return (m_bool_value == other.m_bool_value);
-    }
-    break;
-    case json_type::json_double:
-    {
-        return (m_double_value == other.m_double_value);
-    }
-    break;
-    case json_type::json_integer:
-    {
-        return (m_integer_value == other.m_integer_value);
-    }
-    break;
-    case json_type::json_null:
-    {
+        if (m_array_value.size() != other.m_array_value.size())
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < m_array_value.size(); i++)
+        {
+            if (!(m_array_value[i] == other.m_array_value[i]))
+            {
+                return false;
+            }
+        }
         return true;
-    }
-    break;
+    case json_type::json_bool:
+        return m_bool_value == other.m_bool_value;
+    case json_type::json_double:
+        return m_double_value == other.m_double_value;
+    case json_type::json_integer:
+        return m_integer_value == other.m_integer_value;
+    case json_type::json_null:
+        return true;
     case json_type::json_object:
-    {
-        return false;
-    }
-    break;
+        if (m_object_value.size() != other.m_object_value.size())
+        {
+            return false;
+        }
+        for (const auto &entry : m_object_value)
+        {
+            auto it = other.m_object_value.find(entry.first);
+            if (it == other.m_object_value.end() || !(it->second == entry.second))
+            {
+                return false;
+            }
+        }
+        return true;
     case json_type::json_string:
-    {
-        return (m_string_value == other.m_string_value);
-    }
-    break;
-    default:
-        break;
+        return m_string_value == other.m_string_value;
     }
     return false;
 }
 
-bool json::operator!=(const json &other)
+bool json::operator!=(const json &other) const
 {
     return !(*this == other);
 }
 
-json &json::operator[](size_t index)
+json &json::operator[](std::size_t index)
 {
     if (m_json_type == json_type::json_null)
     {
@@ -467,34 +530,27 @@ json &json::operator[](size_t index)
     {
         throw std::logic_error("function json::operator [int] requires array value");
     }
-    size_t size = m_array_value.size();
-    if (index < 0)
+    if (index >= m_array_value.size())
     {
-        throw std::logic_error("function json::operator [int] index less 0");
-    }
-    if (index > 0 && index < size)
-    {
-        return m_array_value.at(index);
-    }
-    if (index >= size)
-    {
-        for (size_t i = size; i <= index; i++)
+        // For SIZE_MAX, index + 1 wraps to 0; resize(0) would destroy the
+        // existing elements, so throw instead of "growing".
+        if (index + 1 < index)
         {
-            m_array_value.push_back(json());
+            throw std::logic_error("function json::operator [int] index out of range");
         }
+        m_array_value.resize(index + 1);
     }
     return m_array_value.at(index);
 }
 
-const json &json::operator[](size_t index) const
+const json &json::operator[](std::size_t index) const
 {
     return get(index);
 }
 
 json &json::operator[](const char *key)
 {
-    std::string name = key;
-    return (*this)[name];
+    return operator[](std::string(key ? key : ""));
 }
 
 const json &json::operator[](const char *key) const
@@ -520,7 +576,7 @@ const json &json::operator[](const std::string &key) const
     return get(key);
 }
 
-json::operator bool()
+json::operator bool() const
 {
     if (m_json_type != json_type::json_bool)
     {
@@ -529,7 +585,7 @@ json::operator bool()
     return m_bool_value;
 }
 
-json::operator long long()
+json::operator long long() const
 {
     if (m_json_type != json_type::json_integer)
     {
@@ -538,22 +594,13 @@ json::operator long long()
     return m_integer_value;
 }
 
-json::operator double()
+json::operator double() const
 {
     if (m_json_type != json_type::json_double)
     {
         throw std::logic_error("function json::operator (double) requires double value");
     }
     return m_double_value;
-}
-
-json::operator std::string()
-{
-    if (m_json_type != json_type::json_string)
-    {
-        throw std::logic_error("function json::operator (string) requires string value");
-    }
-    return m_string_value;
 }
 
 json::operator std::string() const
@@ -580,62 +627,75 @@ void json::parse(const std::string &str)
 
 std::string json::to_string() const
 {
-    ostringstream os;
     switch (type())
     {
     case json_type::json_null:
-        os << "null";
-        break;
+        return "null";
     case json_type::json_bool:
-        if (m_bool_value)
-        {
-            os << "true";
-        }
-        else
-        {
-            os << "false";
-        }
-        break;
+        return m_bool_value ? "true" : "false";
     case json_type::json_integer:
-        os << m_integer_value;
-        break;
+        return std::to_string(m_integer_value);
     case json_type::json_double:
-        os << m_double_value;
-        break;
+    {
+        // JSON has no representation for NaN/Inf; constructing one is refused,
+        // but guard here too since to_string is the public serialization path.
+        if (!std::isfinite(m_double_value))
+        {
+            throw std::logic_error("function json::to_string non-finite double is not representable in JSON");
+        }
+        // std::to_string hard-codes 6 significant digits, which both rounds
+        // non-round doubles (0.1 -> "0.100000") and is not guaranteed to
+        // round-trip. %.17g always round-trips through strtod and %g already
+        // strips trailing zeros. A whole-number double (1234.0, 1e7) formats
+        // without a point or exponent and would re-parse as an integer,
+        // flipping the node type; append ".0" to keep it a real.
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.17g", m_double_value);
+        std::string s(buf);
+        if (s.find('.') == std::string::npos && s.find('e') == std::string::npos && s.find('E') == std::string::npos)
+        {
+            s += ".0";
+        }
+        return s;
+    }
     case json_type::json_string:
-        os << "\"" << m_string_value << "\"";
-        break;
+        return string_token(m_string_value);
     case json_type::json_array:
     {
-        os << "[";
-        for (std::vector<json>::const_iterator it = m_array_value.begin(); it != m_array_value.end(); it++)
+        std::string out = "[";
+        bool first = true;
+        for (const auto &value : m_array_value)
         {
-            if (it != m_array_value.begin())
+            if (!first)
             {
-                os << ",";
+                out += ",";
             }
-            os << (*it).to_string();
+            first = false;
+            out += value.to_string();
         }
-        os << "]";
+        out += "]";
+        return out;
     }
-    break;
     case json_type::json_object:
     {
-        os << "{";
-        for (std::map<std::string, json>::const_iterator it = m_object_value.begin(); it != m_object_value.end(); it++)
+        std::string out = "{";
+        bool first = true;
+        for (const auto &entry : m_object_value)
         {
-            if (it != m_object_value.begin())
+            if (!first)
             {
-                os << ",";
+                out += ",";
             }
-            os << "\"" << it->first << "\":" << it->second.to_string();
+            first = false;
+            out += "\"";
+            append_escaped_body(entry.first, out);
+            out += "\"";
+            out += ":";
+            out += entry.second.to_string();
         }
-        os << "}";
-        return os.str();
+        out += "}";
+        return out;
     }
-    break;
-    default:
-        break;
     }
-    return os.str();
+    return "null";
 }

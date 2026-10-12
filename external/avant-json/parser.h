@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
+
 #include "json.h"
 
 namespace avant::json
@@ -8,10 +10,33 @@ namespace avant::json
     class parser
     {
     public:
-        parser();
-        ~parser();
+        // Maximum nesting depth of a document this parser will accept.
+        // A nested `[` or `{` at a depth beyond this throws, which bounds the
+        // recursion to a known limit and defeats stack-overflow DoS via deep
+        // nesting. 512 levels is far above any realistic document.
+        static constexpr std::size_t kMaxDepth = 512;
+
+        parser() = default;
+        // Move-only: declaring the move ctor already deletes the implicit copy
+        // ctor; delete the copy ops explicitly so the class is consistently
+        // non-copyable (the implicit copy *assignment* would otherwise remain).
+        parser(const parser &) = delete;
+        parser(parser &&other) noexcept
+            : m_str(std::move(other.m_str)), m_idx(other.m_idx)
+        {
+        }
+        parser &operator=(const parser &) = delete;
+        parser &operator=(parser &&other) noexcept
+        {
+            m_str = std::move(other.m_str);
+            m_idx = other.m_idx;
+            return *this;
+        }
+        ~parser() noexcept = default;
+
+        // Not noexcept: the string copy can throw std::bad_alloc.
         void load(const std::string &str);
-        json parse();
+        [[nodiscard]] json parse();
 
     private:
         void skip_white_spaces();
@@ -20,14 +45,10 @@ namespace avant::json
         json parse_bool();
         json parse_number();
         json parse_string();
-
-        bool in_range(long x, long lower, long upper)
-        {
-            return (x >= lower && x <= upper);
-        }
+        json parse(std::size_t depth);
 
     private:
         std::string m_str{};
-        size_t m_idx{0};
+        std::size_t m_idx{0};
     };
-};
+}
