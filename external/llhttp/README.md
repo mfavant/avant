@@ -1,3 +1,3 @@
 # llhttp
 
-[@nodejs/llhttp v9.3.0](https://github.com/nodejs/llhttp)
+[@nodejs/llhttp v9.4.3](https://github.com/nodejs/llhttp)
