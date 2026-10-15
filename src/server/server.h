@@ -42,9 +42,6 @@ namespace avant::server
         void to_stop();
         void cmd_reload();
 
-        void request_stop();
-        void request_reload();
-
         inline const avant::json::json &get_ipc_json()
         {
             return this->m_ipc_json;
@@ -103,11 +100,12 @@ namespace avant::server
         // reusable tunnel recv scratch buffer
         std::vector<char> m_tunnel_recv_buf;
 
-        // self-pipe: the signal handlers write one byte here (async-signal-safe) to wake
-        // the main loop; the read end is registered with m_epoller.
+        // self-pipe: the async-signal-safe handlers (see system/signal_channel.h) write
+        // one byte to the write end to wake the main loop; the read end is registered
+        // with m_epoller. The channel's g_signal_pipe_wr mirrors the write end so the
+        // handlers can poke it without touching this object. The write end is kept
+        // open for the process lifetime (see close_signal_pipe()).
         int m_signal_pipe_rd{-1};
         int m_signal_pipe_wr{-1};
-        // Set by the (async-signal-safe) handlers, consumed by the main loop.
-        std::atomic<bool> reload_request{false};
     };
 }

@@ -18,6 +18,7 @@
 #endif
 
 #include "system/system.h"
+#include "system/signal_channel.h"
 #include "utility/singleton.h"
 
 using avant::utility::singleton;
@@ -28,6 +29,12 @@ using namespace avant::log;
 using std::string;
 
 static avant::system::system *avant_global_system_ptr = nullptr;
+
+system::~system()
+{
+    g_system_alive.store(false, std::memory_order_release);
+    avant_global_system_ptr = nullptr;
+}
 
 int system::init()
 {
@@ -48,6 +55,7 @@ int system::init()
 
     // daemon
     m_daemon = m_config_mgr.get_daemon() == 1;
+    g_daemon.store(m_daemon, std::memory_order_relaxed); // published for the signal handlers
     if (m_daemon)
     {
         create_daemon();
@@ -89,7 +97,11 @@ int system::init()
         return 1;
     }
     m_server_ptr.reset(new_server);
-    m_server_ptr->config(m_config_mgr);    // copy config_mgr to server object
+    m_server_ptr->config(m_config_mgr); // copy config_mgr to server object
+    // The system is now live: allow the signal handlers to record requests.
+    // (The self-pipe itself is created inside start(); until then a request just
+    // latches the flag and is picked up once the main loop is running.)
+    g_system_alive.store(true, std::memory_order_release);
     int start_ret = m_server_ptr->start(); // main thread loop
 
     LOG_ERROR("m_server_ptr->start() return ret={}", start_ret);
@@ -212,25 +224,27 @@ void system::create_daemon()
 
 void system::signal_term(int)
 {
-    if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr)
+    // Async-signal-safe: only touches the static-storage channel, never a pointer to
+    // the (possibly already destroyed) system/server objects.
+    if (g_system_alive.load(std::memory_order_acquire))
     {
-        avant_global_system_ptr->m_server_ptr->request_stop();
+        async_signal_notify(false); // stop
     }
 }
 
 void system::signal_usr1(int)
 {
-    if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr)
+    if (g_system_alive.load(std::memory_order_acquire))
     {
-        avant_global_system_ptr->m_server_ptr->request_reload();
+        async_signal_notify(true); // hot reload
     }
 }
 
 void system::signal_int(int)
 {
-    if (avant_global_system_ptr && avant_global_system_ptr->m_server_ptr &&
-        !avant_global_system_ptr->m_daemon)
+    // In daemon mode a foreground Ctrl-C is ignored; SIGTERM still stops us.
+    if (g_system_alive.load(std::memory_order_acquire) && !g_daemon.load(std::memory_order_acquire))
     {
-        avant_global_system_ptr->m_server_ptr->request_stop();
+        async_signal_notify(false); // stop
     }
 }

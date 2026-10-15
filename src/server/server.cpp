@@ -8,6 +8,7 @@
 #include <avant-log/logger.h>
 #include <chrono>
 #include "server/server.h"
+#include "system/signal_channel.h"
 #include "socket/socket.h"
 #include "utility/singleton.h"
 #include "task/task_type.h"
@@ -1064,28 +1065,7 @@ void server::cmd_reload()
     hooks::reload::on_cmd_reload(*this);
 }
 
-void server::request_stop()
-{
-    // Both operations are async-signal-safe: an atomic store and a 1-byte write.
-    stop_flag.store(true, std::memory_order_release);
-    if (m_signal_pipe_wr >= 0)
-    {
-        const char byte = 'S';
-        (void)write(m_signal_pipe_wr, &byte, 1);
-    }
-}
-
-void server::request_reload()
-{
-    reload_request.store(true, std::memory_order_release);
-    if (m_signal_pipe_wr >= 0)
-    {
-        const char byte = 'R';
-        (void)write(m_signal_pipe_wr, &byte, 1);
-    }
-}
-
-// Close the self-pipe
+// Invalidate the signal channel once the main loop has exited.
 void server::close_signal_pipe()
 {
     if (m_signal_pipe_rd >= 0)
@@ -1093,11 +1073,15 @@ void server::close_signal_pipe()
         ::close(m_signal_pipe_rd);
         m_signal_pipe_rd = -1;
     }
-    if (m_signal_pipe_wr >= 0)
-    {
-        ::close(m_signal_pipe_wr);
-        m_signal_pipe_wr = -1;
-    }
+    // The write end is deliberately NOT closed: a handler that already loaded the fd
+    // (and the alive flag) but is descheduled before its write() could otherwise race
+    // a close() here with a later open() reusing the same fd number, and its 1 byte
+    // would land in an unrelated socket. Kept open, a straggler write can only hit
+    // this now-unread pipe; the kernel reclaims the fd on process exit.
+    // (In setup_signal_pipe's failure paths both ends are closed instead: there the
+    // channel was never published to the handlers, so no such race exists.)
+    // Invalidate the channel so no further handler writes are even attempted.
+    avant::system::g_signal_pipe_wr.store(-1, std::memory_order_release);
 }
 
 int server::setup_signal_pipe()
@@ -1134,8 +1118,13 @@ int server::setup_signal_pipe()
         ::close(fds[1]);
         m_signal_pipe_rd = -1;
         m_signal_pipe_wr = -1;
+        avant::system::g_signal_pipe_wr.store(-1, std::memory_order_release);
         return -1;
     }
+
+    // Publish the write end to the signal channel now that the pipe is fully wired up,
+    // so the async-signal-safe handlers can wake the loop without touching this object.
+    avant::system::g_signal_pipe_wr.store(m_signal_pipe_wr, std::memory_order_release);
 
     return 0;
 }
@@ -1155,13 +1144,21 @@ void server::drain_signal_pipe()
 
 void server::process_signal_requests()
 {
-    if (stop_flag.load(std::memory_order_acquire))
+    // Runs on the main thread, never in signal context: this is where the async-signal-safe
+    // handlers' requests are actually acted on (see system/signal_channel.h).
+    const bool stop_requested = avant::system::g_stop_request.load(std::memory_order_acquire);
+    if (stop_requested)
     {
-        to_stop();
+        to_stop(); // idempotent: latches stop_flag; the loop then drains workers and exits
     }
-    if (reload_request.load(std::memory_order_acquire))
+    if (avant::system::g_reload_request.load(std::memory_order_acquire))
     {
-        reload_request.store(false, std::memory_order_release);
-        cmd_reload();
+        avant::system::g_reload_request.store(false, std::memory_order_release);
+        // A reload arriving in the same window as a stop is dropped: we are shutting down
+        // and about to exit, so a hot reload here would be wasted work.
+        if (!stop_requested)
+        {
+            cmd_reload();
+        }
     }
 }

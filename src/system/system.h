@@ -11,7 +11,7 @@ namespace avant::system
     {
     public:
         system() = default;
-        ~system() = default;
+        ~system();
         // init avant system
         int init();
 
