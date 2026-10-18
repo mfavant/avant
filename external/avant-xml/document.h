@@ -1,5 +1,5 @@
 #pragma once
-#include <iostream>
+#include <cstddef>
 #include <string>
 
 #include "element.h"
@@ -8,7 +8,6 @@ namespace avant
 {
     namespace xml
     {
-        using std::string;
         /**
          * @brief xml document object
          *
@@ -16,84 +15,121 @@ namespace avant
         class document
         {
         public:
-            document();
+            document() = default;
             ~document() = default;
 
             /**
-             * @brief to load xml file
+             * @brief load an xml file
              *
              * @param path
+             * @return false if the file could not be opened
              */
-            void load_file(const string &path);
+            bool load_file(const std::string &path);
 
             /**
-             * @brief to load xml string
+             * @brief load an xml string
              *
              * @param str
              */
-            void load_string(const string &str);
+            void load_string(const std::string &str);
 
             /**
-             * @brief skip index now if it's blank space、\t、\r、\n
+             * @brief construct the node tree from the loaded xml string
              *
-             */
-            void skip_white_spaces();
-
-            /**
-             * @brief to construct node tree by element from xml string
+             * Resets the parse position, so it can be called repeatedly on the
+             * same loaded document, and skips a UTF-8 BOM if the input begins
+             * with one. Comments and processing instructions are legal both
+             * before and after the root element; CDATA sections are not
+             * supported. Text and attribute values are entity-decoded (the
+             * five predefined entities and numeric character references);
+             * any other '&' sequence is left as-is.
              *
-             * @return element
+             * Throws std::logic_error on malformed input: empty document,
+             * missing or non-element root, CDATA section, duplicate
+             * attribute, unterminated declaration/comment/processing
+             * instruction, unclosed or mismatched end tag, unterminated
+             * attribute value, nesting deeper than k_max_depth, or mixed
+             * text after child elements.
+             *
+             * @return element root node
              */
             element parse();
 
         private:
+            static constexpr std::size_t k_max_depth = 128; // nesting limit
+
             /**
-             * @brief m_index skip to the index ?> next
+             * @brief skip white spaces (space, \t, \r, \n)
+             */
+            void skip_white_spaces();
+
+            /**
+             * @brief skip to just past the terminating "?>" of a "<?...?>"
+             *        (xml declaration or processing instruction)
              *
-             * @return true
-             * @return false
+             * @return false if unterminated
              */
             bool parse_declaration();
 
             /**
-             * @brief skiping <!-- -->
+             * @brief skip to just past the terminating "-->" of a comment
+             *        (the cursor must be on the '<' of the "<!--" opening)
              *
-             * @return true
-             * @return false
+             * @return false if unterminated
              */
             bool parse_comment();
 
             /**
-             * @brief tag name can contain number、alpha、:、_、-
+             * @brief whether the cursor is on a valid element start tag
+             *        ('<' followed by alpha or '_')
+             */
+            bool is_element_start() const;
+
+            /**
+             * @brief parse one element (recursive); the cursor must be on its
+             *        '<' (is_element_start() checked by the caller)
+             *
+             * @param depth nesting depth, guarded by k_max_depth
+             * @return element
+             */
+            element parse_element(std::size_t depth);
+
+            /**
+             * @brief collect the tag name (alpha, number, :, _, -); the cursor
+             *        must be on the first name char (the caller verified
+             *        is_element_start, so the name is never empty)
              *
              * @return string tag name
              */
-            string parse_element_name();
+            std::string parse_element_name();
 
             /**
-             * @brief skiping to the next < and collecting the text skiped
+             * @brief collect text up to the next '<' (leading whitespace is
+             *        ignorable and stripped; throws at end of input)
+             *
+             * @param owner element name, for the error message
+             * @return string
+             */
+            std::string parse_element_text(const std::string &owner);
+
+            /**
+             * @brief collect the attribute key from the start tag
              *
              * @return string
              */
-            string parse_element_text();
+            std::string parse_element_attr_key();
 
             /**
-             * @brief collecting the key from start tag
+             * @brief collect the quoted attribute value from the start tag
+             *        ('"' or '\'')
              *
              * @return string
              */
-            string parse_element_attr_key();
-
-            /**
-             * @brief coolecting the value from start tag
-             *
-             * @return string
-             */
-            string parse_element_attr_val();
+            std::string parse_element_attr_val();
 
         private:
-            string m_str{};  // xml context string
-            size_t m_idx{0}; // analysis char index
+            std::string m_str{};  // xml context string
+            std::size_t m_idx{0}; // analysis char index
         };
     }
 }
