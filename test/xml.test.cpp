@@ -92,7 +92,16 @@ static void test_element_basics()
         (void)c;
         ++n;
     }
-    CHECK(n == 3, "const iteration visits all children");
+    CHECK(n == 3, "non-const range-for visits all children");
+
+    const element &croot = root;
+    int nc = 0;
+    for (const auto &c : croot)
+    {
+        (void)c;
+        ++nc;
+    }
+    CHECK(nc == 3, "range-for over a const element (needs end() const)");
 
     element c1 = root["c1"];
     c1.text("mutated"); // copies out: the tree is value semantics
@@ -222,6 +231,15 @@ static void test_document_parse()
     element sa = single.parse();
     CHECK(sa.attr("x") == "single-quoted", "single-quoted attr value");
 
+    // empty attribute values are preserved during parse (the public attr()
+    // blank-deletes semantics does not apply to parsed trees)
+    document emptyattr;
+    emptyattr.load_string("<a x=\"\" y=\"1\">t</a>");
+    element ea = emptyattr.parse();
+    CHECK(ea.has_attr("x") && ea.attr("x") == "", "empty attr value is preserved");
+    CHECK(ea.attr("y") == "1", "sibling non-empty attr unaffected");
+    CHECK(to_string(ea) == "<a x=\"\" y=\"1\">t</a>", "empty attr round-trips byte-identical");
+
     document formatted;
     formatted.load_string("<a>\n    <b>1</b>\n    <c>2</c>\n</a>");
     element fa = formatted.parse();
@@ -279,6 +297,22 @@ static void test_document_parse()
         }
         document missing;
         CHECK(!missing.load_file("no/such/file.xml"), "load_file false on missing file");
+
+        // a file the test itself wrote (exercises the read-size guard)
+        {
+            const char tmp_name[] = "xml.test.tmp.xml";
+            {
+                std::ofstream out(tmp_name, std::ios::binary);
+                out << "<?xml version=\"1.0\"?>\n<a x=\"1\">\n  <b>2</b>\n</a>\n";
+            }
+            document tf;
+            CHECK(tf.load_file(tmp_name), "load_file ok on a file written by the test");
+            element tfe = tf.parse();
+            CHECK(tfe.name() == "a" && tfe.attr("x") == "1" && tfe["b"].text() == "2" &&
+                      tfe.text().empty(),
+                  "written file parses (newlines are ignorable whitespace)");
+            std::remove(tmp_name);
+        }
     }
 
     // depth limit (finding 9)

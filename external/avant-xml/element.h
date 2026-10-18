@@ -9,6 +9,7 @@ namespace avant
 {
     namespace xml
     {
+        class document;
         class element
         {
         public:
@@ -129,10 +130,18 @@ namespace avant
             iterator begin();
             iterator end();
             const_iterator begin() const;
+            const_iterator end() const;
             const_iterator cbegin() const;
             const_iterator cend() const;
 
             static const element &null();
+
+        private:
+            // parser-only: store an attribute even when the value is empty,
+            // so x="" round-trips — the public attr() treats a blank value
+            // as deletion
+            friend class document;
+            void attr_store(std::string key, std::string value);
         };
 
         /**

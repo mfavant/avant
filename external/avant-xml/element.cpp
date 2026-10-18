@@ -59,6 +59,11 @@ namespace avant::xml
         m_attrs.erase(key); // blank value deletes the attribute
     }
 
+    void element::attr_store(std::string key, std::string value)
+    {
+        m_attrs[key] = std::move(value); // parser path: keep empty values (duplicates already rejected)
+    }
+
     const std::map<std::string, std::string> &element::attrs() const
     {
         return m_attrs;
@@ -131,6 +136,11 @@ namespace avant::xml
     element::const_iterator element::begin() const
     {
         return m_children.begin();
+    }
+
+    element::const_iterator element::end() const
+    {
+        return m_children.end();
     }
 
     element::const_iterator element::cbegin() const

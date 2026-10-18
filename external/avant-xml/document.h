@@ -22,7 +22,8 @@ namespace avant
              * @brief load an xml file
              *
              * @param path
-             * @return false if the file could not be opened
+             * @return false if the file could not be opened or could not be
+             *         read in full (a truncated read would yield a half doc)
              */
             bool load_file(const std::string &path);
 
@@ -42,7 +43,8 @@ namespace avant
              * before and after the root element; CDATA sections are not
              * supported. Text and attribute values are entity-decoded (the
              * five predefined entities and numeric character references);
-             * any other '&' sequence is left as-is.
+             * any other '&' sequence is left as-is. Empty attribute values
+             * (x="") are preserved.
              *
              * Throws std::logic_error on malformed input: empty document,
              * missing or non-element root, CDATA section, duplicate
@@ -105,7 +107,9 @@ namespace avant
 
             /**
              * @brief collect text up to the next '<' (leading whitespace is
-             *        ignorable and stripped; throws at end of input)
+             *        ignorable and stripped; trailing whitespace is kept, so
+             *        only whitespace-only text comes out empty; throws at end
+             *        of input)
              *
              * @param owner element name, for the error message
              * @return string

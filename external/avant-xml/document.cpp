@@ -156,16 +156,23 @@ namespace avant::xml
 
     bool document::load_file(const std::string &path)
     {
-        std::ifstream in(path);
+        // binary: byte-exact read (we handle BOM/UTF-8 ourselves)
+        std::ifstream in(path, std::ios::binary);
         if (!in)
         {
             return false; // unreadable file: surface it, do not fake an empty doc
         }
+        // expected byte count: operator<<(rdbuf) never sets the stream's error
+        // bits on a failed read, so a mid-read error can only be caught by
+        // comparing the bytes actually read against the file size
+        in.seekg(0, std::ios::end);
+        const std::streamoff expected = in.tellg();
+        in.seekg(0, std::ios::beg);
         std::ostringstream buf;
         buf << in.rdbuf(); // whole file, newlines preserved
-        if (in.bad())
+        if (expected >= 0 && buf.str().size() != static_cast<std::size_t>(expected))
         {
-            return false; // I/O error mid-read: a truncated doc is worse than none
+            return false; // truncated or grown mid-read: a half doc is worse than none
         }
         load_string(buf.str());
         return true;
@@ -381,8 +388,9 @@ namespace avant::xml
                                        "> attribute '" + key + "' has no value");
             }
             ++m_idx; // skip '='
-            // a set (not elem.has_attr): attr(key, "") deletes, so an empty
-            // first value would otherwise hide the duplicate
+            // a set (not elem.has_attr): attr_store() overwrites, so without
+            // this a duplicate would be silently replaced (even when the
+            // first value is empty)
             if (!seen_attrs.insert(key).second)
             {
                 throw std::logic_error("xml element <" + elem.name() +
@@ -390,7 +398,9 @@ namespace avant::xml
             }
             std::string val = parse_element_attr_val();
             decode_entities(val);
-            elem.attr(key, std::move(val));
+            // attr_store (not attr): a blank value must be kept, so x=""
+            // round-trips — the public attr() treats blank as deletion
+            elem.attr_store(std::move(key), std::move(val));
         }
 
         // text before the first child (may be empty)
