@@ -5,6 +5,9 @@
 #include <stdexcept>
 #include <string>
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include "../external/avant-xml/element.h"
 #include "../external/avant-xml/document.h"
 
@@ -297,6 +300,28 @@ static void test_document_parse()
         }
         document missing;
         CHECK(!missing.load_file("no/such/file.xml"), "load_file false on missing file");
+
+        // non-regular files must be rejected up front: rdbuf() reads until
+        // EOF, and these never have one (old code: /dev/zero hung forever
+        // growing the buffer; a directory faked a 0-byte success on Linux)
+        document zero;
+        CHECK(!zero.load_file("/dev/zero"), "load_file false on /dev/zero (never EOFs)");
+        {
+            const char tmp_dir[] = "xml.test.tmp.dir";
+            ::mkdir(tmp_dir, 0755);
+            document dirf;
+            CHECK(!dirf.load_file(tmp_dir), "load_file false on a directory");
+            ::rmdir(tmp_dir);
+        }
+        {
+            const char tmp_name[] = "xml.test.tmp0.xml";
+            std::ofstream out(tmp_name, std::ios::binary); // creates an empty file
+            out.close();
+            document zb;
+            CHECK(zb.load_file(tmp_name), "load_file true on a 0-byte file (read in full)");
+            CHECK_THROWS_XML(zb.parse(), "0-byte file: parse throws 'empty document'");
+            std::remove(tmp_name);
+        }
 
         // a file the test itself wrote (exercises the read-size guard)
         {

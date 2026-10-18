@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include <sys/stat.h>
+
 namespace avant::xml
 {
     namespace
@@ -156,23 +158,45 @@ namespace avant::xml
 
     bool document::load_file(const std::string &path)
     {
-        // binary: byte-exact read (we handle BOM/UTF-8 ourselves)
-        std::ifstream in(path, std::ios::binary);
+        // regular files only: operator<<(rdbuf) reads until EOF, and a device
+        // (/dev/zero), fifo, or directory stream never reaches one — the size
+        // guard below runs *after* the read, so it cannot stop an unbounded
+        // read (old code: load_file("/dev/zero") hung forever, growing the
+        // buffer). A directory additionally faked a 0-byte success on Linux
+        // (the seek fails -> tellg is -1 -> the size check is skipped)
+        struct stat st{};
+        if (::stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+        {
+            return false;
+        }
+        // binary: byte-exact read (we handle BOM/UTF-8 ourselves); open in a
+        // try, since a NUL inside the path makes open() throw instead of set
+        // failbit — load_file must stay a pure bool
+        std::ifstream in;
+        try
+        {
+            in.open(path, std::ios::binary);
+        }
+        catch (const std::ios_base::failure &)
+        {
+            return false;
+        }
         if (!in)
         {
             return false; // unreadable file: surface it, do not fake an empty doc
         }
-        // expected byte count: operator<<(rdbuf) never sets the stream's error
-        // bits on a failed read, so a mid-read error can only be caught by
-        // comparing the bytes actually read against the file size
+        // expected byte count: a failed read may leave the stream with no
+        // error bits at all, so the bytes actually read are compared against
+        // the file size (the state check is a backstop, not the authority)
         in.seekg(0, std::ios::end);
         const std::streamoff expected = in.tellg();
         in.seekg(0, std::ios::beg);
         std::ostringstream buf;
         buf << in.rdbuf(); // whole file, newlines preserved
-        if (expected >= 0 && buf.str().size() != static_cast<std::size_t>(expected))
+        if (in.fail() || in.bad() ||
+            (expected >= 0 && buf.str().size() != static_cast<std::size_t>(expected)))
         {
-            return false; // truncated or grown mid-read: a half doc is worse than none
+            return false; // read error, or truncated/grown mid-read: a half doc is worse than none
         }
         load_string(buf.str());
         return true;

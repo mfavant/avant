@@ -22,8 +22,11 @@ namespace avant
              * @brief load an xml file
              *
              * @param path
-             * @return false if the file could not be opened or could not be
-             *         read in full (a truncated read would yield a half doc)
+             * @return false if the path is not a regular file (a device, fifo
+             *         or directory has no EOF, so the whole-file read would
+             *         never terminate), or if the file could not be opened,
+             *         or could not be read in full (a truncated read would
+             *         yield a half doc)
              */
             bool load_file(const std::string &path);
 
