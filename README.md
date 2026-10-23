@@ -5,10 +5,10 @@
 A Network Messaging Framework for C++.
 
 - Language: C++ 20
-- Platform: Linux x86_64 ARM64 | MacOS(Apple Silicon) ARM64
+- Platform: Linux(x86-64 ARM64) | MacOS(Apple Silicon)
 - Protocols: HTTP(S) | TCP Stream(Protobuf) | WebSocket | UDP(Protobuf)
 - TLS/SSL: OpenSSL
-- Lua: Lua 5.5.1 Release | LuaJIT v2.1 1ee778a4e37122d8ca7d5733c590a47dafd6b15c
+- Lua: [Lua 5.5.1 Release](https://github.com/lua/lua/releases/tag/v5.5.1) | [LuaJIT v2.1 1ee778a4e37122d8ca7d5733c590a47dafd6b15c](https://github.com/LuaJIT/LuaJIT/commit/1ee778a4e37122d8ca7d5733c590a47dafd6b15c)
 
 ## Overview
 
