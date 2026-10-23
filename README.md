@@ -1,4 +1,4 @@
-# avant
+# Avant
 
 [![Docker Image CI](https://github.com/mfavant/avant/actions/workflows/docker-image.yml/badge.svg)](https://github.com/mfavant/avant/actions/workflows/docker-image.yml)
 
@@ -57,7 +57,7 @@ kubectl apply -f avant-pod.yaml
 
 If some dependencies are already installed on the host, you may skip them.
 
-### Ubuntu Example
+### Example For Ubuntu
 
 ```bash
 docker run -it ubuntu:latest bash
@@ -67,7 +67,7 @@ apt-get install -y \
     cmake g++ make git nodejs npm\
     protobuf-compiler libprotobuf-dev \
     libssl-dev
-git clone https://github.com/crust-hub/avant.git
+git clone https://github.com/mfavant/avant.git
 cd avant/protocol && make
 cd ..
 mkdir -p build
@@ -79,7 +79,7 @@ cd ..
 node node ./generate_proto_lua.js ./protocol ./bin/lua/ProtoLua
 ```
 
-See: [Other Installing Third-Party Example](./install_third_party_example.md)
+More Details: [Other Installing Third-Party Example](./install_third_party_example.md)
 
 ### Configuration
 
@@ -120,7 +120,7 @@ Avant supports HTTP, WebSocket, UDP, and TCP streaming (Protobuf):
 - [Node.js](client/javascript/)
 - [Go](client/go/avant/)
 
-## Lua
+## Lua Support
 
 Each thread (main, worker, auxiliary) runs in its own isolated Lua virtual machine.
 
@@ -139,13 +139,13 @@ ps -ef | grep avant
 kill -SIGUSR1 <PID>
 ```
 
-## IPC
+## Inter-Process Communication
 
 * Configuration: `config/ipc.json`
 * One-way, client-initiated TCP connection
 * Authentication via appid in [ProtoIPCStreamAuthHandshake protocol](./protocol/proto_ipc_stream.proto)
 
-## Benchmark
+## HTTP Benchmark
 
 Using [wrk](https://github.com/wg/wrk)
 
@@ -155,7 +155,7 @@ wrk -c {{connection_num}} -t {{threads}} -d60s \
     http://127.0.0.1:20023/
 ```
 
-## Third-Party Dependencies
+## Dependencies
 
 1. [@nodejs/llhttp](https://github.com/nodejs/llhttp)  
 2. [@lua/lua](https://github.com/lua/lua)  
