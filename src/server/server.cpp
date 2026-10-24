@@ -508,11 +508,11 @@ int server::on_start()
 
     // http-parser setting
     {
-        connection::http_ctx::init_http_settings();
+        connection::http_ctx::init_llhttp_settings();
     }
     // ws-http-parser setting
     {
-        connection::websocket_ctx::init_ws_http_settings();
+        connection::websocket_ctx::init_ws_llhttp_settings();
     }
 
     // main_event_loop begin

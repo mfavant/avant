@@ -7,7 +7,7 @@
 
 namespace avant::socket
 {
-    static constexpr int default_socket_buffer_size = 10 * 1024;
+    static constexpr int DEFAULT_SOCKET_BUFFER_SIZE = 10 * 1024;
 
     class socket
     {

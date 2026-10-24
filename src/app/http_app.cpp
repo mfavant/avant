@@ -107,8 +107,8 @@ struct avant_http_range
 };
 
 // 解析出 HTTP 请求头里的 Range 内容
-bool avant_parse_range_header(const std::string &range_header,
-                              std::vector<avant_http_range> &ranges)
+static bool avant_parse_range_header(const std::string &range_header,
+                                     std::vector<avant_http_range> &ranges)
 {
     if (range_header.empty() || range_header.find("bytes=") != 0)
     {

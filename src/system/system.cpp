@@ -28,22 +28,18 @@ using namespace avant::inifile;
 using namespace avant::log;
 using std::string;
 
-static avant::system::system *avant_global_system_ptr = nullptr;
-
 system::~system()
 {
     g_system_alive.store(false, std::memory_order_release);
-    avant_global_system_ptr = nullptr;
 }
 
 int system::init()
 {
-    if (avant_global_system_ptr)
+    if (g_system_alive.load(std::memory_order_acquire))
     {
-        std::cerr << "avant_global_system_ptr!=nullptr" << std::endl;
+        std::cerr << "g_system is alive" << std::endl;
         return -1;
     }
-    avant_global_system_ptr = this;
 
     // load config ini file
     m_config_mgr.set_root_path(get_root_path());

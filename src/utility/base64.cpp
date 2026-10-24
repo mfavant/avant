@@ -44,7 +44,7 @@ namespace avant::utility::base64
     // two sets of base64 characters needs to be chosen.
     // They differ in their last two characters.
     //
-    static constexpr const char *base64_chars[2] = {
+    static constexpr const char *BASE64_CHARS[2] = {
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         "abcdefghijklmnopqrstuvwxyz"
         "0123456789"
@@ -144,7 +144,7 @@ namespace avant::utility::base64
         // the correct character set is chosen by subscripting
         // base64_chars with url.
         //
-        const char *base64_chars_ = base64_chars[url];
+        const char *base64_chars_ = BASE64_CHARS[url];
 
         std::string ret;
         ret.reserve(len_encoded);

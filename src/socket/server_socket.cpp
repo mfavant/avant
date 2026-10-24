@@ -24,8 +24,8 @@ server_socket::server_socket(const string &ip, int port, int max_connections) : 
         close();
         return;
     }
-    set_recv_buffer(default_socket_buffer_size);
-    set_send_buffer(default_socket_buffer_size);
+    set_recv_buffer(DEFAULT_SOCKET_BUFFER_SIZE);
+    set_send_buffer(DEFAULT_SOCKET_BUFFER_SIZE);
     set_linger(true, 0);
     set_keep_alive();
     set_reuse_addr();

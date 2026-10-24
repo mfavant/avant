@@ -60,6 +60,5 @@ namespace avant::global
 
     private:
         int m_worker_cnt;
-        static std::shared_ptr<tunnel_id> ptr;
     };
 }

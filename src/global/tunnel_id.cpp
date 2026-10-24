@@ -2,11 +2,14 @@
 
 using namespace avant::global;
 
-std::shared_ptr<tunnel_id> tunnel_id::ptr;
+namespace avant::global
+{
+    static std::shared_ptr<tunnel_id> g_tunnel_id_ptr;
+}
 
 int tunnel_id::init(int worker_cnt)
 {
-    if (tunnel_id::ptr)
+    if (g_tunnel_id_ptr)
     {
         return -1;
     }
@@ -15,15 +18,15 @@ int tunnel_id::init(int worker_cnt)
     {
         return -2;
     }
-    tunnel_id::ptr.reset(new_tunnel_id_obj);
-    tunnel_id::ptr->m_worker_cnt = worker_cnt;
+    g_tunnel_id_ptr.reset(new_tunnel_id_obj);
+    g_tunnel_id_ptr->m_worker_cnt = worker_cnt;
     return 0;
 }
 
 tunnel_id &tunnel_id::get()
 {
-    assert(tunnel_id::ptr);
-    return *tunnel_id::ptr.get();
+    assert(g_tunnel_id_ptr);
+    return *g_tunnel_id_ptr.get();
 }
 
 void tunnel_id::get_worker_all_tunnel_id(std::vector<int> &vec_worker_id) const

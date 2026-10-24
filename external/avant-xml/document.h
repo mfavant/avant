@@ -53,7 +53,7 @@ namespace avant
              * missing or non-element root, CDATA section, duplicate
              * attribute, unterminated declaration/comment/processing
              * instruction, unclosed or mismatched end tag, unterminated
-             * attribute value, nesting deeper than k_max_depth, or mixed
+             * attribute value, nesting deeper than K_MAX_DEPTH, or mixed
              * text after child elements.
              *
              * @return element root node
@@ -61,7 +61,7 @@ namespace avant
             element parse();
 
         private:
-            static constexpr std::size_t k_max_depth = 128; // nesting limit
+            static constexpr std::size_t K_MAX_DEPTH = 128; // nesting limit
 
             /**
              * @brief skip white spaces (space, \t, \r, \n)
@@ -94,7 +94,7 @@ namespace avant
              * @brief parse one element (recursive); the cursor must be on its
              *        '<' (is_element_start() checked by the caller)
              *
-             * @param depth nesting depth, guarded by k_max_depth
+             * @param depth nesting depth, guarded by K_MAX_DEPTH
              * @return element
              */
             element parse_element(std::size_t depth);

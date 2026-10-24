@@ -9,11 +9,14 @@
 
 using namespace avant::connection;
 
-std::shared_ptr<llhttp_settings_t> http_ctx::settings;
-
-void http_ctx::init_http_settings()
+namespace avant::connection
 {
-    if (http_ctx::settings)
+    static std::shared_ptr<llhttp_settings_t> g_http_ctx_llhttp_settings;
+}
+
+void http_ctx::init_llhttp_settings()
+{
+    if (g_http_ctx_llhttp_settings)
     {
         return;
     }
@@ -21,15 +24,15 @@ void http_ctx::init_http_settings()
 
     llhttp_settings_init(settings_ptr);
 
-    http_ctx::settings.reset(settings_ptr);
+    g_http_ctx_llhttp_settings.reset(settings_ptr);
 
-    http_ctx::settings->on_message_begin = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_message_begin = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_message_begin");
         return 0;
     };
 
-    http_ctx::settings->on_protocol = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_protocol = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->protocol += std::string(at, length);
@@ -42,13 +45,13 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_protocol_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_protocol_complete = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_protocol_complete");
         return 0;
     };
 
-    http_ctx::settings->on_url = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_url = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->url += std::string(at, length);
@@ -63,13 +66,13 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_url_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_url_complete = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_url_complete");
         return 0;
     };
 
-    http_ctx::settings->on_method = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_method = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->method += std::string(at, length);
@@ -84,13 +87,13 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_method_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_method_complete = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_method_complete");
         return 0;
     };
 
-    http_ctx::settings->on_version = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_version = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->version += std::string(at, length);
@@ -103,13 +106,13 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_version_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_version_complete = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_version_complete");
         return 0;
     };
 
-    http_ctx::settings->on_header_field = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_header_field = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->head_field_tmp += std::string(at, length);
@@ -122,7 +125,7 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_header_field_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_header_field_complete = [](llhttp_t *parser) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         t_http_ctx->head_value_tmp.clear();
@@ -130,7 +133,7 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_header_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_header_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
         std::string value(at, length);
@@ -144,7 +147,7 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_header_value_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_header_value_complete = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_header_value_complete");
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
@@ -154,49 +157,49 @@ void http_ctx::init_http_settings()
         return 0;
     };
 
-    http_ctx::settings->on_headers_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_headers_complete = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_headers_complete");
         return 0;
     };
 
-    http_ctx::settings->on_chunk_header = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_chunk_header = [](llhttp_t *parser) -> auto
     {
         LOG_ERROR("http on_chunk_header not supported");
         return -1;
     };
 
-    http_ctx::settings->on_chunk_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_chunk_complete = [](llhttp_t *parser) -> auto
     {
         LOG_ERROR("http on_chunk_complete not supported");
         return -1;
     };
 
-    http_ctx::settings->on_chunk_extension_name = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_chunk_extension_name = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         LOG_ERROR("http on_chunk_extension_name not supported");
         return -1;
     };
 
-    http_ctx::settings->on_chunk_extension_name_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_chunk_extension_name_complete = [](llhttp_t *parser) -> auto
     {
         LOG_ERROR("http on_chunk_extension_name_complete not supported");
         return -1;
     };
 
-    http_ctx::settings->on_chunk_extension_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_chunk_extension_value = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         LOG_ERROR("http on_chunk_extension_value not supported");
         return -1;
     };
 
-    http_ctx::settings->on_chunk_extension_value_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_chunk_extension_value_complete = [](llhttp_t *parser) -> auto
     {
         LOG_ERROR("http on_chunk_extension_value_complete not supported");
         return -1;
     };
 
-    http_ctx::settings->on_body = [](llhttp_t *parser, const char *at, size_t length) -> auto
+    g_http_ctx_llhttp_settings->on_body = [](llhttp_t *parser, const char *at, size_t length) -> auto
     {
         // LOG_ERROR("on_body length {}", length);
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
@@ -230,7 +233,7 @@ void http_ctx::init_http_settings()
         return iret;
     };
 
-    http_ctx::settings->on_message_complete = [](llhttp_t *parser) -> auto
+    g_http_ctx_llhttp_settings->on_message_complete = [](llhttp_t *parser) -> auto
     {
         // LOG_ERROR("on_message_complete");
         http_ctx *t_http_ctx = static_cast<http_ctx *>(parser->data);
@@ -263,7 +266,7 @@ void http_ctx::on_create(connection &conn_obj, avant::workers::worker &worker_ob
     this->write_end_callback = nullptr;
     this->destory_callback = nullptr;
     this->ptr = nullptr;
-    llhttp_init(&this->http_parser_obj, HTTP_REQUEST, http_ctx::settings.get());
+    llhttp_init(&this->http_parser_obj, HTTP_REQUEST, g_http_ctx_llhttp_settings.get());
     this->http_parser_obj.data = this;
     this->recv_end = false;
     this->process_end = false;

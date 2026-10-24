@@ -32,8 +32,7 @@ namespace avant::connection
         void try_send_flush();
 
     public:
-        static std::shared_ptr<llhttp_settings_t> settings;
-        static void init_ws_http_settings();
+        static void init_ws_llhttp_settings();
 
     protected:
         connection *conn_ptr{nullptr};

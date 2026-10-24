@@ -65,8 +65,7 @@ namespace avant::connection
         virtual std::pair<std::string, int> get_ip_port() const override;
 
     public:
-        static std::shared_ptr<llhttp_settings_t> settings;
-        static void init_http_settings();
+        static void init_llhttp_settings();
 
     protected:
         connection *conn_ptr{nullptr};

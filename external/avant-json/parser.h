@@ -14,7 +14,7 @@ namespace avant::json
         // A nested `[` or `{` at a depth beyond this throws, which bounds the
         // recursion to a known limit and defeats stack-overflow DoS via deep
         // nesting. 512 levels is far above any realistic document.
-        static constexpr std::size_t kMaxDepth = 512;
+        static constexpr std::size_t K_MAX_DEPTH = 512;
 
         parser() = default;
         // Move-only: declaring the move ctor already deletes the implicit copy

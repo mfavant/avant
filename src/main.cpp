@@ -8,6 +8,6 @@ using avant::utility::singleton;
 
 int main(int argc, char **argv)
 {
-    avant::system::system avant_global_system;
-    return avant_global_system.init();
+    avant::system::system g_system;
+    return g_system.init();
 }

@@ -25,7 +25,7 @@ namespace avant::connection
             }
             size_t bytes{0};
             std::chrono::time_point<std::chrono::steady_clock> timestamp{};
-            static constexpr size_t max_traffic_data_seconds = 60;
+            static constexpr size_t MAX_TRAFFIC_DATA_SECONDS = 60;
         };
 
     public:

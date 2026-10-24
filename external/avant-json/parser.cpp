@@ -390,7 +390,7 @@ json parser::parse(std::size_t depth)
     }
     if (ch == '[')
     {
-        if (depth + 1 > kMaxDepth)
+        if (depth + 1 > K_MAX_DEPTH)
         {
             throw std::logic_error("maximum nesting depth exceeded");
         }
@@ -420,7 +420,7 @@ json parser::parse(std::size_t depth)
 
     if (ch == '{')
     {
-        if (depth + 1 > kMaxDepth)
+        if (depth + 1 > K_MAX_DEPTH)
         {
             throw std::logic_error("maximum nesting depth exceeded");
         }

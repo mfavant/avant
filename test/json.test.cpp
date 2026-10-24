@@ -217,7 +217,7 @@ int main()
         CHECK(success);
     }
 
-    // --- nesting depth boundary: exactly kMaxDepth succeeds, one more throws ---
+    // --- nesting depth boundary: exactly K_MAX_DEPTH succeeds, one more throws ---
     {
         auto nested = [](std::size_t n)
         {
@@ -233,7 +233,7 @@ int main()
         try
         {
             parser p;
-            p.load(nested(parser::kMaxDepth));
+            p.load(nested(parser::K_MAX_DEPTH));
             success = p.parse().is_array();
         }
         catch (...)
@@ -245,7 +245,7 @@ int main()
         try
         {
             parser p;
-            p.load(nested(parser::kMaxDepth + 1));
+            p.load(nested(parser::K_MAX_DEPTH + 1));
             (void)p.parse();
         }
         catch (...)

@@ -365,10 +365,10 @@ namespace avant::xml
 
     element document::parse_element(std::size_t depth)
     {
-        if (depth >= k_max_depth)
+        if (depth >= K_MAX_DEPTH)
         {
             throw std::logic_error("xml nesting is too deep (limit " +
-                                   std::to_string(k_max_depth) + ")");
+                                   std::to_string(K_MAX_DEPTH) + ")");
         }
         ++m_idx; // skip '<' (caller verified is_element_start)
         element elem;

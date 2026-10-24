@@ -16,15 +16,18 @@ using avant::app::other_app;
 namespace utility = avant::utility;
 namespace global = avant::global;
 
-class avant_authenticated_ipc_pair
+namespace avant::app
 {
-public:
-    std::unordered_map<uint64_t, std::string> gid2appid;
-    std::unordered_map<std::string, uint64_t> appid2gid;
-    avant::workers::other *other_obj{nullptr};
-};
+    class avant_authenticated_ipc_pair
+    {
+    public:
+        std::unordered_map<uint64_t, std::string> gid2appid;
+        std::unordered_map<std::string, uint64_t> appid2gid;
+        avant::workers::other *other_obj{nullptr};
+    };
 
-static avant_authenticated_ipc_pair authenticated_ipc_pair;
+    static avant_authenticated_ipc_pair authenticated_ipc_pair;
+}
 
 void other_app::on_other_init(avant::workers::other &other_obj)
 {
@@ -157,7 +160,6 @@ void other_app::on_new_connection_remote2this(avant::connection::ipc_stream_ctx 
     }
     // LOG_ERROR("other_app on_new_connection {}", ctx.get_conn_gid());
 }
-
 
 void other_app::on_new_connection_this2remote(avant::connection::ipc_stream_ctx &ctx)
 {

@@ -130,7 +130,7 @@ void connection::record_traffic_bytes(std::deque<traffic_data> &traffic_data_lis
     {
         auto now = std::chrono::steady_clock::now();
 
-        clear_timeout_traffic_data(traffic_data_list, now, traffic_data::max_traffic_data_seconds);
+        clear_timeout_traffic_data(traffic_data_list, now, traffic_data::MAX_TRAFFIC_DATA_SECONDS);
 
         if (traffic_data_list.empty())
         {

@@ -27,7 +27,7 @@ extern "C" int luaopen_emmy_core(lua_State *L);
 #endif
 
 #ifdef AVANT_JIT_VERSION
-int countTableElements(lua_State *L, int tableIndex)
+static int countTableElements(lua_State *L, int tableIndex)
 {
     // 保存栈的状态
     int count = 0;
