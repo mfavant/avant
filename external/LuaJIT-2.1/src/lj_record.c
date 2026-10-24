@@ -447,9 +447,9 @@ static void rec_for_check(jit_State *J, IRType t, int dir,
 			  TRef stop, TRef step, int init)
 {
   if (!tref_isk(step)) {
-    /* Non-constant step: need a guard for the direction. */
+    /* Non-constant step: need a guard for the direction (excluding +-0). */
     TRef zero = (t == IRT_INT) ? lj_ir_kint(J, 0) : lj_ir_knum_zero(J);
-    emitir(IRTG(dir ? IR_GE : IR_LT, t), step, zero);
+    emitir(IRTG(dir ? IR_GT : IR_LT, t), step, zero);
     /* Add hoistable overflow checks for a narrowed FORL index. */
     if (init && t == IRT_INT) {
       if (tref_isk(stop)) {
@@ -530,8 +530,9 @@ static LoopEvent rec_for(jit_State *J, const BCIns *fori, int isforl)
   /* Avoid semantic mismatches and always failing guards. */
   if ((tvisnum(&tv[FORL_IDX]) && tvisnan(&tv[FORL_IDX])) ||
       (tvisnum(&tv[FORL_STOP]) && tvisnan(&tv[FORL_STOP])) ||
-      (tvisnum(&tv[FORL_STEP]) && tvisnan(&tv[FORL_STEP])) ||
-      tvismzero(&tv[FORL_STEP]))
+      (tvisnum(&tv[FORL_STEP]) &&
+       (tvisnan(&tv[FORL_STEP]) || tviszero(&tv[FORL_STEP]))) ||
+      (tvisint(&tv[FORL_STEP]) && intV(&tv[FORL_STEP]) == 0))
     lj_trace_err(J, LJ_TRERR_GFAIL);
   if (isforl) {  /* Handle FORL/JFORL opcodes. */
     TRef idx = tr[FORL_IDX];
@@ -2039,7 +2040,7 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
       TRef tridx = getslot(J, dst-1);
       TRef tr = TREF_NIL;
       ptrdiff_t idx = lj_ffrecord_select_mode(J, tridx, &J->L->base[dst-1]);
-      if (idx < 0) goto nyivarg;
+      if (idx < 0 || idx > LUAI_MAXSTACK) goto nyivarg;
       if (idx != 0 && !tref_isinteger(tridx)) {
 	if (tref_isstr(tridx))
 	  tridx = emitir(IRTG(IR_STRTO, IRT_NUM), tridx, 0);
@@ -2058,15 +2059,8 @@ static void rec_varg(jit_State *J, BCReg dst, ptrdiff_t nresults)
 	  tridx = emitir(IRTI(IR_ADD), tridx, lj_ir_kint(J, -1));
 	  rec_idx_abc(J, tr, tridx, (uint32_t)nvararg);
 	}
-      } else {
-	TRef tmp = lj_ir_kint(J, frofs);
-	if (idx != 0) {
-	  TRef tmp2 = emitir(IRTI(IR_BSHL), tridx, lj_ir_kint(J, 3));
-	  tmp = emitir(IRTI(IR_ADD), tmp2, tmp);
-	} else {
-	  tr = lj_ir_kint(J, 0);
-	}
-	emitir(IRTGI(IR_LT), fr, tmp);
+      } else {  /* Indexing beyond nvararg. */
+	goto nyivarg;  /* Uncommon and pointless to compile it. */
       }
       if (idx != 0 && idx <= nvararg) {
 	IRType t;
@@ -2266,6 +2260,8 @@ void lj_record_ins(jit_State *J)
       {
 	BCReg s;
 	TValue *tv = J->L->base;
+	ptrdiff_t delta = J->L->top - tv;
+	if (J->maxslot > (BCReg)delta) J->maxslot = (BCReg)delta;
 	for (s = 0; s < J->maxslot; s++)  /* Constify stack slots (if any). */
 	  if (J->base[s] == TREF_NIL && !tvisnil(&tv[s]))
 	    J->base[s] = lj_record_constify(J, &tv[s]);
