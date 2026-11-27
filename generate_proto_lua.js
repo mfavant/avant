@@ -1,5 +1,12 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync, readdirSync } from 'fs';
-import { basename, join } from 'path';
+const {
+  existsSync,
+  statSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+} = require('fs');
+const { join, basename } = require('path');
 
 const PREFIX = `ProtoLua_`;
 
